@@ -1,2 +1,5 @@
-# Twif-App
-the internal app for Twif
+# TWIF OMS
+
+## Structure
+- `/backend` — API (stack TBD by dev)
+- `/frontend` — Client (stack TBD by dev)
