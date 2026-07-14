@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './lib/api';
 
 const money = new Intl.NumberFormat('en-NG', {
@@ -50,6 +50,11 @@ const toNumber = (value) => Number(value) || 0;
 const dateInputValue = (value, fallback = todayIso()) => {
   if (!value) return fallback;
   return String(value).slice(0, 10);
+};
+
+const customerStatus = (status) => {
+  if (status === 'Unassigned') return 'Order Sheet Confirmed';
+  return status || 'Order Sheet Pending';
 };
 
 const SENT_INVOICES_KEY = 'twif.sentInvoices';
@@ -869,12 +874,13 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       updateSheetForm('invoiceNumber', '');
       return;
     }
+    const resolvedToken = invoice.trackingToken || trackingTokenSeed();
 
     setSheetForm((current) => ({
       ...current,
       invoiceNumber,
-      trackingToken: invoice.trackingToken || '',
-      trackingUrl: invoice.trackingUrl || '',
+      trackingToken: resolvedToken,
+      trackingUrl: invoice.trackingUrl || trackingUrlForToken(resolvedToken),
       customer: invoice.customer || '',
       item: invoice.item || current.item,
       pieces: invoice.pieces || current.pieces,
@@ -905,7 +911,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       delivery: sheetForm.delivery,
       amount: 0,
       paid: 0,
-      status: 'Unassigned',
+      status: 'Order Sheet Confirmed',
       payment: 'Fully Paid',
       fabric: sheetForm.fabric,
       tailor: 'Unassigned',
@@ -1032,18 +1038,33 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
 
 function ProductionView({ productionJobs, onUpdateJob }) {
   const [statusFilter, setStatusFilter] = useState('All');
+  const [toast, setToast] = useState('');
+  const toastTimerRef = useRef(null);
   const filteredJobs = productionJobs.filter((job) => (
     statusFilter === 'All' ? true : job.status === statusFilter
   ));
+  const productionTabs = ['All', 'Order Sheet Confirmed', 'Assigned', 'In Progress', 'Ready'];
+
+  const notify = (message) => {
+    setToast(message);
+    window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(''), 2600);
+  };
+
+  const updateJobWithToast = (job, changes, message) => {
+    onUpdateJob(job.id, changes);
+    notify(message);
+  };
 
   return (
     <div className="production-board">
+      {toast ? <div className="app-toast">{toast}</div> : null}
       <section className="panel span-2 production-jobs-panel">
         <SectionHeader eyebrow="Production" title="Active Job Sheets">
           <button>View all jobs</button>
         </SectionHeader>
         <div className="production-tabs">
-          {['All', 'In Progress', 'Ready'].map((tab) => (
+          {productionTabs.map((tab) => (
             <button
               key={tab}
               className={statusFilter === tab ? 'active' : ''}
@@ -1067,26 +1088,26 @@ function ProductionView({ productionJobs, onUpdateJob }) {
               </div>
               <div className="job-detail">
                 <dl>
-                  <div><dt>Fabric</dt><dd>{order.fabric} · {order.fabricConfirmed ? 'Confirmed' : 'Not confirmed'}</dd></div>
+                  <div><dt>Fabric</dt><dd>{order.fabric} · <span className='text-green-600'>{order.fabricConfirmed ? 'Confirmed' : 'Not confirmed'}</span></dd></div>
                   <div><dt>Tailor</dt><dd>{order.tailor}</dd></div>
                   <div><dt>Images</dt><dd>{order.images || 0} labelled references</dd></div>
                   <div><dt>Measurements</dt><dd>{order.measurements ? 'Included' : 'Not added'}</dd></div>
                 </dl>
                 <div className="production-controls">
                   <label>Tailor
-                    <select value={order.tailor} onChange={(event) => onUpdateJob(order.id, {
+                    <select value={order.tailor} onChange={(event) => updateJobWithToast(order, {
                       tailor: event.target.value,
-                      status: event.target.value === 'Unassigned' ? 'Unassigned' : 'In Progress',
-                    })}>
+                      status: event.target.value === 'Unassigned' ? 'Order Sheet Confirmed' : 'Assigned',
+                    }, event.target.value === 'Unassigned' ? 'Tailor assignment removed' : `Assigned to ${event.target.value}`)}>
                       <option>Unassigned</option>
                       {tailorOptions.map((tailor) => <option key={tailor.name}>{tailor.name}</option>)}
                     </select>
                   </label>
                   <label>Fabric
-                    <select value={order.fabric} onChange={(event) => onUpdateJob(order.id, {
+                    <select value={order.fabric} onChange={(event) => updateJobWithToast(order, {
                       fabric: event.target.value,
                       fabricConfirmed: false,
-                    })}>
+                    }, `Fabric changed to ${event.target.value}`)}>
                       <option value="Client supplied">Client supplied</option>
                       {fabrics.map((fabric) => <option key={fabric.name} value={fabric.name}>{fabric.name}</option>)}
                     </select>
@@ -1097,9 +1118,9 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                 </div>
                 <p className="note">{order.designNotes || order.note}</p>
                 <div className="row-actions">
-                  <button onClick={() => onUpdateJob(order.id, { fabricConfirmed: true })}>Confirm Fabric</button>
-                  <button onClick={() => onUpdateJob(order.id, { status: 'In Progress' })}>In Progress</button>
-                  <button className="primary-action" onClick={() => onUpdateJob(order.id, { status: 'Ready' })}>Mark Ready</button>
+                  <button onClick={() => updateJobWithToast(order, { fabricConfirmed: true }, 'Fabric confirmed')}>Confirm Fabric</button>
+                  <button onClick={() => updateJobWithToast(order, { status: 'In Progress' }, 'Job moved to In Progress')}>In Progress</button>
+                  <button className="primary-action" onClick={() => updateJobWithToast(order, { status: 'Ready' }, 'Job marked Ready')}>Mark Ready</button>
                 </div>
               </div>
             </article>
@@ -1282,50 +1303,56 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
   useEffect(() => {
     let cancelled = false;
 
-    api.get(`/oms/track/${token}`)
-      .then((response) => {
-        if (!cancelled) setTracking(response.data?.data?.tracking || null);
-      })
-      .catch(() => {
-        const job = productionJobs.find((item) => item.trackingToken === token);
-        const invoice = sentInvoices.find((item) => item.trackingToken === token);
-        if (!cancelled) {
-          setTracking(job ? {
-            invoiceNumber: job.invoiceNumber,
-            customer: job.customer,
-            store: job.store,
-            item: job.item,
-            pieces: job.pieces,
-            deliveryDate: job.delivery,
-            status: job.status,
-            fabric: job.fabric,
-            measurementsAdded: Boolean(job.measurements),
-            designNotesAdded: Boolean(job.designNotes),
-            styleImagesCount: job.images || 0,
-            lastUpdatedAt: job.updatedAt || job.assignedAt,
-          } : invoice ? {
-            invoiceNumber: invoice.invoiceNumber,
-            customer: invoice.customer,
-            store: invoice.store,
-            item: invoice.item,
-            pieces: invoice.pieces,
-            deliveryDate: invoice.deliveryDate,
-            status: 'Order Sheet Pending',
-            styleImagesCount: 0,
-          } : null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const loadTracking = () => {
+      api.get(`/oms/track/${token}`)
+        .then((response) => {
+          if (!cancelled) setTracking(response.data?.data?.tracking || null);
+        })
+        .catch(() => {
+          const job = productionJobs.find((item) => item.trackingToken === token);
+          const invoice = sentInvoices.find((item) => item.trackingToken === token);
+          if (!cancelled) {
+            setTracking(job ? {
+              invoiceNumber: job.invoiceNumber,
+              customer: job.customer,
+              store: job.store,
+              item: job.item,
+              pieces: job.pieces,
+              deliveryDate: job.delivery,
+              status: customerStatus(job.status),
+              fabric: job.fabric,
+              measurementsAdded: Boolean(job.measurements),
+              designNotesAdded: Boolean(job.designNotes),
+              styleImagesCount: job.images || 0,
+              lastUpdatedAt: job.updatedAt || job.assignedAt,
+            } : invoice ? {
+              invoiceNumber: invoice.invoiceNumber,
+              customer: invoice.customer,
+              store: invoice.store,
+              item: invoice.item,
+              pieces: invoice.pieces,
+              deliveryDate: invoice.deliveryDate,
+              status: 'Order Sheet Pending',
+              styleImagesCount: 0,
+            } : null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    };
+
+    loadTracking();
+    const intervalId = window.setInterval(loadTracking, 5000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, [token, productionJobs, sentInvoices]);
 
-  const normalizedStatus = tracking?.status || 'Order Sheet Pending';
-  const steps = ['Order Sheet Pending', 'Unassigned', 'In Progress', 'Ready'];
+  const normalizedStatus = customerStatus(tracking?.status);
+  const steps = ['Order Sheet Pending', 'Order Sheet Confirmed', 'Assigned', 'In Progress', 'Ready'];
   const currentStep = Math.max(0, steps.indexOf(normalizedStatus));
 
   if (loading) {
@@ -1373,7 +1400,7 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
 
         <div className="tracking-steps">
           {steps.map((step, index) => (
-            <div className={classNames('tracking-step', index <= currentStep && 'active')} key={step}>
+            <div className={classNames('tracking-step', index === currentStep && 'active')} key={step}>
               <span>{index + 1}</span>
               <strong>{step}</strong>
             </div>
@@ -1485,15 +1512,22 @@ function App() {
   };
 
   const updateProductionJob = (jobId, changes) => {
-    let updatedJob;
-    setProductionJobs((current) => current.map((job) => {
-      if (job.id !== jobId) return job;
-      updatedJob = { ...job, ...changes };
-      return updatedJob;
-    }));
+    const existingJob = productionJobs.find((job) => job.id === jobId);
+    const updatedJob = existingJob ? {
+      ...existingJob,
+      ...changes,
+      updatedAt: new Date().toISOString(),
+    } : null;
+
+    setProductionJobs((current) => current.map((job) => (
+      job.id === jobId ? updatedJob : job
+    )));
 
     if (updatedJob?.trackingToken) {
-      api.patch(`/oms/tracking/order-sheet/${updatedJob.trackingToken}`, updatedJob).catch(() => {});
+      api.patch(`/oms/tracking/order-sheet/${updatedJob.trackingToken}`, {
+        ...updatedJob,
+        status: customerStatus(updatedJob.status),
+      }).catch(() => {});
     }
   };
 

@@ -713,7 +713,9 @@ td {
 .status-work-in-progress,
 .status-in-progress,
 .status-low,
-.status-partial-paid {
+.status-partial-paid,
+.status-assigned,
+.status-order-sheet-confirmed {
   background: rgba(231, 162, 45, 0.18);
   color: #8a570d;
 }
@@ -956,6 +958,22 @@ dd {
 .row-actions .primary-action {
   border-color: var(--gold);
   background: var(--gold);
+}
+
+.app-toast {
+  position: fixed;
+  top: 22px;
+  right: 22px;
+  z-index: 80;
+  max-width: min(360px, calc(100vw - 32px));
+  border: 1px solid rgba(211, 171, 79, 0.36);
+  border-radius: 8px;
+  background: #171717;
+  color: #fffefa;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+  padding: 13px 16px;
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .production-job-form,
@@ -1438,41 +1456,71 @@ dd {
 
 .tracking-steps {
   display: grid;
-  gap: 10px;
-  margin: 8px 0 18px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  margin: 10px 0 24px;
 }
 
 .tracking-step {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid #eee7dd;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 12px;
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  background: transparent;
+  padding: 8px 4px 0;
   color: #8a8379;
+  text-align: center;
+}
+
+.tracking-step::before {
+  content: "";
+  position: absolute;
+  top: 23px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #e7ded1;
+  z-index: 0;
+}
+
+.tracking-step:first-child::before {
+  left: 50%;
+}
+
+.tracking-step:last-child::before {
+  right: 50%;
 }
 
 .tracking-step span {
-  width: 30px;
-  height: 30px;
+  position: relative;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #f1eee8;
+  border: 2px solid #dfd5c7;
+  background: #fffefa;
+  color: #9a9287;
   font-size: 12px;
   font-weight: 900;
 }
 
+.tracking-step strong {
+  max-width: 112px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
 .tracking-step.active {
-  border-color: rgba(231, 162, 45, 0.5);
-  background: #fff8ea;
   color: #171717;
 }
 
 .tracking-step.active span {
+  border-color: var(--gold);
   background: var(--gold);
   color: #111111;
+  box-shadow: 0 0 0 7px rgba(231, 162, 45, 0.16);
 }
 
 .tracking-details {
@@ -1799,6 +1847,51 @@ dd {
   .production-tabs {
     margin-left: -2px;
     margin-right: -2px;
+  }
+
+  .app-toast {
+    top: auto;
+    right: 16px;
+    bottom: 18px;
+    left: 16px;
+    max-width: none;
+  }
+
+  .tracking-steps {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .tracking-step {
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-items: start;
+    text-align: left;
+    padding: 8px 0;
+  }
+
+  .tracking-step::before {
+    top: 0;
+    bottom: 0;
+    left: 15px;
+    right: auto;
+    width: 2px;
+    height: auto;
+  }
+
+  .tracking-step:first-child::before {
+    top: 24px;
+    left: 15px;
+  }
+
+  .tracking-step:last-child::before {
+    right: auto;
+    bottom: 24px;
+  }
+
+  .tracking-step strong {
+    align-self: center;
+    max-width: none;
+    font-size: 13px;
   }
 
   .invoice-items-header {
