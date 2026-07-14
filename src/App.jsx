@@ -37,7 +37,11 @@ const invoiceItemSeed = () => `item-${Date.now()}-${Math.floor(Math.random() * 1
 
 const trackingTokenSeed = () => Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-8);
 
-const trackingBaseUrl = (import.meta.env.VITE_TRACKING_BASE_URL || 'https://track.twiflagos.com').replace(/\/+$/, '');
+const trackingBaseUrl = (
+  import.meta.env.VITE_TRACKING_BASE_URL ||
+  window.location.origin ||
+  'http://localhost:5173'
+).replace(/\/+$/, '');
 
 const trackingUrlForToken = (token) => `${trackingBaseUrl}/c/${token}`;
 
