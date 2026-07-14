@@ -35,9 +35,21 @@ const invoiceSeed = () => `INV${Math.floor(Math.random() * 90000) + 10000}`;
 
 const invoiceItemSeed = () => `item-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
+const trackingTokenSeed = () => Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-8);
+
+const trackingBaseUrl = (import.meta.env.VITE_TRACKING_BASE_URL || 'https://track.twiflagos.com').replace(/\/+$/, '');
+
+const trackingUrlForToken = (token) => `${trackingBaseUrl}/c/${token}`;
+
 const toNumber = (value) => Number(value) || 0;
 
+const dateInputValue = (value, fallback = todayIso()) => {
+  if (!value) return fallback;
+  return String(value).slice(0, 10);
+};
+
 const SENT_INVOICES_KEY = 'twif.sentInvoices';
+const PRODUCTION_JOBS_KEY = 'twif.productionJobs';
 
 const paymentStatusLabels = {
   partial_paid: 'Partial Paid',
@@ -47,6 +59,14 @@ const paymentStatusLabels = {
 const loadSentInvoices = () => {
   try {
     return JSON.parse(localStorage.getItem(SENT_INVOICES_KEY) || '[]');
+  } catch (error) {
+    return [];
+  }
+};
+
+const loadStoredProductionJobs = () => {
+  try {
+    return JSON.parse(localStorage.getItem(PRODUCTION_JOBS_KEY) || '[]');
   } catch (error) {
     return [];
   }
@@ -119,6 +139,22 @@ const fabrics = [
   { name: 'Gold aso-oke trim', type: 'Trim', qty: 4, unit: 'rolls', threshold: 5, status: 'Low' },
 ];
 
+const tailorOptions = [
+  { name: 'Segun', department: 'Suit', grade: 4 },
+  { name: 'Musa', department: 'Finishing', grade: 5 },
+  { name: 'Hassan', department: 'Trouser', grade: 3 },
+  { name: 'Ayo', department: 'Native', grade: 4 },
+];
+
+const initialProductionJobs = orders
+  .filter((order) => ['Partial Paid', 'Fully Paid'].includes(order.payment))
+  .map((order) => ({
+    ...order,
+    fabricConfirmed: order.fabric !== 'Client supplied',
+    productionNote: order.note,
+    assignedAt: 'Seeded',
+  }));
+
 const staff = [
   { name: 'Jenni', role: 'Owner', store: 'All', status: 'Active', lastLogin: 'Today, 21:18' },
   { name: 'Bola', role: 'Store Manager', store: 'Ikeja', status: 'Active', lastLogin: 'Today, 18:42' },
@@ -136,7 +172,7 @@ const notifications = [
 const navByRole = {
   owner: ['Overview', 'Orders', 'Customers', 'Payments', 'Production', 'Inventory', 'Staff', 'Reports', 'Notifications'],
   admin: ['Overview', 'Orders', 'Customers', 'Payments', 'Production', 'Inventory', 'Staff', 'Reports', 'Notifications'],
-  store_manager: ['Overview', 'Orders', 'Customers', 'New Invoice', 'Notifications'],
+  store_manager: ['Overview', 'Orders', 'Customers', 'New Invoice', 'Order Sheet', 'Notifications'],
   accounts: ['Overview', 'Payments', 'Reports', 'Notifications'],
   production_manager: ['Overview', 'Production', 'Inventory', 'Notifications'],
   inventory_manager: ['Overview', 'Inventory', 'Notifications'],
@@ -274,11 +310,11 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-function Overview({ role }) {
+function Overview({ role, productionJobs = [], onUpdateJob }) {
   const isTailor = role === 'tailor';
 
   if (isTailor) {
-    return <TailorTasks compact />;
+    return <TailorTasks compact productionJobs={productionJobs} onUpdateJob={onUpdateJob} />;
   }
 
   return (
@@ -339,6 +375,39 @@ function OrderTable({ rows }) {
 }
 
 function OrdersView({ sentInvoices }) {
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [invoicePage, setInvoicePage] = useState(1);
+  const invoicePageSize = 8;
+
+  const filteredInvoices = useMemo(() => {
+    const query = invoiceSearch.trim().toLowerCase();
+    if (!query) return sentInvoices;
+
+    return sentInvoices.filter((invoice) => [
+      invoice.invoiceNumber,
+      invoice.customer,
+      invoice.store,
+      invoice.createdBy,
+      invoice.paymentStatus,
+      invoice.emailStatus,
+      invoice.orderStatus,
+    ].some((value) => String(value || '').toLowerCase().includes(query)));
+  }, [invoiceSearch, sentInvoices]);
+
+  const invoicePageCount = Math.max(1, Math.ceil(filteredInvoices.length / invoicePageSize));
+  const currentInvoicePage = Math.min(invoicePage, invoicePageCount);
+  const visibleInvoices = filteredInvoices.slice(
+    (currentInvoicePage - 1) * invoicePageSize,
+    currentInvoicePage * invoicePageSize,
+  );
+  const invoiceStart = filteredInvoices.length ? ((currentInvoicePage - 1) * invoicePageSize) + 1 : 0;
+  const invoiceEnd = Math.min(currentInvoicePage * invoicePageSize, filteredInvoices.length);
+
+  const updateInvoiceSearch = (value) => {
+    setInvoiceSearch(value);
+    setInvoicePage(1);
+  };
+
   return (
     <div className="stack">
       <SectionHeader eyebrow="Orders" title="Invoice and Order Sheet Control">
@@ -366,33 +435,81 @@ function OrdersView({ sentInvoices }) {
 
       <section className="panel invoice-register-panel">
         <SectionHeader eyebrow="Invoices" title="Invoices Created by Store Manager">
-          <input className="search" placeholder="Search invoice or customer" />
+          <input
+            className="search"
+            placeholder="Search invoice or customer"
+            value={invoiceSearch}
+            onChange={(event) => updateInvoiceSearch(event.target.value)}
+          />
         </SectionHeader>
-        <div className="invoice-register-list">
-          {sentInvoices.length ? sentInvoices.map((invoice) => (
-            <article className="invoice-register-card" key={invoice.invoiceNumber}>
-              <div className="invoice-register-head">
-                <div>
-                  <span>{invoice.invoiceNumber}</span>
-                  <h3>{invoice.customer}</h3>
-                </div>
-                <Status>{invoice.paymentStatus}</Status>
-              </div>
-              <dl>
-                <div><dt>Store</dt><dd>{invoice.store}</dd></div>
-                <div><dt>Created by</dt><dd>{invoice.createdBy}</dd></div>
-                <div><dt>Date created</dt><dd>{invoice.createdAt}</dd></div>
-                <div><dt>Invoice total</dt><dd>{money.format(invoice.total)}</dd></div>
-                <div><dt>Email</dt><dd><Status>{invoice.emailStatus}</Status></dd></div>
-                <div><dt>Order status</dt><dd><Status>{invoice.orderStatus}</Status></dd></div>
-              </dl>
-            </article>
-          )) : (
-            <div className="invoice-preview-empty">
-              Sent invoices will appear here after the Store Manager sends an invoice email.
+
+        {filteredInvoices.length ? (
+          <>
+            <div className="invoice-table-shell">
+              <table className="invoice-table">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Customer</th>
+                    <th>Store</th>
+                    <th>Created By</th>
+                    <th>Date</th>
+                    <th>Total</th>
+                    <th>Payment</th>
+                    <th>Email</th>
+                    <th>Order</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleInvoices.map((invoice) => (
+                    <tr key={invoice.invoiceNumber}>
+                      <td data-label="Invoice"><strong>{invoice.invoiceNumber}</strong></td>
+                      <td data-label="Customer">{invoice.customer}</td>
+                      <td data-label="Store">{invoice.store}</td>
+                      <td data-label="Created by">{invoice.createdBy}</td>
+                      <td data-label="Date">{invoice.createdAt}</td>
+                      <td data-label="Total"><strong>{money.format(invoice.total)}</strong></td>
+                      <td data-label="Payment"><Status>{invoice.paymentStatus}</Status></td>
+                      <td data-label="Email"><Status>{invoice.emailStatus}</Status></td>
+                      <td data-label="Order"><Status>{invoice.orderStatus}</Status></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
+
+            <div className="invoice-pagination">
+              <span>
+                Showing {invoiceStart}-{invoiceEnd} of {filteredInvoices.length}
+              </span>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setInvoicePage(Math.max(1, currentInvoicePage - 1))}
+                  disabled={currentInvoicePage === 1}
+                >
+                  Previous
+                </button>
+                <strong>{currentInvoicePage} / {invoicePageCount}</strong>
+                <button
+                  type="button"
+                  onClick={() => setInvoicePage(Math.min(invoicePageCount, currentInvoicePage + 1))}
+                  disabled={currentInvoicePage === invoicePageCount}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="invoice-register-list">
+            <div className="invoice-preview-empty">
+              {sentInvoices.length
+                ? 'No invoices match your search.'
+                : 'Sent invoices will appear here after the Store Manager sends an invoice email.'}
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
@@ -432,6 +549,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
   const [form, setForm] = useState({
     store: 'lekki',
     invoiceNumber: invoiceSeed(),
+    trackingToken: trackingTokenSeed(),
     invoiceDate: todayIso(),
     dueDate: todayIso(),
     customerName: '',
@@ -492,6 +610,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
     recipientEmail: form.customerEmail,
     createdByName: currentRole?.name || 'Store Manager',
     paymentStatus: form.paymentStatus,
+    trackingToken: form.trackingToken,
     customer: {
       name: form.customerName,
       phone: form.customerPhone,
@@ -510,7 +629,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
     eliteDiscountAmount,
     storeCreditApplied: toNumber(form.storeCreditApplied),
     balanceDue,
-    trackingUrl: form.trackingUrl,
+    trackingUrl: form.trackingUrl || trackingUrlForToken(form.trackingToken),
     notes: form.notes.split('\n').map((note) => note.trim()).filter(Boolean),
   });
 
@@ -534,6 +653,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
       const payload = invoicePayload();
       const response = await api.post('/oms/invoices/send-email', payload);
       const serverInvoice = response.data?.data?.sentInvoice;
+      const firstItem = payload.items[0] || {};
       onInvoiceSent(serverInvoice || {
         invoiceNumber: payload.invoiceNumber,
         customer: payload.customer.name,
@@ -548,6 +668,12 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
         emailStatus: 'Sent',
         paymentStatus: paymentStatusLabels[payload.paymentStatus],
         orderStatus: paymentStatusLabels[payload.paymentStatus],
+        item: firstItem.description || '',
+        pieces: firstItem.quantity || 1,
+        deliveryDate: payload.dueDate,
+        itemNote: firstItem.note || payload.notes?.[0] || '',
+        trackingToken: payload.trackingToken,
+        trackingUrl: payload.trackingUrl,
       });
       setMessage(response.data.message || 'Invoice email sent');
     } catch (error) {
@@ -704,31 +830,272 @@ function PaymentsView() {
   );
 }
 
-function ProductionView() {
+function OrderSheetView({ sentInvoices = [], onCreateJob }) {
+  const [sheetForm, setSheetForm] = useState({
+    invoiceNumber: '',
+    trackingToken: '',
+    trackingUrl: '',
+    customer: '',
+    item: '',
+    pieces: 1,
+    delivery: todayIso(),
+    store: 'Lekki',
+    fabric: fabrics[0]?.name || '',
+    measurements: '',
+    designNotes: '',
+    itemNote: '',
+    styleImages: ['', '', '', '', ''],
+  });
+  const [message, setMessage] = useState('');
+
+  const updateSheetForm = (field, value) => {
+    setSheetForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const updateStyleImage = (index, value) => {
+    setSheetForm((current) => ({
+      ...current,
+      styleImages: current.styleImages.map((image, imageIndex) => (imageIndex === index ? value : image)),
+    }));
+  };
+
+  const selectInvoice = (invoiceNumber) => {
+    const invoice = sentInvoices.find((item) => item.invoiceNumber === invoiceNumber);
+    if (!invoice) {
+      updateSheetForm('invoiceNumber', '');
+      return;
+    }
+
+    setSheetForm((current) => ({
+      ...current,
+      invoiceNumber,
+      trackingToken: invoice.trackingToken || '',
+      trackingUrl: invoice.trackingUrl || '',
+      customer: invoice.customer || '',
+      item: invoice.item || current.item,
+      pieces: invoice.pieces || current.pieces,
+      delivery: dateInputValue(invoice.deliveryDate, current.delivery),
+      store: invoice.store || current.store,
+      itemNote: invoice.itemNote || current.itemNote,
+      designNotes: invoice.itemNote || current.designNotes,
+    }));
+  };
+
+  const submitOrderSheet = (event) => {
+    event.preventDefault();
+    if (!sheetForm.invoiceNumber || !sheetForm.customer.trim() || !sheetForm.item.trim()) {
+      setMessage('Select an invoice and confirm the customer and item before releasing the order sheet.');
+      return;
+    }
+
+    const orderSheet = {
+      id: `JOB-${Date.now().toString().slice(-6)}`,
+      invoiceNumber: sheetForm.invoiceNumber,
+      trackingToken: sheetForm.trackingToken,
+      trackingUrl: sheetForm.trackingUrl,
+      customer: sheetForm.customer.trim(),
+      phone: '',
+      store: sheetForm.store,
+      item: sheetForm.item.trim(),
+      pieces: toNumber(sheetForm.pieces) || 1,
+      delivery: sheetForm.delivery,
+      amount: 0,
+      paid: 0,
+      status: 'Unassigned',
+      payment: 'Fully Paid',
+      fabric: sheetForm.fabric,
+      tailor: 'Unassigned',
+      images: sheetForm.styleImages.filter(Boolean).length,
+      styleImages: sheetForm.styleImages.filter(Boolean).map((image, index) => ({
+        label: `Image ${index + 1}`,
+        name: image,
+      })),
+      measurements: sheetForm.measurements,
+      designNotes: sheetForm.designNotes,
+      note: sheetForm.designNotes || sheetForm.itemNote || 'Order sheet released by Store Manager.',
+      productionNote: '',
+      fabricConfirmed: false,
+      assignedAt: new Intl.DateTimeFormat('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date()),
+    };
+
+    onCreateJob(orderSheet);
+    api.post('/oms/tracking/order-sheet', {
+      trackingToken: orderSheet.trackingToken,
+      invoiceNumber: orderSheet.invoiceNumber,
+      orderSheet,
+    }).catch(() => {});
+
+    setMessage('Order sheet released to Production.');
+    setSheetForm({
+      invoiceNumber: '',
+      trackingToken: '',
+      trackingUrl: '',
+      customer: '',
+      item: '',
+      pieces: 1,
+      delivery: todayIso(),
+      store: 'Lekki',
+      fabric: fabrics[0]?.name || '',
+      measurements: '',
+      designNotes: '',
+      itemNote: '',
+      styleImages: ['', '', '', '', ''],
+    });
+  };
+
   return (
-    <div className="production-grid">
-      <section className="panel span-2">
-        <SectionHeader eyebrow="Production" title="Active Job Sheets" />
-        <div className="job-list">
-          {orders.filter((order) => ['Partial Paid', 'Fully Paid'].includes(order.payment)).map((order) => (
+    <section className="panel">
+      <SectionHeader eyebrow="Store Manager" title="Create Order Sheet" />
+      <form className="production-job-form order-sheet-form" onSubmit={submitOrderSheet}>
+        <div className="form-stage wide-field">
+          <span>1. Invoice</span>
+          <label className="wide-field">Invoice number
+            <select value={sheetForm.invoiceNumber} onChange={(event) => selectInvoice(event.target.value)}>
+              <option value="">Select invoice to auto-fill job details</option>
+              {sentInvoices.map((invoice) => (
+                <option key={invoice.invoiceNumber} value={invoice.invoiceNumber}>
+                  {invoice.invoiceNumber} · {invoice.customer} · {invoice.store}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="form-stage wide-field">
+          <span>2. Customer and Item</span>
+          <label>Customer name
+            <input value={sheetForm.customer} onChange={(event) => updateSheetForm('customer', event.target.value)} placeholder="Customer name" />
+          </label>
+          <label>Item
+            <input value={sheetForm.item} onChange={(event) => updateSheetForm('item', event.target.value)} placeholder="e.g. Three-piece suit" />
+          </label>
+        </div>
+
+        <div className="form-stage wide-field">
+          <span>3. Order Details</span>
+          <label>Pieces
+            <input type="number" min="1" value={sheetForm.pieces} onChange={(event) => updateSheetForm('pieces', event.target.value)} />
+          </label>
+          <label>Delivery date
+            <input type="date" value={sheetForm.delivery} onChange={(event) => updateSheetForm('delivery', event.target.value)} />
+          </label>
+          <label>Store
+            <select value={sheetForm.store} onChange={(event) => updateSheetForm('store', event.target.value)}>
+              <option>Lekki</option>
+              <option>Ikeja</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="form-stage wide-field">
+          <span>4. Measurements and Fabric</span>
+          <label>Fabric
+            <select value={sheetForm.fabric} onChange={(event) => updateSheetForm('fabric', event.target.value)}>
+              <option value="Client supplied">Client supplied</option>
+              {fabrics.map((fabric) => <option key={fabric.name} value={fabric.name}>{fabric.name}</option>)}
+            </select>
+          </label>
+          <label className="wide-field">Measurements
+            <textarea value={sheetForm.measurements} onChange={(event) => updateSheetForm('measurements', event.target.value)} placeholder="Chest, waist, inseam, sleeve, shoulder, neck..." />
+          </label>
+        </div>
+
+        <div className="form-stage wide-field">
+          <span>5. Design Notes and Style Images</span>
+          <label className="wide-field">Design notes
+            <textarea value={sheetForm.designNotes} onChange={(event) => updateSheetForm('designNotes', event.target.value)} placeholder="Internal design notes for Production" />
+          </label>
+          <div className="style-image-grid wide-field">
+            {sheetForm.styleImages.map((image, index) => (
+              <label key={`style-image-${index}`}>Image {index + 1}
+                <input value={image} onChange={(event) => updateStyleImage(index, event.target.value)} placeholder={`Image ${index + 1} filename or note`} />
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {message ? <div className="invoice-message wide-field">{message}</div> : null}
+        <button className="primary-action wide-field" type="submit">Release Order Sheet to Production</button>
+      </form>
+    </section>
+  );
+}
+
+function ProductionView({ productionJobs, onUpdateJob }) {
+  const [statusFilter, setStatusFilter] = useState('All');
+  const filteredJobs = productionJobs.filter((job) => (
+    statusFilter === 'All' ? true : job.status === statusFilter
+  ));
+
+  return (
+    <div className="production-board">
+      <section className="panel span-2 production-jobs-panel">
+        <SectionHeader eyebrow="Production" title="Active Job Sheets">
+          <button>View all jobs</button>
+        </SectionHeader>
+        <div className="production-tabs">
+          {['All', 'In Progress', 'Ready'].map((tab) => (
+            <button
+              key={tab}
+              className={statusFilter === tab ? 'active' : ''}
+              onClick={() => setStatusFilter(tab)}
+            >
+              {tab} <span>{tab === 'All' ? productionJobs.length : productionJobs.filter((job) => job.status === tab).length}</span>
+            </button>
+          ))}
+        </div>
+        <div className="job-list production-job-list">
+          {filteredJobs.map((order) => (
             <article className="job-card" key={order.id}>
-              <div className="job-line">
-                <strong>{order.customer}</strong>
-                <span>{order.item}</span>
-                <span>{order.delivery}</span>
+              <div className="job-line production-job-head">
+                <div className="avatar">{order.customer.split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
+                <div>
+                  <strong>{order.customer}</strong>
+                  <span>{order.item}</span>
+                  <span>{order.delivery}</span>
+                </div>
                 <Status>{order.status}</Status>
               </div>
               <div className="job-detail">
-                <p>{order.note}</p>
                 <dl>
-                  <div><dt>Fabric</dt><dd>{order.fabric}</dd></div>
+                  <div><dt>Fabric</dt><dd>{order.fabric} · {order.fabricConfirmed ? 'Confirmed' : 'Not confirmed'}</dd></div>
                   <div><dt>Tailor</dt><dd>{order.tailor}</dd></div>
-                  <div><dt>Images</dt><dd>{order.images} labelled references</dd></div>
+                  <div><dt>Images</dt><dd>{order.images || 0} labelled references</dd></div>
+                  <div><dt>Measurements</dt><dd>{order.measurements ? 'Included' : 'Not added'}</dd></div>
                 </dl>
+                <div className="production-controls">
+                  <label>Tailor
+                    <select value={order.tailor} onChange={(event) => onUpdateJob(order.id, {
+                      tailor: event.target.value,
+                      status: event.target.value === 'Unassigned' ? 'Unassigned' : 'In Progress',
+                    })}>
+                      <option>Unassigned</option>
+                      {tailorOptions.map((tailor) => <option key={tailor.name}>{tailor.name}</option>)}
+                    </select>
+                  </label>
+                  <label>Fabric
+                    <select value={order.fabric} onChange={(event) => onUpdateJob(order.id, {
+                      fabric: event.target.value,
+                      fabricConfirmed: false,
+                    })}>
+                      <option value="Client supplied">Client supplied</option>
+                      {fabrics.map((fabric) => <option key={fabric.name} value={fabric.name}>{fabric.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="wide-field">Production style note
+                    <textarea value={order.productionNote || ''} onChange={(event) => onUpdateJob(order.id, { productionNote: event.target.value })} placeholder="Production Manager instruction for Tailor" />
+                  </label>
+                </div>
+                <p className="note">{order.designNotes || order.note}</p>
                 <div className="row-actions">
-                  <button>Assign Tailor</button>
-                  <button>Confirm Fabric</button>
-                  <button className="primary-action">Mark Ready</button>
+                  <button onClick={() => onUpdateJob(order.id, { fabricConfirmed: true })}>Confirm Fabric</button>
+                  <button onClick={() => onUpdateJob(order.id, { status: 'In Progress' })}>In Progress</button>
+                  <button className="primary-action" onClick={() => onUpdateJob(order.id, { status: 'Ready' })}>Mark Ready</button>
                 </div>
               </div>
             </article>
@@ -738,9 +1105,9 @@ function ProductionView() {
       <section className="panel">
         <SectionHeader eyebrow="Tailors" title="Availability" />
         <div className="mini-list">
-          <span>Segun · Suit · Grade 4</span>
-          <span>Musa · Finishing · Grade 5</span>
-          <span>Hassan · Trouser · Grade 3</span>
+          {tailorOptions.map((tailor) => (
+            <span key={tailor.name}>{tailor.name} · {tailor.department} · Grade {tailor.grade}</span>
+          ))}
         </div>
       </section>
     </div>
@@ -808,12 +1175,14 @@ function ReportsView() {
   );
 }
 
-function TailorTasks({ compact = false }) {
+function TailorTasks({ compact = false, productionJobs = [], onUpdateJob }) {
+  const assignedJobs = productionJobs.filter((order) => order.tailor !== 'Unassigned');
+
   return (
     <section className="panel">
       <SectionHeader eyebrow="My Tasks" title={compact ? 'Assigned This Week' : 'Tailor Work Queue'} />
       <div className="job-list">
-        {orders.filter((order) => order.tailor !== 'Unassigned').map((order) => (
+        {assignedJobs.length ? assignedJobs.map((order) => (
           <article className="job-card" key={order.id}>
             <div className="job-line">
               <strong>{order.customer}</strong>
@@ -822,31 +1191,42 @@ function TailorTasks({ compact = false }) {
               <Status>{order.status === 'Ready' ? 'Ready' : 'In Progress'}</Status>
             </div>
             <div className="job-detail">
-              <p className="production-note">Production Style Note: Add 1cm ease at the waist. Match Image 2 lapel shape.</p>
+              <p className="production-note">Production Style Note: {order.productionNote || order.note}</p>
               <p>{order.note}</p>
+              <dl>
+                <div><dt>Pieces</dt><dd>{order.pieces}</dd></div>
+                <div><dt>Fabric</dt><dd>{order.fabric}</dd></div>
+                <div><dt>Fabric status</dt><dd>{order.fabricConfirmed ? 'Confirmed' : 'Pending'}</dd></div>
+                <div><dt>Assigned</dt><dd>{order.assignedAt || 'Today'}</dd></div>
+              </dl>
               <div className="row-actions">
-                <button>In Progress</button>
-                <button className="primary-action">Ready</button>
+                <button onClick={() => onUpdateJob?.(order.id, { status: 'In Progress' })}>In Progress</button>
+                <button className="primary-action" onClick={() => onUpdateJob?.(order.id, { status: 'Ready' })}>Ready</button>
               </div>
             </div>
           </article>
-        ))}
+        )) : (
+          <div className="invoice-preview-empty">Assigned jobs will appear here once Production Manager assigns a tailor.</div>
+        )}
       </div>
     </section>
   );
 }
 
-function WeeklyLogView() {
+function WeeklyLogView({ productionJobs = [] }) {
+  const assignedJobs = productionJobs.filter((order) => order.tailor !== 'Unassigned');
+
   return (
     <section className="panel">
       <SectionHeader eyebrow="Log Sheet" title="Weekly and Monthly Aggregation" />
       <OrderTableLike
         columns={['Task', 'Date assigned', 'Status', 'Logged at']}
-        rows={[
-          ['Three-piece suit', 'Mon 29 Jun', 'In Progress', '29 Jun, 09:13'],
-          ['Dinner jacket', 'Tue 30 Jun', 'Ready', '01 Jul, 15:41'],
-          ['Native kaftan set', 'Wed 01 Jul', 'In Progress', '01 Jul, 11:24'],
-        ]}
+        rows={(assignedJobs.length ? assignedJobs : initialProductionJobs.filter((order) => order.tailor !== 'Unassigned')).map((order) => [
+          order.item,
+          order.assignedAt || 'Today',
+          order.status === 'Ready' ? 'Ready' : 'In Progress',
+          order.status === 'Ready' ? 'Marked ready' : 'Active',
+        ])}
       />
     </section>
   );
@@ -891,6 +1271,126 @@ function PortalPreview() {
   );
 }
 
+function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] }) {
+  const [tracking, setTracking] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    api.get(`/oms/track/${token}`)
+      .then((response) => {
+        if (!cancelled) setTracking(response.data?.data?.tracking || null);
+      })
+      .catch(() => {
+        const job = productionJobs.find((item) => item.trackingToken === token);
+        const invoice = sentInvoices.find((item) => item.trackingToken === token);
+        if (!cancelled) {
+          setTracking(job ? {
+            invoiceNumber: job.invoiceNumber,
+            customer: job.customer,
+            store: job.store,
+            item: job.item,
+            pieces: job.pieces,
+            deliveryDate: job.delivery,
+            status: job.status,
+            fabric: job.fabric,
+            measurementsAdded: Boolean(job.measurements),
+            designNotesAdded: Boolean(job.designNotes),
+            styleImagesCount: job.images || 0,
+            lastUpdatedAt: job.updatedAt || job.assignedAt,
+          } : invoice ? {
+            invoiceNumber: invoice.invoiceNumber,
+            customer: invoice.customer,
+            store: invoice.store,
+            item: invoice.item,
+            pieces: invoice.pieces,
+            deliveryDate: invoice.deliveryDate,
+            status: 'Order Sheet Pending',
+            styleImagesCount: 0,
+          } : null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, productionJobs, sentInvoices]);
+
+  const normalizedStatus = tracking?.status || 'Order Sheet Pending';
+  const steps = ['Order Sheet Pending', 'Unassigned', 'In Progress', 'Ready'];
+  const currentStep = Math.max(0, steps.indexOf(normalizedStatus));
+
+  if (loading) {
+    return (
+      <main className="tracking-page">
+        <section className="tracking-card">
+          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>TWIF</strong></div>
+          <p>Loading order status...</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!tracking) {
+    return (
+      <main className="tracking-page">
+        <section className="tracking-card">
+          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>TWIF</strong></div>
+          <h1>Tracking Link Not Found</h1>
+          <p>Please confirm the invoice link with The Way It Fits.</p>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="tracking-page">
+      <section className="tracking-card">
+        <div className="tracking-top">
+          <div className="brand-lockup tracking-brand">
+            <div className="mark">TW</div>
+            <div>
+              <strong>TWIF</strong>
+              <span>The Way It Fits</span>
+            </div>
+          </div>
+          <Status>{normalizedStatus}</Status>
+        </div>
+
+        <div className="tracking-hero">
+          <span>{tracking.invoiceNumber}</span>
+          <h1>{tracking.item || 'Your order'}</h1>
+          <p>{tracking.customer} · {tracking.store} Store</p>
+        </div>
+
+        <div className="tracking-steps">
+          {steps.map((step, index) => (
+            <div className={classNames('tracking-step', index <= currentStep && 'active')} key={step}>
+              <span>{index + 1}</span>
+              <strong>{step}</strong>
+            </div>
+          ))}
+        </div>
+
+        <dl className="tracking-details">
+          <div><dt>Delivery date</dt><dd>{tracking.deliveryDate || 'To be confirmed'}</dd></div>
+          <div><dt>Pieces</dt><dd>{tracking.pieces || 1}</dd></div>
+          <div><dt>Fabric</dt><dd>{tracking.fabric || 'To be confirmed'}</dd></div>
+          <div><dt>Style images</dt><dd>{tracking.styleImagesCount || 0} uploaded</dd></div>
+        </dl>
+
+        <p className="tracking-note">
+          This page updates from the order sheet and production status managed by TWIF staff.
+        </p>
+      </section>
+    </main>
+  );
+}
+
 function OrderTableLike({ columns, rows }) {
   return (
     <div className="table-wrap">
@@ -911,17 +1411,18 @@ function OrderTableLike({ columns, rows }) {
 }
 
 function renderView(activeView, role, viewProps = {}) {
-  if (activeView === 'Overview') return <Overview role={role} />;
+  if (activeView === 'Overview') return <Overview role={role} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
   if (activeView === 'Orders') return <OrdersView sentInvoices={viewProps.sentInvoices} />;
   if (activeView === 'Customers') return <CustomersView />;
   if (activeView === 'New Invoice') return <NewInvoiceView currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
+  if (activeView === 'Order Sheet') return <OrderSheetView sentInvoices={viewProps.sentInvoices} onCreateJob={viewProps.onCreateJob} />;
   if (activeView === 'Payments') return <PaymentsView />;
-  if (activeView === 'Production') return <ProductionView />;
+  if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
   if (activeView === 'Inventory') return <InventoryView />;
   if (activeView === 'Staff') return <StaffView />;
   if (activeView === 'Reports') return <ReportsView />;
-  if (activeView === 'My Tasks') return <TailorTasks />;
-  if (activeView === 'Weekly Log') return <WeeklyLogView />;
+  if (activeView === 'My Tasks') return <TailorTasks productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
+  if (activeView === 'Weekly Log') return <WeeklyLogView productionJobs={viewProps.productionJobs} />;
   if (activeView === 'Notifications') return <NotificationPanel />;
   return <Overview role={role} />;
 }
@@ -933,12 +1434,20 @@ function App() {
   const [activeView, setActiveView] = useState('Overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sentInvoices, setSentInvoices] = useState(loadSentInvoices);
+  const [productionJobs, setProductionJobs] = useState(() => {
+    const storedJobs = loadStoredProductionJobs();
+    return storedJobs.length ? storedJobs : initialProductionJobs;
+  });
 
   const currentRole = useMemo(() => roles.find((item) => item.id === role), [role]);
 
   useEffect(() => {
     localStorage.setItem(SENT_INVOICES_KEY, JSON.stringify(sentInvoices));
   }, [sentInvoices]);
+
+  useEffect(() => {
+    localStorage.setItem(PRODUCTION_JOBS_KEY, JSON.stringify(productionJobs));
+  }, [productionJobs]);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -967,6 +1476,23 @@ function App() {
     ]);
   };
 
+  const createProductionJob = (job) => {
+    setProductionJobs((current) => [job, ...current]);
+  };
+
+  const updateProductionJob = (jobId, changes) => {
+    let updatedJob;
+    setProductionJobs((current) => current.map((job) => {
+      if (job.id !== jobId) return job;
+      updatedJob = { ...job, ...changes };
+      return updatedJob;
+    }));
+
+    if (updatedJob?.trackingToken) {
+      api.patch(`/oms/tracking/order-sheet/${updatedJob.trackingToken}`, updatedJob).catch(() => {});
+    }
+  };
+
   const handleLogin = (account) => {
     setRole(account.role);
     setActiveView(navByRole[account.role][0]);
@@ -985,6 +1511,17 @@ function App() {
     setActiveView(view);
     setMobileMenuOpen(false);
   };
+
+  const trackingMatch = window.location.pathname.match(/^\/c\/([^/?#]+)/);
+  if (trackingMatch) {
+    return (
+      <CustomerTrackingPage
+        token={decodeURIComponent(trackingMatch[1])}
+        productionJobs={productionJobs}
+        sentInvoices={sentInvoices}
+      />
+    );
+  }
 
   if (!signedIn) {
     return <LoginScreen onLogin={handleLogin} />;
@@ -1047,6 +1584,9 @@ function App() {
           currentRole,
           onInvoiceSent: recordSentInvoice,
           sentInvoices,
+          productionJobs,
+          onCreateJob: createProductionJob,
+          onUpdateJob: updateProductionJob,
         })}
       </main>
     </div>
