@@ -698,7 +698,9 @@ td {
 }
 
 .status-confirmed,
+.status-approved,
 .status-ready,
+.status-ready-for-collection,
 .status-elite,
 .status-healthy,
 .status-fully-paid,
@@ -715,12 +717,14 @@ td {
 .status-low,
 .status-partial-paid,
 .status-assigned,
-.status-order-sheet-confirmed {
+.status-order-sheet-confirmed,
+.status-pending-accounts {
   background: rgba(231, 162, 45, 0.18);
   color: #8a570d;
 }
 
-.status-flagged {
+.status-flagged,
+.status-payment-flagged {
   background: rgba(201, 75, 63, 0.14);
   color: #9a332b;
 }
@@ -1456,7 +1460,7 @@ dd {
 
 .tracking-steps {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   margin: 10px 0 24px;
 }

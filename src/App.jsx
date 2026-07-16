@@ -53,8 +53,8 @@ const dateInputValue = (value, fallback = todayIso()) => {
 };
 
 const customerStatus = (status) => {
-  if (status === 'Unassigned') return 'Order Sheet Confirmed';
-  return status || 'Order Sheet Pending';
+  if (status === 'Ready' || status === 'Ready for Collection') return 'Ready for Collection';
+  return 'In Progress';
 };
 
 const SENT_INVOICES_KEY = 'twif.sentInvoices';
@@ -63,6 +63,62 @@ const PRODUCTION_JOBS_KEY = 'twif.productionJobs';
 const paymentStatusLabels = {
   partial_paid: 'Partial Paid',
   fully_paid: 'Fully Paid',
+};
+
+const invoiceApprovalStatus = (invoice) => invoice?.accountApprovalStatus || 'Pending Accounts';
+
+const isInvoiceApproved = (invoice) => invoiceApprovalStatus(invoice) === 'Approved';
+
+const canShowJobInProduction = (job, invoices) => {
+  if (!job.invoiceNumber) return true;
+  const invoice = invoices.find((item) => item.invoiceNumber === job.invoiceNumber);
+  return isInvoiceApproved(invoice);
+};
+
+const productionJobFromInvoice = (invoice) => {
+  if (!invoice?.orderSheet) return null;
+  const sheet = invoice.orderSheet;
+  const styleImages = Array.isArray(sheet.styleImages) ? sheet.styleImages : [];
+
+  return {
+    id: sheet.id || `JOB-${invoice.invoiceNumber}`,
+    invoiceNumber: invoice.invoiceNumber,
+    trackingToken: sheet.trackingToken || invoice.trackingToken,
+    trackingUrl: sheet.trackingUrl || invoice.trackingUrl,
+    customer: sheet.customer || invoice.customer || '',
+    phone: sheet.phone || '',
+    store: sheet.store || invoice.store || 'Lekki',
+    item: sheet.item || invoice.item || '',
+    pieces: toNumber(sheet.pieces || invoice.pieces) || 1,
+    delivery: sheet.delivery || dateInputValue(invoice.deliveryDate),
+    amount: toNumber(sheet.amount),
+    paid: toNumber(sheet.paid),
+    status: sheet.status || 'Order Sheet Confirmed',
+    requiresAccountApproval: true,
+    payment: sheet.payment || invoice.paymentStatus || 'Fully Paid',
+    fabric: sheet.fabric || '',
+    tailor: sheet.tailor || 'Unassigned',
+    images: toNumber(sheet.images) || styleImages.length,
+    styleImages,
+    measurements: sheet.measurements || '',
+    designNotes: sheet.designNotes || '',
+    note: sheet.note || sheet.designNotes || invoice.itemNote || '',
+    productionNote: sheet.productionNote || '',
+    fabricConfirmed: Boolean(sheet.fabricConfirmed),
+    assignedAt: sheet.assignedAt || 'Pending assignment',
+    updatedAt: sheet.updatedAt,
+  };
+};
+
+const mergeJobsByInvoice = (currentJobs, incomingJobs) => {
+  const validIncoming = incomingJobs.filter(Boolean);
+  if (!validIncoming.length) return currentJobs;
+
+  const incomingInvoiceNumbers = new Set(validIncoming.map((job) => job.invoiceNumber));
+  return [
+    ...validIncoming,
+    ...currentJobs.filter((job) => !incomingInvoiceNumbers.has(job.invoiceNumber)),
+  ];
 };
 
 const loadSentInvoices = () => {
@@ -398,6 +454,7 @@ function OrdersView({ sentInvoices }) {
       invoice.store,
       invoice.createdBy,
       invoice.paymentStatus,
+      invoice.accountApprovalStatus,
       invoice.emailStatus,
       invoice.orderStatus,
     ].some((value) => String(value || '').toLowerCase().includes(query)));
@@ -465,6 +522,7 @@ function OrdersView({ sentInvoices }) {
                     <th>Date</th>
                     <th>Total</th>
                     <th>Payment</th>
+                    <th>Accounts</th>
                     <th>Email</th>
                     <th>Order</th>
                   </tr>
@@ -479,6 +537,7 @@ function OrdersView({ sentInvoices }) {
                       <td data-label="Date">{invoice.createdAt}</td>
                       <td data-label="Total"><strong>{money.format(invoice.total)}</strong></td>
                       <td data-label="Payment"><Status>{invoice.paymentStatus}</Status></td>
+                      <td data-label="Accounts"><Status>{invoiceApprovalStatus(invoice)}</Status></td>
                       <td data-label="Email"><Status>{invoice.emailStatus}</Status></td>
                       <td data-label="Order"><Status>{invoice.orderStatus}</Status></td>
                     </tr>
@@ -815,22 +874,37 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
   );
 }
 
-function PaymentsView() {
+function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
+  const invoiceQueue = sentInvoices.length ? sentInvoices : payments.map((payment) => ({
+    invoiceNumber: payment.order,
+    customer: payment.customer,
+    store: payment.store,
+    total: payment.amount,
+    paymentStatus: payment.status,
+    accountApprovalStatus: payment.status === 'Confirmed' ? 'Approved' : 'Pending Accounts',
+  }));
+
   return (
     <section className="panel">
-      <SectionHeader eyebrow="Accounts" title="Payment Reconciliation Queue" />
+      <SectionHeader eyebrow="Accounts" title="Invoice Payment Approval Queue" />
       <div className="queue">
-        {payments.map((payment) => (
-          <article className="queue-row" key={payment.id}>
+        {invoiceQueue.map((invoice) => (
+          <article className="queue-row" key={invoice.invoiceNumber}>
             <div>
-              <strong>{payment.customer}</strong>
-              <span>{payment.order} · {payment.store} · {payment.mode} · {payment.bank}</span>
+              <strong>{invoice.customer}</strong>
+              <span>{invoice.invoiceNumber} · {invoice.store} · {invoice.paymentStatus}</span>
             </div>
-            <strong>{money.format(payment.amount)}</strong>
-            <Status>{payment.status}</Status>
+            <strong>{money.format(invoice.total)}</strong>
+            <Status>{invoiceApprovalStatus(invoice)}</Status>
             <div className="row-actions">
-              <button>Flag</button>
-              <button className="primary-action">Confirm</button>
+              <button onClick={() => onApproveInvoice?.(invoice.invoiceNumber, 'Flagged')}>Flag</button>
+              <button
+                className="primary-action"
+                onClick={() => onApproveInvoice?.(invoice.invoiceNumber, 'Approved')}
+                disabled={isInvoiceApproved(invoice)}
+              >
+                {isInvoiceApproved(invoice) ? 'Approved' : 'Approve'}
+              </button>
             </div>
           </article>
         ))}
@@ -912,6 +986,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       amount: 0,
       paid: 0,
       status: 'Order Sheet Confirmed',
+      requiresAccountApproval: true,
       payment: 'Fully Paid',
       fabric: sheetForm.fabric,
       tailor: 'Unassigned',
@@ -940,7 +1015,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       orderSheet,
     }).catch(() => {});
 
-    setMessage('Order sheet released to Production.');
+    setMessage('Order sheet saved. It will become visible to Production after Accounts approves the invoice.');
     setSheetForm({
       invoiceNumber: '',
       trackingToken: '',
@@ -1075,7 +1150,7 @@ function ProductionView({ productionJobs, onUpdateJob }) {
           ))}
         </div>
         <div className="job-list production-job-list">
-          {filteredJobs.map((order) => (
+          {filteredJobs.length ? filteredJobs.map((order) => (
             <article className="job-card" key={order.id}>
               <div className="job-line production-job-head">
                 <div className="avatar">{order.customer.split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
@@ -1124,7 +1199,11 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                 </div>
               </div>
             </article>
-          ))}
+          )) : (
+            <div className="invoice-preview-empty">
+              No approved job sheets are visible yet. Accounts must approve the invoice before Production can see the order sheet.
+            </div>
+          )}
         </div>
       </section>
       <section className="panel">
@@ -1246,7 +1325,7 @@ function WeeklyLogView({ productionJobs = [] }) {
       <SectionHeader eyebrow="Log Sheet" title="Weekly and Monthly Aggregation" />
       <OrderTableLike
         columns={['Task', 'Date assigned', 'Status', 'Logged at']}
-        rows={(assignedJobs.length ? assignedJobs : initialProductionJobs.filter((order) => order.tailor !== 'Unassigned')).map((order) => [
+        rows={assignedJobs.map((order) => [
           order.item,
           order.assignedAt || 'Today',
           order.status === 'Ready' ? 'Ready' : 'In Progress',
@@ -1332,7 +1411,7 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
               item: invoice.item,
               pieces: invoice.pieces,
               deliveryDate: invoice.deliveryDate,
-              status: 'Order Sheet Pending',
+              status: 'In Progress',
               styleImagesCount: 0,
             } : null);
           }
@@ -1352,7 +1431,7 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
   }, [token, productionJobs, sentInvoices]);
 
   const normalizedStatus = customerStatus(tracking?.status);
-  const steps = ['Order Sheet Pending', 'Order Sheet Confirmed', 'Assigned', 'In Progress', 'Ready'];
+  const steps = ['In Progress', 'Ready for Collection'];
   const currentStep = Math.max(0, steps.indexOf(normalizedStatus));
 
   if (loading) {
@@ -1447,7 +1526,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Customers') return <CustomersView />;
   if (activeView === 'New Invoice') return <NewInvoiceView currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
   if (activeView === 'Order Sheet') return <OrderSheetView sentInvoices={viewProps.sentInvoices} onCreateJob={viewProps.onCreateJob} />;
-  if (activeView === 'Payments') return <PaymentsView />;
+  if (activeView === 'Payments') return <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
   if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
   if (activeView === 'Inventory') return <InventoryView />;
   if (activeView === 'Staff') return <StaffView />;
@@ -1490,6 +1569,10 @@ function App() {
         if (cancelled) return;
         const invoices = response.data?.data?.invoices || [];
         setSentInvoices(invoices);
+        setProductionJobs((current) => mergeJobsByInvoice(
+          current,
+          invoices.map(productionJobFromInvoice)
+        ));
       })
       .catch(() => {
         // Keep the local cache visible if the API is unavailable.
@@ -1502,9 +1585,24 @@ function App() {
 
   const recordSentInvoice = (invoice) => {
     setSentInvoices((current) => [
-      invoice,
+      { ...invoice, accountApprovalStatus: invoice.accountApprovalStatus || 'Pending Accounts' },
       ...current.filter((item) => item.invoiceNumber !== invoice.invoiceNumber),
     ]);
+  };
+
+  const updateInvoiceApproval = (invoiceNumber, status) => {
+    setSentInvoices((current) => current.map((invoice) => (
+      invoice.invoiceNumber === invoiceNumber ? { ...invoice, accountApprovalStatus: status } : invoice
+    )));
+
+    api.patch(`/oms/invoices/${invoiceNumber}/account-approval`, { status }).then((response) => {
+      const invoice = response.data?.data?.invoice;
+      if (!invoice) return;
+      setSentInvoices((current) => current.map((item) => (
+        item.invoiceNumber === invoice.invoiceNumber ? invoice : item
+      )));
+      setProductionJobs((current) => mergeJobsByInvoice(current, [productionJobFromInvoice(invoice)]));
+    }).catch(() => {});
   };
 
   const createProductionJob = (job) => {
@@ -1530,6 +1628,10 @@ function App() {
       }).catch(() => {});
     }
   };
+
+  const approvedProductionJobs = productionJobs.filter((job) => {
+    return canShowJobInProduction(job, sentInvoices);
+  });
 
   const handleLogin = (account) => {
     setRole(account.role);
@@ -1621,8 +1723,9 @@ function App() {
         ) : renderView(activeView, role, {
           currentRole,
           onInvoiceSent: recordSentInvoice,
+          onApproveInvoice: updateInvoiceApproval,
           sentInvoices,
-          productionJobs,
+          productionJobs: approvedProductionJobs,
           onCreateJob: createProductionJob,
           onUpdateJob: updateProductionJob,
         })}
