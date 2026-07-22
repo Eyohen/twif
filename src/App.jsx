@@ -94,6 +94,7 @@ const productionJobFromInvoice = (invoice) => {
     requiresAccountApproval: true,
     payment: sheet.payment || invoice.paymentStatus || 'Fully Paid',
     fabric: sheet.fabric || '',
+    fabricId: sheet.fabricId || '',
     tailor: sheet.tailor || 'Unassigned',
     images: toNumber(sheet.images) || styleImages.length,
     styleImages,
@@ -120,13 +121,6 @@ const mergeJobsByInvoice = (currentJobs, incomingJobs) => {
     ...currentJobs.filter((job) => !incomingInvoiceNumbers.has(job.invoiceNumber)),
   ];
 };
-
-const fabrics = [
-  { name: 'Black jacquard wool', type: 'Suiting', qty: 18, unit: 'm', threshold: 10, status: 'Healthy' },
-  { name: 'Midnight velvet', type: 'Jacket', qty: 6, unit: 'm', threshold: 8, status: 'Low' },
-  { name: 'White cotton poplin', type: 'Shirting', qty: 44, unit: 'm', threshold: 15, status: 'Healthy' },
-  { name: 'Gold aso-oke trim', type: 'Trim', qty: 4, unit: 'rolls', threshold: 5, status: 'Low' },
-];
 
 const inventoryCategories = [
   'Suiting',
@@ -706,6 +700,7 @@ function OrdersView({ sentInvoices }) {
       invoice.store,
       invoice.createdBy,
       invoice.paymentStatus,
+      invoice.paymentMethod,
       invoice.accountApprovalStatus,
       invoice.emailStatus,
       invoice.orderStatus,
@@ -787,6 +782,7 @@ function OrdersView({ sentInvoices }) {
                     <th>Date</th>
                     <th>Total</th>
                     <th>Payment</th>
+                    <th>Method</th>
                     <th>Accounts</th>
                     <th>Email</th>
                     <th>Order</th>
@@ -802,6 +798,7 @@ function OrdersView({ sentInvoices }) {
                       <td data-label="Date">{invoice.createdAt}</td>
                       <td data-label="Total"><strong>{money.format(invoice.total)}</strong></td>
                       <td data-label="Payment"><Status>{invoice.paymentStatus}</Status></td>
+                      <td data-label="Method">{invoice.paymentMethod}</td>
                       <td data-label="Accounts"><Status>{invoiceApprovalStatus(invoice)}</Status></td>
                       <td data-label="Email"><Status>{invoice.emailStatus}</Status></td>
                       <td data-label="Order"><Status>{invoice.orderStatus}</Status></td>
@@ -930,6 +927,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
     customerPhone: '',
     customerEmail: '',
     paymentStatus: 'partial_paid',
+    paymentMethod: 'transfer',
     eliteDiscountEnabled: false,
     eliteDiscountAmount: 0,
     storeCreditApplied: 0,
@@ -984,6 +982,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
     recipientEmail: form.customerEmail,
     createdByName: currentRole?.name || 'Store Manager',
     paymentStatus: form.paymentStatus,
+    paymentMethod: form.paymentMethod,
     trackingToken: form.trackingToken,
     customer: {
       name: form.customerName,
@@ -1041,6 +1040,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
         total: payload.balanceDue,
         emailStatus: 'Sent',
         paymentStatus: paymentStatusLabels[payload.paymentStatus],
+        paymentMethod: payload.paymentMethod.charAt(0).toUpperCase() + payload.paymentMethod.slice(1),
         orderStatus: paymentStatusLabels[payload.paymentStatus],
         item: firstItem.description || '',
         pieces: firstItem.quantity || 1,
@@ -1082,6 +1082,14 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
             <select value={form.paymentStatus} onChange={(event) => updateForm('paymentStatus', event.target.value)}>
               <option value="partial_paid">Partial Paid</option>
               <option value="fully_paid">Fully Paid</option>
+            </select>
+          </label>
+          <label>Payment method
+            <select value={form.paymentMethod} onChange={(event) => updateForm('paymentMethod', event.target.value)}>
+              <option value="transfer">Transfer</option>
+              <option value="card">Card</option>
+              <option value="check">Check</option>
+              <option value="cash">Cash</option>
             </select>
           </label>
           <label>Customer name
@@ -1135,7 +1143,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
             <input type="number" value={form.eliteDiscountAmount} onChange={(event) => updateForm('eliteDiscountAmount', event.target.value)} disabled={!form.eliteDiscountEnabled} />
           </label>
           <label>Store credit applied
-            <input type="number" value={form.storeCreditApplied} onChange={(event) => updateForm('storeCreditApplied', event.target.value)} />
+            <input type="number" min="0" value={form.storeCreditApplied} onChange={(event) => updateForm('storeCreditApplied', event.target.value)} />
           </label>
           <label className="wide-field">Tracking link
             <input value={form.trackingUrl} onChange={(event) => updateForm('trackingUrl', event.target.value)} />
@@ -1153,6 +1161,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
           <div><dt>Invoice</dt><dd>{form.invoiceNumber}</dd></div>
           <div><dt>Bill to</dt><dd>{form.customerName}</dd></div>
           <div><dt>Payment status</dt><dd><Status>{paymentStatusLabels[form.paymentStatus]}</Status></dd></div>
+          <div><dt>Payment method</dt><dd>{form.paymentMethod.charAt(0).toUpperCase() + form.paymentMethod.slice(1)}</dd></div>
           <div><dt>Email</dt><dd>{form.customerEmail || 'Not set'}</dd></div>
           <div><dt>Subtotal</dt><dd>{money.format(subtotal)}</dd></div>
           <div><dt>Item discounts</dt><dd>-{money.format(itemDiscountTotal)}</dd></div>
@@ -1182,12 +1191,40 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
 
 function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
   const invoiceQueue = sentInvoices;
+  const [approvalFilter, setApprovalFilter] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
+  const pendingCount = invoiceQueue.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts').length;
+  const approvedCount = invoiceQueue.filter(isInvoiceApproved).length;
+  const partialCount = invoiceQueue.filter((invoice) => invoice.paymentStatus === 'Partial Paid').length;
+  const completedCount = invoiceQueue.filter((invoice) => invoice.paymentStatus === 'Fully Paid').length;
+  const filteredQueue = invoiceQueue.filter((invoice) => {
+    const approvalMatches = approvalFilter === 'all'
+      || (approvalFilter === 'pending' && invoiceApprovalStatus(invoice) === 'Pending Accounts')
+      || (approvalFilter === 'approved' && isInvoiceApproved(invoice));
+    const paymentMatches = paymentFilter === 'all'
+      || (paymentFilter === 'partial' && invoice.paymentStatus === 'Partial Paid')
+      || (paymentFilter === 'completed' && invoice.paymentStatus === 'Fully Paid');
+    return approvalMatches && paymentMatches;
+  });
 
   return (
     <section className="panel">
-      <SectionHeader eyebrow="Accounts" title="Invoice Payment Approval Queue" />
+      <SectionHeader eyebrow="Accounts" title="Invoice Payment Approval Queue">
+        <div className="row-actions">
+          <select value={approvalFilter} onChange={(event) => setApprovalFilter(event.target.value)} aria-label="Filter by approval status">
+            <option value="all">All approvals ({invoiceQueue.length})</option>
+            <option value="pending">Pending ({pendingCount})</option>
+            <option value="approved">Approved ({approvedCount})</option>
+          </select>
+          <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)} aria-label="Filter by payment status">
+            <option value="all">All payments ({invoiceQueue.length})</option>
+            <option value="partial">Partial ({partialCount})</option>
+            <option value="completed">Completed ({completedCount})</option>
+          </select>
+        </div>
+      </SectionHeader>
       <div className="queue">
-        {invoiceQueue.map((invoice) => (
+        {filteredQueue.length ? filteredQueue.map((invoice) => (
           <article className="queue-row" key={invoice.invoiceNumber}>
             <div>
               <strong>{invoice.customer}</strong>
@@ -1206,13 +1243,15 @@ function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
               </button>
             </div>
           </article>
-        ))}
+        )) : <div className="invoice-preview-empty">No invoices match the selected filters.</div>}
       </div>
     </section>
   );
 }
 
 function OrderSheetView({ sentInvoices = [], onCreateJob }) {
+  const [inventory, setInventory] = useState([]);
+  const [inventoryLoading, setInventoryLoading] = useState(true);
   const [sheetForm, setSheetForm] = useState({
     invoiceNumber: '',
     trackingToken: '',
@@ -1222,13 +1261,37 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     pieces: 1,
     delivery: todayIso(),
     store: 'Lekki',
-    fabric: fabrics[0]?.name || '',
+    fabric: '',
+    fabricId: '',
+    fabricUnit: '',
     measurements: '',
     designNotes: '',
     itemNote: '',
     styleImages: ['', '', '', '', ''],
   });
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    api.get('/oms/fabrics')
+      .then((response) => {
+        if (!active) return;
+        const availableInventory = response.data?.data?.fabrics || [];
+        setInventory(availableInventory);
+        const firstAvailable = availableInventory.find((fabric) => toNumber(fabric.quantity) > 0);
+        if (firstAvailable) {
+          setSheetForm((current) => current.fabricId || current.fabric === 'Client supplied' ? current : ({
+            ...current,
+            fabric: firstAvailable.name,
+            fabricId: firstAvailable.id,
+            fabricUnit: firstAvailable.unit,
+          }));
+        }
+      })
+      .catch(() => setMessage('Unable to load fabrics from inventory.'))
+      .finally(() => active && setInventoryLoading(false));
+    return () => { active = false; };
+  }, []);
 
   const updateSheetForm = (field, value) => {
     setSheetForm((current) => ({ ...current, [field]: value }));
@@ -1238,6 +1301,20 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     setSheetForm((current) => ({
       ...current,
       styleImages: current.styleImages.map((image, imageIndex) => (imageIndex === index ? value : image)),
+    }));
+  };
+
+  const selectFabric = (fabricId) => {
+    if (fabricId === 'client-supplied') {
+      setSheetForm((current) => ({ ...current, fabric: 'Client supplied', fabricId: '', fabricUnit: '' }));
+      return;
+    }
+    const selected = inventory.find((fabric) => fabric.id === fabricId);
+    setSheetForm((current) => ({
+      ...current,
+      fabric: selected?.name || '',
+      fabricId: selected?.id || '',
+      fabricUnit: selected?.unit || '',
     }));
   };
 
@@ -1266,8 +1343,8 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
 
   const submitOrderSheet = (event) => {
     event.preventDefault();
-    if (!sheetForm.invoiceNumber || !sheetForm.customer.trim() || !sheetForm.item.trim()) {
-      setMessage('Select an invoice and confirm the customer and item before releasing the order sheet.');
+    if (!sheetForm.invoiceNumber || !sheetForm.customer.trim() || !sheetForm.item.trim() || !sheetForm.fabric) {
+      setMessage('Select an invoice, confirm the customer and item, and choose a fabric before releasing the order sheet.');
       return;
     }
 
@@ -1288,6 +1365,8 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       requiresAccountApproval: true,
       payment: 'Fully Paid',
       fabric: sheetForm.fabric,
+      fabricId: sheetForm.fabricId,
+      fabricUnit: sheetForm.fabricUnit,
       tailor: 'Unassigned',
       images: sheetForm.styleImages.filter(Boolean).length,
       styleImages: sheetForm.styleImages.filter(Boolean).map((image, index) => ({
@@ -1324,7 +1403,9 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       pieces: 1,
       delivery: todayIso(),
       store: 'Lekki',
-      fabric: fabrics[0]?.name || '',
+      fabric: '',
+      fabricId: '',
+      fabricUnit: '',
       measurements: '',
       designNotes: '',
       itemNote: '',
@@ -1379,9 +1460,19 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
         <div className="form-stage wide-field">
           <span>4. Measurements and Fabric</span>
           <label>Fabric
-            <select value={sheetForm.fabric} onChange={(event) => updateSheetForm('fabric', event.target.value)}>
-              <option value="Client supplied">Client supplied</option>
-              {fabrics.map((fabric) => <option key={fabric.name} value={fabric.name}>{fabric.name}</option>)}
+            <select
+              value={sheetForm.fabric === 'Client supplied' ? 'client-supplied' : sheetForm.fabricId}
+              onChange={(event) => selectFabric(event.target.value)}
+              disabled={inventoryLoading}
+              required
+            >
+              <option value="">{inventoryLoading ? 'Loading inventory...' : 'Select inventory fabric'}</option>
+              <option value="client-supplied">Client supplied</option>
+              {inventory.map((fabric) => (
+                <option key={fabric.id} value={fabric.id} disabled={toNumber(fabric.quantity) <= 0}>
+                  {fabric.name} ({toNumber(fabric.quantity)} {fabric.unit}){toNumber(fabric.quantity) <= 0 ? ' · Out of stock' : ''}
+                </option>
+              ))}
             </select>
           </label>
           <label className="wide-field">Measurements
@@ -1423,12 +1514,12 @@ function ProductionView({ productionJobs, onUpdateJob }) {
   const productionTabs = ['All', 'Order Sheet Confirmed', 'Assigned', 'In Progress', 'Ready'];
 
   useEffect(() => {
-    Promise.all([api.get('/oms/fabrics'), api.get('/oms/staff')])
-      .then(([inventoryResponse, staffResponse]) => {
-        setInventory(inventoryResponse.data?.data?.fabrics || []);
-        setTailors((staffResponse.data?.data?.staffUsers || []).filter((person) => person.role === 'tailor'));
-      })
+    api.get('/oms/fabrics')
+      .then((response) => setInventory(response.data?.data?.fabrics || []))
       .catch(() => notify('Unable to load current inventory'));
+    api.get('/oms/staff')
+      .then((response) => setTailors((response.data?.data?.staffUsers || []).filter((person) => person.role === 'tailor')))
+      .catch(() => notify('Unable to load tailors'));
   }, []);
 
   const notify = (message) => {
@@ -1447,7 +1538,8 @@ function ProductionView({ productionJobs, onUpdateJob }) {
       updateJobWithToast(order, { fabricConfirmed: true, fabricAllocated: true }, 'Client-supplied fabric confirmed');
       return;
     }
-    const selectedFabric = inventory.find((fabric) => fabric.name === order.fabric);
+    const selectedFabric = inventory.find((fabric) => fabric.id === order.fabricId)
+      || inventory.find((fabric) => fabric.name === order.fabric);
     const usage = Number(order.fabricUsage);
     if (!selectedFabric || !Number.isFinite(usage) || usage <= 0) {
       notify('Select inventory fabric and enter the quantity used');
@@ -1534,12 +1626,24 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                     </select>
                   </label>
                   <label>Fabric
-                    <select disabled={order.fabricAllocated} value={order.fabric} onChange={(event) => updateJobWithToast(order, {
-                      fabric: event.target.value,
-                      fabricConfirmed: false,
-                    }, `Fabric changed to ${event.target.value}`)}>
-                      <option value="Client supplied">Client supplied</option>
-                      {inventory.map((fabric) => <option key={fabric.id} value={fabric.name}>{fabric.name} ({toNumber(fabric.quantity)} {fabric.unit})</option>)}
+                    <select disabled={order.fabricAllocated} value={order.fabric === 'Client supplied' ? 'client-supplied' : order.fabricId || ''} onChange={(event) => {
+                      const selected = inventory.find((fabric) => fabric.id === event.target.value);
+                      const clientSupplied = event.target.value === 'client-supplied';
+                      const fabricName = clientSupplied ? 'Client supplied' : selected?.name || '';
+                      updateJobWithToast(order, {
+                        fabric: fabricName,
+                        fabricId: selected?.id || '',
+                        fabricUnit: selected?.unit || '',
+                        fabricConfirmed: false,
+                      }, `Fabric changed to ${fabricName}`);
+                    }}>
+                      <option value="">Select inventory fabric</option>
+                      <option value="client-supplied">Client supplied</option>
+                      {inventory.map((fabric) => (
+                        <option key={fabric.id} value={fabric.id} disabled={toNumber(fabric.quantity) <= 0}>
+                          {fabric.name} ({toNumber(fabric.quantity)} {fabric.unit}){toNumber(fabric.quantity) <= 0 ? ' · Out of stock' : ''}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label>Quantity used
@@ -1562,7 +1666,12 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                   <button disabled={order.fabricAllocated || allocatingJobId === order.id} onClick={() => allocateFabric(order)}>
                     {order.fabricAllocated ? 'Fabric Allocated' : allocatingJobId === order.id ? 'Allocating...' : 'Allocate Fabric'}
                   </button>
-                  <button onClick={() => updateJobWithToast(order, { status: 'In Progress' }, 'Job moved to In Progress')}>In Progress</button>
+                  <button
+                    disabled={order.status === 'In Progress' || order.status === 'Ready'}
+                    onClick={() => updateJobWithToast(order, { status: 'In Progress' }, 'Job moved to In Progress')}
+                  >
+                    In Progress
+                  </button>
                   <button className="primary-action" onClick={() => updateJobWithToast(order, { status: 'Ready' }, 'Job marked Ready')}>Mark Ready</button>
                 </div>
               </div>
