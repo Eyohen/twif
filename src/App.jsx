@@ -57,9 +57,6 @@ const customerStatus = (status) => {
   return 'In Progress';
 };
 
-const SENT_INVOICES_KEY = 'twif.sentInvoices';
-const PRODUCTION_JOBS_KEY = 'twif.productionJobs';
-
 const paymentStatusLabels = {
   partial_paid: 'Partial Paid',
   fully_paid: 'Fully Paid',
@@ -105,6 +102,9 @@ const productionJobFromInvoice = (invoice) => {
     note: sheet.note || sheet.designNotes || invoice.itemNote || '',
     productionNote: sheet.productionNote || '',
     fabricConfirmed: Boolean(sheet.fabricConfirmed),
+    fabricAllocated: Boolean(sheet.fabricAllocated),
+    fabricUsage: sheet.fabricUsage || '',
+    fabricUnit: sheet.fabricUnit || '',
     assignedAt: sheet.assignedAt || 'Pending assignment',
     updatedAt: sheet.updatedAt,
   };
@@ -121,82 +121,6 @@ const mergeJobsByInvoice = (currentJobs, incomingJobs) => {
   ];
 };
 
-const loadSentInvoices = () => {
-  try {
-    return JSON.parse(localStorage.getItem(SENT_INVOICES_KEY) || '[]');
-  } catch (error) {
-    return [];
-  }
-};
-
-const loadStoredProductionJobs = () => {
-  try {
-    return JSON.parse(localStorage.getItem(PRODUCTION_JOBS_KEY) || '[]');
-  } catch (error) {
-    return [];
-  }
-};
-
-const orders = [
-  {
-    id: 'TWIF-2026-0041',
-    customer: 'Ken Mbachu',
-    phone: '0803 221 8844',
-    store: 'Lekki',
-    item: 'Three-piece suit',
-    pieces: 3,
-    delivery: '12 Jul 2026',
-    amount: 780000,
-    paid: 400000,
-    status: 'Work in Progress',
-    payment: 'Partial Paid',
-    fabric: 'Black jacquard wool',
-    tailor: 'Segun',
-    images: 4,
-    note: 'Collared neckline, structured shoulder, Image 2 lapel reference.',
-  },
-  {
-    id: 'TWIF-2026-0042',
-    customer: 'Frank Ade-Williams',
-    phone: '0816 440 9077',
-    store: 'Ikeja',
-    item: 'Native kaftan set',
-    pieces: 2,
-    delivery: '09 Jul 2026',
-    amount: 320000,
-    paid: 320000,
-    status: 'Pending Confirmation',
-    payment: 'Fully Paid',
-    fabric: 'Client supplied',
-    tailor: 'Unassigned',
-    images: 3,
-    note: 'Clean neckline, minimal embroidery, trouser slim but not tight.',
-  },
-  {
-    id: 'TWIF-2026-0043',
-    customer: 'Audu Mustapha',
-    phone: '0705 183 2261',
-    store: 'Lekki',
-    item: 'Dinner jacket',
-    pieces: 1,
-    delivery: '15 Jul 2026',
-    amount: 520000,
-    paid: 520000,
-    status: 'Ready',
-    payment: 'Fully Paid',
-    fabric: 'Midnight velvet',
-    tailor: 'Musa',
-    images: 5,
-    note: 'Peak lapel, covered buttons, no pocket flap.',
-  },
-];
-
-const payments = [
-  { id: 'PAY-1841', order: 'TWIF-2026-0042', customer: 'Frank Ade-Williams', store: 'Ikeja', amount: 320000, mode: 'Transfer', bank: 'GTBank', status: 'Needs Review' },
-  { id: 'PAY-1838', order: 'TWIF-2026-0041', customer: 'Ken Mbachu', store: 'Lekki', amount: 400000, mode: 'POS', bank: 'Moniepoint', status: 'Confirmed' },
-  { id: 'PAY-1837', order: 'TWIF-2026-0039', customer: 'Dare Johnson', store: 'Ikeja', amount: 150000, mode: 'Cash', bank: 'Till', status: 'Flagged' },
-];
-
 const fabrics = [
   { name: 'Black jacquard wool', type: 'Suiting', qty: 18, unit: 'm', threshold: 10, status: 'Healthy' },
   { name: 'Midnight velvet', type: 'Jacket', qty: 6, unit: 'm', threshold: 8, status: 'Low' },
@@ -204,34 +128,18 @@ const fabrics = [
   { name: 'Gold aso-oke trim', type: 'Trim', qty: 4, unit: 'rolls', threshold: 5, status: 'Low' },
 ];
 
-const tailorOptions = [
-  { name: 'Segun', department: 'Suit', grade: 4 },
-  { name: 'Musa', department: 'Finishing', grade: 5 },
-  { name: 'Hassan', department: 'Trouser', grade: 3 },
-  { name: 'Ayo', department: 'Native', grade: 4 },
-];
-
-const initialProductionJobs = orders
-  .filter((order) => ['Partial Paid', 'Fully Paid'].includes(order.payment))
-  .map((order) => ({
-    ...order,
-    fabricConfirmed: order.fabric !== 'Client supplied',
-    productionNote: order.note,
-    assignedAt: 'Seeded',
-  }));
-
-const staff = [
-  { name: 'Jenni', role: 'Owner', store: 'All', status: 'Active', lastLogin: 'Today, 21:18' },
-  { name: 'Bola', role: 'Store Manager', store: 'Ikeja', status: 'Active', lastLogin: 'Today, 18:42' },
-  { name: 'Funke', role: 'Accounts', store: 'All', status: 'Active', lastLogin: 'Today, 17:03' },
-  { name: 'Segun', role: 'Tailor', store: 'Production', status: 'Active', lastLogin: 'Today, 08:12', department: 'Suit', grade: 4 },
-];
-
-const notifications = [
-  { channel: 'Payments', text: 'Frank Ade-Williams payment is waiting for Accounts review.', time: '4 min ago' },
-  { channel: 'Production', text: 'Audu Mustapha dinner jacket was marked Ready.', time: '18 min ago' },
-  { channel: 'Inventory', text: 'Midnight velvet is below stock threshold.', time: '1 hr ago' },
-  { channel: 'Security', text: 'One failed login attempt for Store Manager account.', time: '2 hrs ago' },
+const inventoryCategories = [
+  'Suiting',
+  'Shirting',
+  'Jacket',
+  'Trouser',
+  'Native',
+  'Bridal',
+  'Lining',
+  'Trim',
+  'Accessories',
+  'Cloth',
+  'Add Ons',
 ];
 
 const navByRole = {
@@ -241,7 +149,7 @@ const navByRole = {
   accounts: ['Overview', 'Payments', 'Reports', 'Notifications'],
   production_manager: ['Overview', 'Production', 'Inventory', 'Notifications'],
   inventory_manager: ['Overview', 'Inventory', 'Notifications'],
-  tailor: ['My Tasks', 'Weekly Log', 'Notifications'],
+  tailor: ['Overview', 'My Tasks', 'Weekly Log', 'Notifications'],
 };
 
 function classNames(...items) {
@@ -375,66 +283,410 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-function Overview({ role, productionJobs = [], onUpdateJob }) {
+function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], onUpdateJob }) {
   const isTailor = role === 'tailor';
 
   if (isTailor) {
-    return <TailorTasks compact productionJobs={productionJobs} onUpdateJob={onUpdateJob} />;
+    return <TailorOverview currentRole={currentRole} productionJobs={productionJobs} onUpdateJob={onUpdateJob} />;
   }
 
+  if (role === 'inventory_manager') {
+    return <InventoryOverview />;
+  }
+
+  if (role === 'production_manager') {
+    return <ProductionOverview productionJobs={productionJobs} />;
+  }
+
+  return <OperationsOverview role={role} sentInvoices={sentInvoices} productionJobs={productionJobs} />;
+}
+
+function OperationsOverview({ role, sentInvoices = [], productionJobs = [] }) {
+  const [inventory, setInventory] = useState([]);
+
+  useEffect(() => {
+    api.get('/oms/fabrics')
+      .then((response) => setInventory(response.data?.data?.fabrics || []))
+      .catch(() => setInventory([]));
+  }, []);
+
+  const approved = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Approved');
+  const pendingAccounts = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts');
+  const partialPayments = sentInvoices.filter((invoice) => invoice.paymentStatus === 'Partial Paid');
+  const readyJobs = productionJobs.filter((job) => job.status === 'Ready');
+  const activeJobs = productionJobs.filter((job) => job.status !== 'Ready');
+  const lowStock = inventory.filter((item) => toNumber(item.quantity) <= toNumber(item.lowStockThreshold));
+  const invoiceTotal = sentInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
+  const metricSets = {
+    accounts: [
+      { label: 'Awaiting review', value: pendingAccounts.length, detail: 'Pending Accounts approval', tone: pendingAccounts.length ? 'gold' : undefined },
+      { label: 'Approved invoices', value: approved.length, detail: `${sentInvoices.length} invoices received` },
+      { label: 'Partial payments', value: partialPayments.length, detail: 'Outstanding payment status', tone: partialPayments.length ? 'alert' : undefined },
+      { label: 'Total invoiced', value: money.format(invoiceTotal), detail: 'Across live invoice records' },
+    ],
+    store_manager: [
+      { label: 'Invoices sent', value: sentInvoices.length, detail: 'Live customer invoices' },
+      { label: 'Pending approval', value: pendingAccounts.length, detail: 'Waiting for Accounts', tone: pendingAccounts.length ? 'gold' : undefined },
+      { label: 'Active orders', value: activeJobs.length, detail: 'Currently in production' },
+      { label: 'Ready orders', value: readyJobs.length, detail: 'Ready for customer handoff' },
+    ],
+    owner: [
+      { label: 'Invoices', value: sentInvoices.length, detail: money.format(invoiceTotal) },
+      { label: 'Active production', value: activeJobs.length, detail: `${productionJobs.length} total job sheets` },
+      { label: 'Ready orders', value: readyJobs.length, detail: 'Awaiting handoff' },
+      { label: 'Low stock', value: lowStock.length, detail: `${inventory.length} inventory records`, tone: lowStock.length ? 'alert' : undefined },
+    ],
+    admin: [
+      { label: 'Invoices', value: sentInvoices.length, detail: money.format(invoiceTotal) },
+      { label: 'Pending Accounts', value: pendingAccounts.length, detail: 'Requiring approval', tone: pendingAccounts.length ? 'gold' : undefined },
+      { label: 'Production jobs', value: productionJobs.length, detail: `${readyJobs.length} ready` },
+      { label: 'Low stock', value: lowStock.length, detail: `${inventory.length} inventory records`, tone: lowStock.length ? 'alert' : undefined },
+    ],
+  };
+  const metrics = metricSets[role] || metricSets.owner;
+
   return (
-    <div className="stack">
+    <div className="stack operations-overview">
       <section className="metrics-grid">
-        <Stat label="Active orders" value="18" detail="11 Lekki, 7 Ikeja" />
-        <Stat label="Payment review" value="6" detail="Awaiting Accounts" tone="gold" />
-        <Stat label="Ready today" value="4" detail="Store handoff pending" />
-        <Stat label="Low stock" value="2" detail="Velvet, aso-oke trim" tone="alert" />
+        {metrics.map((metric) => <Stat key={metric.label} label={metric.label} value={String(metric.value)} detail={metric.detail} tone={metric.tone} />)}
       </section>
 
-      <section className="work-grid">
-        <div className="panel span-2">
-          <SectionHeader eyebrow="Orders" title="Live Order Queue">
-            <select>
-              {stores.map((store) => <option key={store}>{store}</option>)}
-            </select>
-          </SectionHeader>
-          <OrderTable rows={orders} />
+      <section className="panel">
+        <SectionHeader eyebrow="Live records" title={role === 'accounts' ? 'Invoice Review Queue' : 'Recent Orders'} />
+        {sentInvoices.length ? (
+          <div className="table-wrap">
+            <table className="operations-overview-table">
+              <thead><tr><th>Invoice</th><th>Customer</th><th>Store</th><th>Total</th><th>Payment</th><th>Accounts</th><th>Order</th></tr></thead>
+              <tbody>{sentInvoices.slice(0, 10).map((invoice) => (
+                <tr key={invoice.invoiceNumber}>
+                  <td data-label="Invoice"><strong>{invoice.invoiceNumber}</strong></td>
+                  <td data-label="Customer">{invoice.customer}</td>
+                  <td data-label="Store">{invoice.store}</td>
+                  <td data-label="Total">{money.format(invoice.total)}</td>
+                  <td data-label="Payment"><Status>{invoice.paymentStatus}</Status></td>
+                  <td data-label="Accounts"><Status>{invoiceApprovalStatus(invoice)}</Status></td>
+                  <td data-label="Order"><Status>{invoice.orderStatus}</Status></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : <div className="invoice-preview-empty">No invoice or order records are available yet.</div>}
+      </section>
+
+      {(role === 'owner' || role === 'admin') ? (
+        <section className="operations-health-grid">
+          <div className="panel"><SectionHeader eyebrow="Production" title="Current Workload" /><div className="inventory-category-list"><div><span>Active</span><strong>{activeJobs.length}</strong></div><div><span>Ready</span><strong>{readyJobs.length}</strong></div><div><span>Unassigned</span><strong>{productionJobs.filter((job) => !job.tailor || job.tailor === 'Unassigned').length}</strong></div></div></div>
+          <div className="panel"><SectionHeader eyebrow="Inventory" title="Stock Health" /><div className="inventory-category-list"><div><span>Healthy</span><strong>{inventory.length - lowStock.length}</strong></div><div><span>Low or out</span><strong>{lowStock.length}</strong></div><div><span>Total records</span><strong>{inventory.length}</strong></div></div></div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function TailorOverview({ currentRole, productionJobs = [], onUpdateJob }) {
+  const tailorName = currentRole?.name?.split(' (')[0] || '';
+  const myJobs = productionJobs.filter((job) => job.tailor === tailorName);
+  const readyJobs = myJobs.filter((job) => job.status === 'Ready');
+  const activeJobs = myJobs.filter((job) => job.status !== 'Ready');
+  const inProgressJobs = myJobs.filter((job) => job.status === 'In Progress');
+  const now = new Date();
+  const inSevenDays = new Date(now);
+  inSevenDays.setDate(now.getDate() + 7);
+  const dueSoon = activeJobs.filter((job) => {
+    const deliveryDate = new Date(job.delivery);
+    return !Number.isNaN(deliveryDate.getTime()) && deliveryDate >= now && deliveryDate <= inSevenDays;
+  });
+  const overdueJobs = activeJobs.filter((job) => {
+    const deliveryDate = new Date(job.delivery);
+    return !Number.isNaN(deliveryDate.getTime()) && deliveryDate < now;
+  });
+  const preparationPending = activeJobs.filter((job) => !job.fabricConfirmed || !job.measurements);
+  const sortedActiveJobs = [...activeJobs].sort((a, b) => {
+    const first = new Date(a.delivery).getTime();
+    const second = new Date(b.delivery).getTime();
+    if (Number.isNaN(first)) return 1;
+    if (Number.isNaN(second)) return -1;
+    return first - second;
+  });
+
+  return (
+    <div className="stack tailor-overview">
+      <section className="metrics-grid">
+        <Stat label="My active tasks" value={String(activeJobs.length)} detail={`${myJobs.length} total assignments`} />
+        <Stat label="In progress" value={String(inProgressJobs.length)} detail="Currently being worked on" />
+        <Stat label="Due in 7 days" value={String(dueSoon.length)} detail={`${overdueJobs.length} overdue`} tone={overdueJobs.length ? 'alert' : 'gold'} />
+        <Stat label="Ready" value={String(readyJobs.length)} detail="Marked complete" />
+      </section>
+
+      <section className="panel">
+        <SectionHeader eyebrow="My schedule" title="Priority Task Queue" />
+        {sortedActiveJobs.length ? (
+          <div className="job-list production-job-list tailor-priority-list">
+            {sortedActiveJobs.map((job) => (
+              <article className="job-card" key={job.id}>
+                <div className="job-line production-job-head">
+                  <div className="avatar">{job.customer.split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
+                  <div><strong>{job.customer}</strong><span>{job.item}</span><span>Delivery {job.delivery || 'not set'}</span></div>
+                  <Status>{job.status}</Status>
+                </div>
+                <div className="job-detail">
+                  <dl>
+                    <div><dt>Pieces</dt><dd>{job.pieces || 1}</dd></div>
+                    <div><dt>Fabric</dt><dd>{job.fabric || 'Not selected'}</dd></div>
+                    <div><dt>Fabric status</dt><dd>{job.fabricConfirmed ? 'Confirmed' : 'Pending'}</dd></div>
+                    <div><dt>Measurements</dt><dd>{job.measurements ? 'Included' : 'Missing'}</dd></div>
+                  </dl>
+                  {(job.productionNote || job.designNotes || job.note) ? <p className="production-note">{job.productionNote || job.designNotes || job.note}</p> : null}
+                  <div className="row-actions">
+                    <button disabled={job.status === 'In Progress'} onClick={() => onUpdateJob?.(job.id, { status: 'In Progress' })}>Start Work</button>
+                    <button className="primary-action" onClick={() => onUpdateJob?.(job.id, { status: 'Ready' })}>Mark Ready</button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : <div className="invoice-preview-empty">You have no active assigned tasks.</div>}
+      </section>
+
+      <section className="tailor-overview-grid">
+        <div className="panel">
+          <SectionHeader eyebrow="Before sewing" title="Preparation Pending" />
+          <div className="production-summary-list">
+            {preparationPending.length ? preparationPending.map((job) => (
+              <article key={job.id}>
+                <div><strong>{job.customer}</strong><Status>Attention</Status></div>
+                <span>{!job.fabricConfirmed ? 'Fabric not confirmed' : ''}{!job.fabricConfirmed && !job.measurements ? ' · ' : ''}{!job.measurements ? 'Measurements missing' : ''}</span>
+              </article>
+            )) : <div className="invoice-preview-empty">All active tasks have fabric and measurements ready.</div>}
+          </div>
         </div>
-        <NotificationPanel />
+
+        <div className="panel">
+          <SectionHeader eyebrow="Completed work" title="Recently Ready" />
+          <div className="production-summary-list">
+            {readyJobs.length ? readyJobs.slice(0, 6).map((job) => (
+              <article key={job.id}><div><strong>{job.customer}</strong><Status>Ready</Status></div><span>{job.item} · Delivery {job.delivery || 'not set'}</span></article>
+            )) : <div className="invoice-preview-empty">No completed tasks yet.</div>}
+          </div>
+        </div>
       </section>
     </div>
   );
 }
 
-function OrderTable({ rows }) {
+function ProductionOverview({ productionJobs = [] }) {
+  const readyJobs = productionJobs.filter((job) => job.status === 'Ready');
+  const unassignedJobs = productionJobs.filter((job) => !job.tailor || job.tailor === 'Unassigned');
+  const fabricPending = productionJobs.filter((job) => !job.fabricConfirmed);
+  const activeJobs = productionJobs.filter((job) => job.status !== 'Ready');
+  const now = new Date();
+  const inSevenDays = new Date(now);
+  inSevenDays.setDate(now.getDate() + 7);
+  const dueSoon = activeJobs.filter((job) => {
+    const deliveryDate = new Date(job.delivery);
+    return !Number.isNaN(deliveryDate.getTime()) && deliveryDate >= now && deliveryDate <= inSevenDays;
+  });
+  const overdueJobs = activeJobs.filter((job) => {
+    const deliveryDate = new Date(job.delivery);
+    return !Number.isNaN(deliveryDate.getTime()) && deliveryDate < now;
+  });
+  const tailorWorkload = productionJobs.reduce((workload, job) => {
+    if (!job.tailor || job.tailor === 'Unassigned' || job.status === 'Ready') return workload;
+    workload[job.tailor] = (workload[job.tailor] || 0) + 1;
+    return workload;
+  }, {});
+  const priorityJobs = [...activeJobs].sort((a, b) => {
+    const first = new Date(a.delivery).getTime();
+    const second = new Date(b.delivery).getTime();
+    if (Number.isNaN(first)) return 1;
+    if (Number.isNaN(second)) return -1;
+    return first - second;
+  });
+
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Invoice</th>
-            <th>Customer</th>
-            <th>Store</th>
-            <th>Item</th>
-            <th>Delivery</th>
-            <th>Payment</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((order) => (
-            <tr key={order.id}>
-              <td data-label="Invoice"><strong>{order.id}</strong></td>
-              <td data-label="Customer">{order.customer}</td>
-              <td data-label="Store">{order.store}</td>
-              <td data-label="Item">{order.item}</td>
-              <td data-label="Delivery">{order.delivery}</td>
-              <td data-label="Payment"><Status>{order.payment}</Status></td>
-              <td data-label="Status"><Status>{order.status}</Status></td>
-            </tr>
+    <div className="stack production-overview">
+      <section className="metrics-grid">
+        <Stat label="Active jobs" value={String(activeJobs.length)} detail={`${productionJobs.length} total job sheets`} />
+        <Stat label="Unassigned" value={String(unassignedJobs.length)} detail="Waiting for a tailor" tone={unassignedJobs.length ? 'alert' : undefined} />
+        <Stat label="Due in 7 days" value={String(dueSoon.length)} detail={`${overdueJobs.length} overdue`} tone={overdueJobs.length ? 'alert' : 'gold'} />
+        <Stat label="Ready" value={String(readyJobs.length)} detail="Awaiting collection or handoff" />
+      </section>
+
+      <section className="production-overview-grid">
+        <div className="panel">
+          <SectionHeader eyebrow="Work schedule" title="Priority Production Queue" />
+          {priorityJobs.length ? (
+            <div className="table-wrap">
+              <table className="production-overview-table">
+                <thead><tr><th>Delivery</th><th>Customer</th><th>Item</th><th>Tailor</th><th>Fabric</th><th>Status</th></tr></thead>
+                <tbody>{priorityJobs.slice(0, 10).map((job) => (
+                  <tr key={job.id}>
+                    <td data-label="Delivery"><strong>{job.delivery || 'Not set'}</strong></td>
+                    <td data-label="Customer">{job.customer}</td>
+                    <td data-label="Item">{job.item}</td>
+                    <td data-label="Tailor">{job.tailor || 'Unassigned'}</td>
+                    <td data-label="Fabric"><Status>{job.fabricConfirmed ? 'Confirmed' : 'Pending'}</Status></td>
+                    <td data-label="Status"><Status>{job.status}</Status></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          ) : <div className="invoice-preview-empty">No active production jobs.</div>}
+        </div>
+
+        <div className="panel">
+          <SectionHeader eyebrow="Team capacity" title="Tailor Workload" />
+          <div className="inventory-category-list">
+            {Object.entries(tailorWorkload).length ? Object.entries(tailorWorkload)
+              .sort(([first], [second]) => first.localeCompare(second))
+              .map(([tailor, workload]) => (
+              <div key={tailor}>
+                <span>{tailor}<small>Active assignments</small></span>
+                <strong>{workload}</strong>
+              </div>
+              )) : <div className="invoice-preview-empty">No tailors have active assignments.</div>}
+          </div>
+        </div>
+      </section>
+
+      <section className="production-overview-alerts">
+        <div className="panel">
+          <SectionHeader eyebrow="Action required" title="Unassigned Jobs" />
+          <div className="production-summary-list">
+            {unassignedJobs.length ? unassignedJobs.slice(0, 6).map((job) => (
+              <article key={job.id}><div><strong>{job.customer}</strong><Status>{job.status}</Status></div><span>{job.item} · Delivery {job.delivery || 'not set'}</span></article>
+            )) : <div className="invoice-preview-empty">Every active job has a tailor.</div>}
+          </div>
+        </div>
+
+        <div className="panel">
+          <SectionHeader eyebrow="Materials" title="Fabric Confirmation Pending" />
+          <div className="production-summary-list">
+            {fabricPending.length ? fabricPending.slice(0, 6).map((job) => (
+              <article key={job.id}><div><strong>{job.customer}</strong><Status>Pending</Status></div><span>{job.fabric || 'Fabric not selected'} · {job.item}</span></article>
+            )) : <div className="invoice-preview-empty">Fabric is confirmed for every production job.</div>}
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <SectionHeader eyebrow="Latest updates" title="Recent Production Activity" />
+        <div className="inventory-recent-list">
+          {[...productionJobs].sort((a, b) => new Date(b.updatedAt || b.assignedAt) - new Date(a.updatedAt || a.assignedAt)).slice(0, 6).map((job) => (
+            <article key={job.id}>
+              <div><strong>{job.customer}</strong><Status>{job.status}</Status></div>
+              <span>{job.item} · {job.tailor || 'Unassigned'}</span>
+              <small>{job.updatedAt ? `Updated ${new Date(job.updatedAt).toLocaleString('en-GB')}` : `Assigned ${job.assignedAt || 'pending'}`}</small>
+            </article>
           ))}
-        </tbody>
-      </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function InventoryOverview() {
+  const [inventory, setInventory] = useState([]);
+  const [allocations, setAllocations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    Promise.all([api.get('/oms/fabrics'), api.get('/oms/fabrics/allocations')])
+      .then(([inventoryResponse, allocationResponse]) => {
+        setInventory(inventoryResponse.data?.data?.fabrics || []);
+        setAllocations(allocationResponse.data?.data?.allocations || []);
+      })
+      .catch((requestError) => setError(requestError.response?.data?.message || 'Unable to load inventory overview.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <section className="panel"><div className="invoice-preview-empty">Loading inventory overview...</div></section>;
+  if (error) return <section className="panel"><div className="invoice-message">{error}</div></section>;
+
+  const lowStock = inventory.filter((item) => toNumber(item.quantity) <= toNumber(item.lowStockThreshold));
+  const outOfStock = inventory.filter((item) => toNumber(item.quantity) === 0);
+  const healthyStock = inventory.length - lowStock.length;
+  const today = todayIso();
+  const todayAllocations = allocations.filter((item) => String(item.createdAt).slice(0, 10) === today);
+  const categoryCounts = inventory.reduce((counts, item) => ({
+    ...counts,
+    [item.type]: (counts[item.type] || 0) + 1,
+  }), {});
+
+  return (
+    <div className="stack inventory-overview">
+      <section className="metrics-grid">
+        <Stat label="Inventory items" value={String(inventory.length)} detail={`${Object.keys(categoryCounts).length} categories`} />
+        <Stat label="Healthy stock" value={String(healthyStock)} detail="Above reorder threshold" />
+        <Stat label="Low stock" value={String(lowStock.length)} detail={`${outOfStock.length} currently out of stock`} tone="alert" />
+        <Stat label="Allocated today" value={String(todayAllocations.length)} detail="Production usage entries" tone="gold" />
+      </section>
+
+      <section className="inventory-overview-grid">
+        <div className="panel">
+          <SectionHeader eyebrow="Attention required" title="Low-Stock Items" />
+          {lowStock.length ? (
+            <div className="table-wrap">
+              <table className="inventory-overview-table">
+                <thead><tr><th>Item</th><th>Category</th><th>Remaining</th><th>Threshold</th><th>Status</th></tr></thead>
+                <tbody>{lowStock.map((item) => (
+                  <tr key={item.id}>
+                    <td data-label="Item"><strong>{item.name}</strong></td>
+                    <td data-label="Category">{item.type}</td>
+                    <td data-label="Remaining">{toNumber(item.quantity)} {item.unit}</td>
+                    <td data-label="Threshold">{toNumber(item.lowStockThreshold)} {item.unit}</td>
+                    <td data-label="Status"><Status>{toNumber(item.quantity) === 0 ? 'Out of Stock' : 'Low'}</Status></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          ) : <div className="invoice-preview-empty">All inventory items are above their thresholds.</div>}
+        </div>
+
+        <div className="panel">
+          <SectionHeader eyebrow="Stock mix" title="Categories" />
+          <div className="inventory-category-list">
+            {Object.entries(categoryCounts).sort(([a], [b]) => a.localeCompare(b)).map(([category, count]) => (
+              <div key={category}><span>{category}</span><strong>{count}</strong></div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <SectionHeader eyebrow="Production usage" title="Recent Allocations" />
+        {allocations.length ? (
+          <div className="table-wrap">
+            <table className="allocation-table">
+              <thead><tr><th>Date</th><th>Fabric / item</th><th>Quantity</th><th>Order</th><th>Customer</th><th>Tailor</th></tr></thead>
+              <tbody>{allocations.slice(0, 10).map((allocation) => (
+                <tr key={allocation.id}>
+                  <td data-label="Date">{new Date(allocation.createdAt).toLocaleString('en-GB')}</td>
+                  <td data-label="Fabric / item"><strong>{allocation.fabricName}</strong></td>
+                  <td data-label="Quantity">{toNumber(allocation.quantity)} {allocation.unit}</td>
+                  <td data-label="Order">{allocation.invoiceNumber}</td>
+                  <td data-label="Customer">{allocation.customerName}</td>
+                  <td data-label="Tailor">{allocation.tailorName}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : <div className="invoice-preview-empty">No production allocations have been recorded yet.</div>}
+      </section>
+
+      <section className="panel">
+        <SectionHeader eyebrow="Latest records" title="Recently Added Inventory" />
+        <div className="inventory-recent-list">
+          {[...inventory].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 6).map((item) => (
+            <article key={item.id}>
+              <div><strong>{item.name}</strong><Status>{toNumber(item.quantity) <= toNumber(item.lowStockThreshold) ? 'Low' : 'Healthy'}</Status></div>
+              <span>{item.type} · {toNumber(item.quantity)} {item.unit}{item.supplier ? ` · ${item.supplier}` : ''}</span>
+              <small>Added {new Date(item.createdAt).toLocaleDateString('en-GB')}</small>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
@@ -468,6 +720,15 @@ function OrdersView({ sentInvoices }) {
   );
   const invoiceStart = filteredInvoices.length ? ((currentInvoicePage - 1) * invoicePageSize) + 1 : 0;
   const invoiceEnd = Math.min(currentInvoicePage * invoicePageSize, filteredInvoices.length);
+  const liveOrders = sentInvoices
+    .filter((invoice) => invoice.orderSheet)
+    .map((invoice) => ({
+      ...productionJobFromInvoice(invoice),
+      total: toNumber(invoice.total),
+      paymentStatus: invoice.paymentStatus,
+      accountApprovalStatus: invoiceApprovalStatus(invoice),
+    }))
+    .filter(Boolean);
 
   const updateInvoiceSearch = (value) => {
     setInvoiceSearch(value);
@@ -477,27 +738,31 @@ function OrdersView({ sentInvoices }) {
   return (
     <div className="stack">
       <SectionHeader eyebrow="Orders" title="Invoice and Order Sheet Control">
-        <button className="primary-action">New Invoice</button>
+        <span className="live-record-count">{liveOrders.length} live order{liveOrders.length === 1 ? '' : 's'}</span>
       </SectionHeader>
-      <div className="order-cards">
-        {orders.map((order) => (
-          <article className="order-card" key={order.id}>
+      {liveOrders.length ? (
+        <div className="order-cards">
+          {liveOrders.map((order) => (
+          <article className="order-card" key={order.invoiceNumber}>
             <div>
-              <span>{order.id}</span>
+              <span>{order.invoiceNumber}</span>
               <Status>{order.status}</Status>
             </div>
             <h3>{order.customer}</h3>
             <p>{order.item} · {order.pieces} pieces · {order.store}</p>
             <dl>
-              <div><dt>Total</dt><dd>{money.format(order.amount)}</dd></div>
-              <div><dt>Paid</dt><dd>{money.format(order.paid)}</dd></div>
-              <div><dt>Delivery</dt><dd>{order.delivery}</dd></div>
-              <div><dt>Style images</dt><dd>{order.images}/5</dd></div>
+              <div><dt>Invoice total</dt><dd>{money.format(order.total)}</dd></div>
+              <div><dt>Payment</dt><dd><Status>{order.paymentStatus}</Status></dd></div>
+              <div><dt>Delivery</dt><dd>{order.delivery || 'Not set'}</dd></div>
+              <div><dt>Tailor</dt><dd>{order.tailor || 'Unassigned'}</dd></div>
+              <div><dt>Fabric</dt><dd>{order.fabric || 'Not selected'}</dd></div>
+              <div><dt>Style images</dt><dd>{order.images || 0}</dd></div>
             </dl>
-            <p className="note">{order.note}</p>
+            <p className="note">{order.note || 'No production note added.'}</p>
           </article>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : <div className="invoice-preview-empty">No order sheets have been created yet.</div>}
 
       <section className="panel invoice-register-panel">
         <SectionHeader eyebrow="Invoices" title="Invoices Created by Store Manager">
@@ -584,32 +849,73 @@ function OrdersView({ sentInvoices }) {
 }
 
 function CustomersView() {
-  const customers = [
-    { name: 'Ken Mbachu', category: 'Elite', spend: 4200000, orders: 16, credit: 0 },
-    { name: 'Frank Ade-Williams', category: 'Returning', spend: 1280000, orders: 7, credit: 45000 },
-    { name: 'Audu Mustapha', category: 'Elite', spend: 6100000, orders: 21, credit: 0 },
-  ];
+  const [customers, setCustomers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    api.get('/oms/customers')
+      .then((response) => setCustomers(response.data?.data?.customers || []))
+      .catch((error) => setMessage(error.response?.data?.message || 'Unable to load customers.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filteredCustomers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return customers;
+    return customers.filter((customer) => [
+      customer.fullName,
+      customer.phone,
+      customer.email,
+      customer.category,
+      ...(customer.stores || []),
+    ].some((value) => String(value || '').toLowerCase().includes(query)));
+  }, [customers, search]);
+
+  const totalSpend = customers.reduce((sum, customer) => sum + toNumber(customer.lifetimeSpend), 0);
+  const repeatCustomers = customers.filter((customer) => customer.totalOrders > 1).length;
+  const withMeasurements = customers.filter((customer) => customer.measurementsAdded).length;
 
   return (
-    <section className="panel">
-      <SectionHeader eyebrow="Clients" title="Customer Profiles">
-        <input className="search" placeholder="Search name or phone" />
-      </SectionHeader>
-      <div className="customer-grid">
-        {customers.map((customer) => (
-          <article className="customer-card" key={customer.name}>
-            <div className="avatar">{customer.name.split(' ').map((part) => part[0]).join('')}</div>
-            <h3>{customer.name}</h3>
-            <Status>{customer.category}</Status>
-            <dl>
-              <div><dt>12-month spend</dt><dd>{money.format(customer.spend)}</dd></div>
-              <div><dt>Confirmed orders</dt><dd>{customer.orders}</dd></div>
-              <div><dt>Store credit</dt><dd>{money.format(customer.credit)}</dd></div>
-            </dl>
-          </article>
-        ))}
-      </div>
-    </section>
+    <div className="stack customer-workspace">
+      <section className="metrics-grid">
+        <Stat label="Customers" value={String(customers.length)} detail="Live customer profiles" />
+        <Stat label="Returning" value={String(repeatCustomers)} detail="More than one invoice" />
+        <Stat label="Measurements" value={String(withMeasurements)} detail="Profiles with measurements" />
+        <Stat label="Lifetime invoiced" value={money.format(totalSpend)} detail="Across customer records" tone="gold" />
+      </section>
+
+      <section className="panel">
+        <SectionHeader eyebrow="Clients" title="Customer Profiles">
+          <input className="search" placeholder="Search name, phone, email, or store" value={search} onChange={(event) => setSearch(event.target.value)} />
+        </SectionHeader>
+        {message ? <div className="invoice-message">{message}</div> : null}
+        {loading ? <div className="invoice-preview-empty">Loading customers...</div> : filteredCustomers.length ? (
+          <div className="customer-grid">
+            {filteredCustomers.map((customer) => (
+              <article className="customer-card" key={customer.id}>
+                <div className="customer-card-head">
+                  <div className="avatar">{customer.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
+                  <Status>{customer.category}</Status>
+                </div>
+                <h3>{customer.fullName}</h3>
+                <p>{[customer.phone, customer.email].filter(Boolean).join(' · ') || 'No contact details'}</p>
+                <dl>
+                  <div><dt>12-month spend</dt><dd>{money.format(customer.twelveMonthSpend)}</dd></div>
+                  <div><dt>Total orders</dt><dd>{customer.totalOrders}</dd></div>
+                  <div><dt>Order sheets</dt><dd>{customer.confirmedOrders}</dd></div>
+                  <div><dt>Store credit</dt><dd>{money.format(customer.storeCreditBalance)}</dd></div>
+                  <div><dt>Measurements</dt><dd>{customer.measurementsAdded ? 'Saved' : 'Not added'}</dd></div>
+                  <div><dt>Stores</dt><dd>{customer.stores?.join(', ') || '—'}</dd></div>
+                </dl>
+                <p className="note">{customer.lastOrderAt ? `Last order ${new Date(customer.lastOrderAt).toLocaleDateString('en-GB')}` : 'No orders yet'}</p>
+              </article>
+            ))}
+          </div>
+        ) : <div className="invoice-preview-empty">{customers.length ? 'No customers match your search.' : 'No customer records are available yet.'}</div>}
+      </section>
+    </div>
   );
 }
 
@@ -875,14 +1181,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
 }
 
 function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
-  const invoiceQueue = sentInvoices.length ? sentInvoices : payments.map((payment) => ({
-    invoiceNumber: payment.order,
-    customer: payment.customer,
-    store: payment.store,
-    total: payment.amount,
-    paymentStatus: payment.status,
-    accountApprovalStatus: payment.status === 'Confirmed' ? 'Approved' : 'Pending Accounts',
-  }));
+  const invoiceQueue = sentInvoices;
 
   return (
     <section className="panel">
@@ -1114,11 +1413,23 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
 function ProductionView({ productionJobs, onUpdateJob }) {
   const [statusFilter, setStatusFilter] = useState('All');
   const [toast, setToast] = useState('');
+  const [inventory, setInventory] = useState([]);
+  const [tailors, setTailors] = useState([]);
+  const [allocatingJobId, setAllocatingJobId] = useState(null);
   const toastTimerRef = useRef(null);
   const filteredJobs = productionJobs.filter((job) => (
     statusFilter === 'All' ? true : job.status === statusFilter
   ));
   const productionTabs = ['All', 'Order Sheet Confirmed', 'Assigned', 'In Progress', 'Ready'];
+
+  useEffect(() => {
+    Promise.all([api.get('/oms/fabrics'), api.get('/oms/staff')])
+      .then(([inventoryResponse, staffResponse]) => {
+        setInventory(inventoryResponse.data?.data?.fabrics || []);
+        setTailors((staffResponse.data?.data?.staffUsers || []).filter((person) => person.role === 'tailor'));
+      })
+      .catch(() => notify('Unable to load current inventory'));
+  }, []);
 
   const notify = (message) => {
     setToast(message);
@@ -1129,6 +1440,50 @@ function ProductionView({ productionJobs, onUpdateJob }) {
   const updateJobWithToast = (job, changes, message) => {
     onUpdateJob(job.id, changes);
     notify(message);
+  };
+
+  const allocateFabric = async (order) => {
+    if (order.fabric === 'Client supplied') {
+      updateJobWithToast(order, { fabricConfirmed: true, fabricAllocated: true }, 'Client-supplied fabric confirmed');
+      return;
+    }
+    const selectedFabric = inventory.find((fabric) => fabric.name === order.fabric);
+    const usage = Number(order.fabricUsage);
+    if (!selectedFabric || !Number.isFinite(usage) || usage <= 0) {
+      notify('Select inventory fabric and enter the quantity used');
+      return;
+    }
+    if (!order.tailor || order.tailor === 'Unassigned') {
+      notify('Assign a tailor before allocating fabric');
+      return;
+    }
+    if (!order.trackingToken) {
+      notify('This job has no saved order sheet and cannot allocate stock');
+      return;
+    }
+
+    setAllocatingJobId(order.id);
+    try {
+      const response = await api.post('/oms/fabrics/allocate', {
+        fabricId: selectedFabric.id,
+        quantity: usage,
+        trackingToken: order.trackingToken,
+        tailorName: order.tailor,
+      });
+      const updatedFabric = response.data?.data?.fabric;
+      setInventory((current) => current.map((fabric) => fabric.id === updatedFabric.id ? updatedFabric : fabric));
+      onUpdateJob(order.id, {
+        fabricConfirmed: true,
+        fabricAllocated: true,
+        fabricId: selectedFabric.id,
+        fabricUnit: selectedFabric.unit,
+      });
+      notify(`${usage} ${selectedFabric.unit} allocated to ${order.invoiceNumber}`);
+    } catch (error) {
+      notify(error.response?.data?.message || 'Unable to allocate fabric');
+    } finally {
+      setAllocatingJobId(null);
+    }
   };
 
   return (
@@ -1156,7 +1511,7 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                 <div className="avatar">{order.customer.split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
                 <div>
                   <strong>{order.customer}</strong>
-                  <span>{order.item}</span>
+                  <span className="production-order-name">{order.item}</span>
                   <span>{order.delivery}</span>
                 </div>
                 <Status>{order.status}</Status>
@@ -1175,17 +1530,28 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                       status: event.target.value === 'Unassigned' ? 'Order Sheet Confirmed' : 'Assigned',
                     }, event.target.value === 'Unassigned' ? 'Tailor assignment removed' : `Assigned to ${event.target.value}`)}>
                       <option>Unassigned</option>
-                      {tailorOptions.map((tailor) => <option key={tailor.name}>{tailor.name}</option>)}
+                      {tailors.map((tailor) => <option key={tailor.id}>{tailor.displayName}</option>)}
                     </select>
                   </label>
                   <label>Fabric
-                    <select value={order.fabric} onChange={(event) => updateJobWithToast(order, {
+                    <select disabled={order.fabricAllocated} value={order.fabric} onChange={(event) => updateJobWithToast(order, {
                       fabric: event.target.value,
                       fabricConfirmed: false,
                     }, `Fabric changed to ${event.target.value}`)}>
                       <option value="Client supplied">Client supplied</option>
-                      {fabrics.map((fabric) => <option key={fabric.name} value={fabric.name}>{fabric.name}</option>)}
+                      {inventory.map((fabric) => <option key={fabric.id} value={fabric.name}>{fabric.name} ({toNumber(fabric.quantity)} {fabric.unit})</option>)}
                     </select>
+                  </label>
+                  <label>Quantity used
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={order.fabricUsage || ''}
+                      disabled={order.fabricAllocated || order.fabric === 'Client supplied'}
+                      onChange={(event) => onUpdateJob(order.id, { fabricUsage: event.target.value, fabricConfirmed: false })}
+                      placeholder="Amount used"
+                    />
                   </label>
                   <label className="wide-field">Production style note
                     <textarea value={order.productionNote || ''} onChange={(event) => onUpdateJob(order.id, { productionNote: event.target.value })} placeholder="Production Manager instruction for Tailor" />
@@ -1193,7 +1559,9 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                 </div>
                 <p className="note">{order.designNotes || order.note}</p>
                 <div className="row-actions">
-                  <button onClick={() => updateJobWithToast(order, { fabricConfirmed: true }, 'Fabric confirmed')}>Confirm Fabric</button>
+                  <button disabled={order.fabricAllocated || allocatingJobId === order.id} onClick={() => allocateFabric(order)}>
+                    {order.fabricAllocated ? 'Fabric Allocated' : allocatingJobId === order.id ? 'Allocating...' : 'Allocate Fabric'}
+                  </button>
                   <button onClick={() => updateJobWithToast(order, { status: 'In Progress' }, 'Job moved to In Progress')}>In Progress</button>
                   <button className="primary-action" onClick={() => updateJobWithToast(order, { status: 'Ready' }, 'Job marked Ready')}>Mark Ready</button>
                 </div>
@@ -1209,8 +1577,8 @@ function ProductionView({ productionJobs, onUpdateJob }) {
       <section className="panel">
         <SectionHeader eyebrow="Tailors" title="Availability" />
         <div className="mini-list">
-          {tailorOptions.map((tailor) => (
-            <span key={tailor.name}>{tailor.name} · {tailor.department} · Grade {tailor.grade}</span>
+          {tailors.map((tailor) => (
+            <span key={tailor.id}>{tailor.displayName} · {tailor.tailorDepartment || 'Department not set'} · Grade {tailor.tailorGrade || 'Not graded'}</span>
           ))}
         </div>
       </section>
@@ -1219,68 +1587,436 @@ function ProductionView({ productionJobs, onUpdateJob }) {
 }
 
 function InventoryView() {
+  const emptyForm = { name: '', type: '', quantity: '', unit: 'm', supplier: '', lowStockThreshold: '' };
+  const [inventory, setInventory] = useState([]);
+  const [form, setForm] = useState(emptyForm);
+  const [formOpen, setFormOpen] = useState(false);
+  const [allocations, setAllocations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const loadInventory = () => {
+    setLoading(true);
+    Promise.all([api.get('/oms/fabrics'), api.get('/oms/fabrics/allocations')])
+      .then(([inventoryResponse, allocationResponse]) => {
+        setInventory(inventoryResponse.data?.data?.fabrics || []);
+        setAllocations(allocationResponse.data?.data?.allocations || []);
+      })
+      .catch((error) => setMessage(error.response?.data?.message || 'Unable to load inventory.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadInventory(); }, []);
+
+  const openCreate = () => {
+    setForm(emptyForm);
+    setMessage('');
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setForm(emptyForm);
+  };
+
+  const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+
+  const saveInventory = async (event) => {
+    event.preventDefault();
+    if (!form.name.trim() || !form.type.trim() || !form.unit.trim()) {
+      setMessage('Item name, category, and unit are required.');
+      return;
+    }
+
+    const payload = {
+      ...form,
+      name: form.name.trim(),
+      type: form.type.trim(),
+      unit: form.unit.trim(),
+      supplier: form.supplier.trim(),
+      quantity: toNumber(form.quantity),
+      lowStockThreshold: toNumber(form.lowStockThreshold),
+    };
+
+    setSaving(true);
+    setMessage('');
+    try {
+      const response = await api.post('/oms/fabrics', payload);
+      const saved = response.data?.data?.fabric;
+      setInventory((current) => [...current, saved].sort((a, b) => a.name.localeCompare(b.name)));
+      closeForm();
+      setMessage('Inventory item created and Accounts notified.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || error.response?.data?.error || 'Unable to save inventory item.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <section className="panel">
-      <SectionHeader eyebrow="Inventory" title="Fabric Ledger">
-        <button className="primary-action">Record Stock In</button>
-      </SectionHeader>
-      <div className="fabric-grid">
-        {fabrics.map((fabric) => (
-          <article className="fabric-card" key={fabric.name}>
-            <div>
-              <h3>{fabric.name}</h3>
-              <Status>{fabric.status}</Status>
+    <div className="stack inventory-workspace">
+      <section className="panel">
+        <SectionHeader eyebrow="Inventory" title="Fabric Ledger">
+          <button type="button" className="primary-action" onClick={openCreate}>Add inventory item</button>
+        </SectionHeader>
+
+        {message ? <div className="invoice-message" role="status">{message}</div> : null}
+
+        {formOpen ? (
+          <form className="inventory-form" onSubmit={saveInventory}>
+            <div className="inventory-form-head">
+              <div><span>New stock record</span><h3>Add inventory item</h3></div>
+              <button type="button" onClick={closeForm}>Cancel</button>
             </div>
-            <p>{fabric.type}</p>
-            <strong>{fabric.qty} {fabric.unit}</strong>
-            <small>Low stock threshold: {fabric.threshold} {fabric.unit}</small>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
+            <div className="invoice-form-grid">
+              <label>Item name<input value={form.name} onChange={(event) => updateForm('name', event.target.value)} placeholder="e.g. Black jacquard wool" required /></label>
+              <label>Category / type
+                <select value={form.type} onChange={(event) => updateForm('type', event.target.value)} required>
+                  <option value="">Select a category</option>
+                  {inventoryCategories.map((category) => <option key={category} value={category}>{category}</option>)}
+                </select>
+              </label>
+              <label>Quantity<input type="number" min="0" step="0.01" value={form.quantity} onChange={(event) => updateForm('quantity', event.target.value)} required /></label>
+              <label>Unit<input value={form.unit} onChange={(event) => updateForm('unit', event.target.value)} placeholder="m, rolls, pieces" required /></label>
+              <label>Supplier<input value={form.supplier} onChange={(event) => updateForm('supplier', event.target.value)} placeholder="Supplier name (optional)" /></label>
+              <label>Low-stock threshold<input type="number" min="0" step="0.01" value={form.lowStockThreshold} onChange={(event) => updateForm('lowStockThreshold', event.target.value)} required /></label>
+            </div>
+            <button className="primary-action inventory-save" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Create item'}</button>
+          </form>
+        ) : null}
 
-function StaffView() {
-  return (
-    <section className="panel">
-      <SectionHeader eyebrow="Owner Control" title="Staff Management">
-        <button className="primary-action">Add Staff</button>
-      </SectionHeader>
-      <OrderTableLike
-        columns={['Name', 'Role', 'Store', 'Status', 'Last login']}
-        rows={staff.map((person) => [person.name, person.role, person.store, person.status, person.lastLogin])}
-      />
-    </section>
-  );
-}
-
-function ReportsView() {
-  return (
-    <div className="stack">
-      <section className="metrics-grid">
-        <Stat label="July revenue" value={money.format(6840000)} detail="Across both stores" />
-        <Stat label="Outstanding balances" value={money.format(910000)} detail="7 customer profiles" tone="gold" />
-        <Stat label="Tailor output" value="42" detail="Completed this month" />
-        <Stat label="Fabric spend" value={money.format(1240000)} detail="Confirmed stock-in" />
+        {loading ? <div className="invoice-preview-empty">Loading inventory...</div> : inventory.length ? (
+          <div className="fabric-grid">
+            {inventory.map((fabric) => {
+              const quantity = toNumber(fabric.quantity);
+              const threshold = toNumber(fabric.lowStockThreshold);
+              const status = quantity <= threshold ? 'Low' : 'Healthy';
+              return (
+                <article className="fabric-card" key={fabric.id}>
+                  <div><h3>{fabric.name}</h3><Status>{status}</Status></div>
+                  <p>{fabric.type}{fabric.supplier ? ` · ${fabric.supplier}` : ''}</p>
+                  <strong>{quantity.toLocaleString()} {fabric.unit}</strong>
+                  <small>Low stock threshold: {threshold.toLocaleString()} {fabric.unit}</small>
+                  <div className="inventory-locked-note">Read only · Stock changes through Production allocation</div>
+                </article>
+              );
+            })}
+          </div>
+        ) : <div className="invoice-preview-empty">No inventory items yet. Add your first stock record.</div>}
       </section>
       <section className="panel">
-        <SectionHeader eyebrow="Exports" title="End-of-Period Reports">
-          <button className="primary-action">Export PDF</button>
-        </SectionHeader>
-        <div className="report-bars">
-          <span style={{ '--value': '78%' }}>Lekki revenue</span>
-          <span style={{ '--value': '52%' }}>Ikeja revenue</span>
-          <span style={{ '--value': '64%' }}>Confirmed transfers</span>
-          <span style={{ '--value': '38%' }}>POS payments</span>
-        </div>
+        <SectionHeader eyebrow="Audit trail" title="Usage & Allocation Log" />
+        {allocations.length ? (
+          <div className="table-wrap">
+            <table className="allocation-table">
+              <thead><tr><th>Date</th><th>Fabric / item</th><th>Quantity</th><th>Order</th><th>Customer</th><th>Tailor</th></tr></thead>
+              <tbody>{allocations.map((allocation) => (
+                <tr key={allocation.id}>
+                  <td data-label="Date">{new Date(allocation.createdAt).toLocaleString('en-GB')}</td>
+                  <td data-label="Fabric / item"><strong>{allocation.fabricName}</strong></td>
+                  <td data-label="Quantity">{toNumber(allocation.quantity)} {allocation.unit}</td>
+                  <td data-label="Order">{allocation.invoiceNumber}</td>
+                  <td data-label="Customer">{allocation.customerName}</td>
+                  <td data-label="Tailor">{allocation.tailorName}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : <div className="invoice-preview-empty">Production allocations will appear here.</div>}
       </section>
     </div>
   );
 }
 
-function TailorTasks({ compact = false, productionJobs = [], onUpdateJob }) {
-  const assignedJobs = productionJobs.filter((order) => order.tailor !== 'Unassigned');
+function StaffView({ role, currentRole }) {
+  const emptyForm = { displayName: '', phone: '', pin: '', role: 'store_manager', store: 'all', status: 'active', dateOfBirth: '', tailorDepartment: '', tailorGrade: '' };
+  const [staffUsers, setStaffUsers] = useState([]);
+  const [message, setMessage] = useState('');
+  const [form, setForm] = useState(emptyForm);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get('/oms/staff')
+      .then((response) => setStaffUsers(response.data?.data?.staffUsers || []))
+      .catch((error) => setMessage(error.response?.data?.message || 'Unable to load staff.'));
+  }, []);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setMessage('');
+    setFormOpen(true);
+  };
+
+  const openEdit = (person) => {
+    setEditingId(person.id);
+    setForm({
+      displayName: person.displayName || '',
+      phone: person.phone || '',
+      pin: '',
+      role: person.role,
+      store: person.store,
+      status: person.status,
+      dateOfBirth: person.dateOfBirth || '',
+      tailorDepartment: person.tailorDepartment || '',
+      tailorGrade: person.tailorGrade || '',
+    });
+    setMessage('');
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+
+  const saveStaff = async (event) => {
+    event.preventDefault();
+    if (form.role === 'tailor' && !form.tailorDepartment) {
+      setMessage('Select a department for the tailor.');
+      return;
+    }
+    if (!editingId && !form.pin) {
+      setMessage('A login PIN is required for a new staff account.');
+      return;
+    }
+    setSaving(true);
+    setMessage('');
+    const payload = {
+      ...form,
+      tailorDepartment: form.role === 'tailor' ? form.tailorDepartment : null,
+      tailorGrade: form.role === 'tailor' && form.tailorGrade ? Number(form.tailorGrade) : null,
+      ownerPhone: currentRole.phone,
+      ownerPin: currentRole.pin,
+    };
+    if (editingId && !payload.pin) delete payload.pin;
+    try {
+      const response = editingId
+        ? await api.patch(`/oms/staff/${editingId}`, payload)
+        : await api.post('/oms/staff', payload);
+      const saved = response.data?.data?.staffUser;
+      setStaffUsers((current) => editingId
+        ? current.map((person) => person.id === editingId ? { ...person, ...saved } : person)
+        : [saved, ...current]);
+      closeForm();
+      setMessage(editingId ? 'Staff account updated.' : 'Staff account created.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to save staff account.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteStaff = async (person) => {
+    if (!window.confirm(`Delete ${person.displayName}'s staff account? This cannot be undone.`)) return;
+    setMessage('');
+    try {
+      await api.delete(`/oms/staff/${person.id}`, { data: { ownerPhone: currentRole.phone, ownerPin: currentRole.pin } });
+      setStaffUsers((current) => current.filter((item) => item.id !== person.id));
+      if (editingId === person.id) closeForm();
+      setMessage('Staff account deleted.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to delete staff account.');
+    }
+  };
+
+  const updateTailorGrade = async (tailor, grade) => {
+    setMessage('');
+    try {
+      const response = await api.patch(`/oms/staff/${tailor.id}/tailor-grade`, {
+        grade,
+        ownerPhone: currentRole.phone,
+        ownerPin: currentRole.pin,
+      });
+      const updated = response.data?.data?.staffUser;
+      setStaffUsers((current) => current.map((person) => person.id === tailor.id
+        ? { ...person, tailorGrade: updated.tailorGrade }
+        : person));
+      setMessage(`${tailor.displayName}'s grade was updated.`);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to update tailor grade.');
+    }
+  };
+
+  return (
+    <section className="panel">
+      <SectionHeader eyebrow="Owner Control" title="Staff Management">
+        {role === 'owner' ? <button type="button" className="primary-action" onClick={openCreate}>Add Staff</button> : null}
+      </SectionHeader>
+      {message ? <div className="invoice-message" role="status">{message}</div> : null}
+      {role === 'owner' && formOpen ? (
+        <form className="inventory-form" onSubmit={saveStaff}>
+          <div className="inventory-form-head">
+            <div><span>{editingId ? 'Update employee' : 'New employee'}</span><h3>{editingId ? 'Edit Staff Account' : 'Create Staff Account'}</h3></div>
+            <button type="button" onClick={closeForm}>Cancel</button>
+          </div>
+          <div className="invoice-form-grid">
+            <label>Full name<input value={form.displayName} onChange={(event) => updateForm('displayName', event.target.value)} required /></label>
+            <label>Phone number<input value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} required /></label>
+            <label>{editingId ? 'New PIN (optional)' : 'Login PIN'}<input type="password" value={form.pin} onChange={(event) => updateForm('pin', event.target.value)} required={!editingId} /></label>
+            <label>Role<select value={form.role} onChange={(event) => updateForm('role', event.target.value)}>{roles.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+            <label>Store<select value={form.store} onChange={(event) => updateForm('store', event.target.value)}><option value="all">All stores</option><option value="ikeja">Ikeja</option><option value="lekki">Lekki</option><option value="production">Production</option></select></label>
+            <label>Status<select value={form.status} onChange={(event) => updateForm('status', event.target.value)}><option value="active">Active</option><option value="inactive">Inactive</option><option value="deactivated">Deactivated</option></select></label>
+            <label>Date of birth<input type="date" value={form.dateOfBirth} onChange={(event) => updateForm('dateOfBirth', event.target.value)} /></label>
+            {form.role === 'tailor' ? <>
+              <label>Tailor department<select value={form.tailorDepartment} onChange={(event) => updateForm('tailorDepartment', event.target.value)} required><option value="">Select department</option><option value="native">Native</option><option value="suit">Suits</option><option value="trouser">Trouser</option><option value="finishing">Finishing</option></select></label>
+              <label>Initial grade<select value={form.tailorGrade} onChange={(event) => updateForm('tailorGrade', event.target.value)}><option value="">Not graded</option>{[1, 2, 3, 4, 5].map((grade) => <option key={grade} value={grade}>Grade {grade}</option>)}</select></label>
+            </> : null}
+          </div>
+          <button className="primary-action inventory-save" type="submit" disabled={saving}>{saving ? 'Saving...' : editingId ? 'Save changes' : 'Create account'}</button>
+        </form>
+      ) : null}
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Role</th><th>Store</th><th>Status</th><th>Last login</th><th>Tailor department</th><th>Grade</th>{role === 'owner' ? <th>Actions</th> : null}</tr></thead>
+          <tbody>{staffUsers.map((person) => (
+            <tr key={person.id}>
+              <td data-label="Name"><strong>{person.displayName}</strong></td>
+              <td data-label="Role">{person.role.replaceAll('_', ' ')}</td>
+              <td data-label="Store">{person.store}</td>
+              <td data-label="Status"><Status>{person.status}</Status></td>
+              <td data-label="Last login">{person.lastLoginAt ? new Date(person.lastLoginAt).toLocaleString('en-GB') : 'Never'}</td>
+              <td data-label="Tailor department">{person.role === 'tailor' ? person.tailorDepartment || 'Not set' : '—'}</td>
+              <td data-label="Grade">{person.role === 'tailor' ? (
+                role === 'owner' ? (
+                  <select value={person.tailorGrade || ''} onChange={(event) => updateTailorGrade(person, event.target.value)} aria-label={`Grade for ${person.displayName}`}>
+                    <option value="" disabled>Not graded</option>
+                    {[1, 2, 3, 4, 5].map((grade) => <option key={grade} value={grade}>Grade {grade}</option>)}
+                  </select>
+                ) : person.tailorGrade ? `Grade ${person.tailorGrade}` : 'Not graded'
+              ) : '—'}</td>
+              {role === 'owner' ? <td data-label="Actions"><div className="row-actions"><button type="button" onClick={() => openEdit(person)}>Edit</button><button type="button" className="danger-action" onClick={() => deleteStaff(person)}>Delete</button></div></td> : null}
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ReportsView() {
+  const now = new Date();
+  const [from, setFrom] = useState(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10));
+  const [to, setTo] = useState(todayIso());
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [exportFormat, setExportFormat] = useState('csv');
+
+  const loadReport = () => {
+    setLoading(true);
+    setMessage('');
+    api.get('/oms/reports/end-of-period', { params: { from, to } })
+      .then((response) => setReport(response.data?.data?.report || null))
+      .catch((error) => setMessage(error.response?.data?.message || 'Unable to load report.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadReport(); }, [from, to]);
+
+  const downloadCsv = () => {
+    const rows = [
+      ['End-of-Period Report', `${from} to ${to}`],
+      [],
+      ['Metric', 'Value'],
+      ...Object.entries(report.summary).map(([key, value]) => [key, value]),
+      [],
+      ['Invoice', 'Date', 'Customer', 'Store', 'Total', 'Payment', 'Approval', 'Order Status'],
+      ...report.invoices.map((invoice) => [invoice.invoiceNumber, invoice.date, invoice.customer, invoice.store, invoice.total, invoice.paymentStatus, invoice.approvalStatus, invoice.orderStatus]),
+      [],
+      ['Allocation Date', 'Fabric', 'Quantity', 'Unit', 'Invoice', 'Customer', 'Tailor'],
+      ...report.allocations.map((allocation) => [allocation.date, allocation.fabricName, allocation.quantity, allocation.unit, allocation.invoiceNumber, allocation.customerName, allocation.tailorName]),
+    ];
+    const csv = rows.map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `twif-report-${from}-to-${to}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const printPdf = () => {
+    const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
+    const popup = window.open('', '_blank', 'width=1100,height=800');
+    if (!popup) {
+      setMessage('Allow popups to export the PDF report.');
+      return;
+    }
+    const summaryRows = Object.entries(report.summary).map(([key, value]) => `<tr><td>${escape(key.replace(/([A-Z])/g, ' $1'))}</td><td>${escape(value)}</td></tr>`).join('');
+    const storeRows = report.storeBreakdown.map((store) => `<tr><td>${escape(store.store)}</td><td>${escape(store.invoices)}</td><td>${escape(money.format(store.total))}</td></tr>`).join('');
+    const invoiceRows = report.invoices.map((invoice) => `<tr><td>${escape(invoice.invoiceNumber)}</td><td>${escape(new Date(invoice.date).toLocaleDateString('en-GB'))}</td><td>${escape(invoice.customer)}</td><td>${escape(invoice.store)}</td><td>${escape(money.format(invoice.total))}</td><td>${escape(invoice.paymentStatus)}</td><td>${escape(invoice.orderStatus)}</td></tr>`).join('');
+    const allocationRows = report.allocations.map((allocation) => `<tr><td>${escape(new Date(allocation.date).toLocaleDateString('en-GB'))}</td><td>${escape(allocation.fabricName)}</td><td>${escape(`${allocation.quantity} ${allocation.unit}`)}</td><td>${escape(allocation.invoiceNumber)}</td><td>${escape(allocation.customerName)}</td><td>${escape(allocation.tailorName)}</td></tr>`).join('');
+    popup.document.write(`<!doctype html><html><head><title>TWIF End-of-Period Report</title><style>body{font-family:Arial,sans-serif;color:#171717;padding:32px}h1{margin-bottom:4px}p{color:#666}table{width:100%;border-collapse:collapse;margin:22px 0}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#171717;color:#fff}@media print{body{padding:0}}</style></head><body><h1>TWIF End-of-Period Report</h1><p>${escape(from)} to ${escape(to)}</p><h2>Summary</h2><table><tbody>${summaryRows}</tbody></table><h2>Store Performance</h2><table><thead><tr><th>Store</th><th>Invoices</th><th>Total Invoiced</th></tr></thead><tbody>${storeRows}</tbody></table><h2>Invoices and Orders</h2><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Store</th><th>Total</th><th>Payment</th><th>Order</th></tr></thead><tbody>${invoiceRows}</tbody></table><h2>Inventory Allocations</h2><table><thead><tr><th>Date</th><th>Fabric</th><th>Quantity</th><th>Order</th><th>Customer</th><th>Tailor</th></tr></thead><tbody>${allocationRows}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`);
+    popup.document.close();
+  };
+
+  const exportReport = () => {
+    if (!report) return;
+    if (exportFormat === 'pdf') printPdf();
+    else downloadCsv();
+  };
+
+  if (loading && !report) return <section className="panel"><div className="invoice-preview-empty">Loading report...</div></section>;
+
+  return (
+    <div className="stack">
+      <section className="panel">
+        <SectionHeader eyebrow="Exports" title="End-of-Period Reports">
+          <div className="row-actions">
+            <select value={exportFormat} onChange={(event) => setExportFormat(event.target.value)} aria-label="Export format"><option value="csv">CSV</option><option value="pdf">PDF</option></select>
+            <button type="button" className="primary-action" onClick={exportReport} disabled={!report}>Export</button>
+          </div>
+        </SectionHeader>
+        <div className="invoice-form-grid">
+          <label>From<input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} /></label>
+          <label>To<input type="date" value={to} min={from} max={todayIso()} onChange={(event) => setTo(event.target.value)} /></label>
+        </div>
+        {message ? <div className="invoice-message" role="status">{message}</div> : null}
+      </section>
+
+      {report ? <>
+        <section className="metrics-grid">
+          <Stat label="Total invoiced" value={money.format(report.summary.totalInvoiced)} detail={`${report.summary.invoiceCount} invoices`} tone="gold" />
+          <Stat label="Customers" value={String(report.summary.customerCount)} detail="Unique customers in period" />
+          <Stat label="Active orders" value={String(report.summary.activeOrderCount)} detail={`${report.summary.readyOrderCount} ready`} />
+          <Stat label="Pending approval" value={String(report.summary.pendingApprovalCount)} detail={`${report.summary.approvedCount} approved`} tone={report.summary.pendingApprovalCount ? 'alert' : undefined} />
+        </section>
+        <section className="metrics-grid">
+          <Stat label="Fully paid" value={String(report.summary.fullyPaidCount)} detail={`${report.summary.partiallyPaidCount} partially paid`} />
+          <Stat label="Allocations" value={String(report.summary.allocationCount)} detail="Production material usage" />
+          <Stat label="Low stock" value={String(report.summary.lowStockCount)} detail={`${report.summary.inventoryItemCount} inventory items`} tone={report.summary.lowStockCount ? 'alert' : undefined} />
+          <Stat label="Active staff" value={String(report.summary.activeStaffCount)} detail={`${report.summary.staffAddedCount} added in period`} />
+        </section>
+
+        <section className="panel">
+          <SectionHeader eyebrow="Stores" title="Store Performance" />
+          <div className="table-wrap"><table><thead><tr><th>Store</th><th>Invoices</th><th>Total invoiced</th></tr></thead><tbody>{report.storeBreakdown.map((store) => <tr key={store.store}><td>{store.store}</td><td>{store.invoices}</td><td>{money.format(store.total)}</td></tr>)}</tbody></table></div>
+        </section>
+
+        <section className="panel">
+          <SectionHeader eyebrow="Commercial activity" title="Invoices and Orders" />
+          {report.invoices.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Store</th><th>Total</th><th>Payment</th><th>Approval</th><th>Order</th></tr></thead><tbody>{report.invoices.map((invoice) => <tr key={invoice.invoiceNumber}><td>{new Date(invoice.date).toLocaleDateString('en-GB')}</td><td><strong>{invoice.invoiceNumber}</strong></td><td>{invoice.customer}</td><td>{invoice.store}</td><td>{money.format(invoice.total)}</td><td><Status>{invoice.paymentStatus}</Status></td><td><Status>{invoice.approvalStatus}</Status></td><td><Status>{invoice.orderStatus}</Status></td></tr>)}</tbody></table></div> : <div className="invoice-preview-empty">No invoices in this period.</div>}
+        </section>
+
+        <section className="panel">
+          <SectionHeader eyebrow="Production usage" title="Inventory Allocations" />
+          {report.allocations.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Fabric</th><th>Quantity</th><th>Order</th><th>Customer</th><th>Tailor</th></tr></thead><tbody>{report.allocations.map((allocation, index) => <tr key={`${allocation.invoiceNumber}-${allocation.date}-${index}`}><td>{new Date(allocation.date).toLocaleDateString('en-GB')}</td><td>{allocation.fabricName}</td><td>{allocation.quantity} {allocation.unit}</td><td>{allocation.invoiceNumber}</td><td>{allocation.customerName}</td><td>{allocation.tailorName}</td></tr>)}</tbody></table></div> : <div className="invoice-preview-empty">No inventory allocations in this period.</div>}
+        </section>
+      </> : null}
+    </div>
+  );
+}
+
+function TailorTasks({ compact = false, currentRole, productionJobs = [], onUpdateJob }) {
+  const tailorName = currentRole?.name?.split(' (')[0] || '';
+  const assignedJobs = productionJobs.filter((order) => order.tailor === tailorName);
 
   return (
     <section className="panel">
@@ -1317,8 +2053,9 @@ function TailorTasks({ compact = false, productionJobs = [], onUpdateJob }) {
   );
 }
 
-function WeeklyLogView({ productionJobs = [] }) {
-  const assignedJobs = productionJobs.filter((order) => order.tailor !== 'Unassigned');
+function WeeklyLogView({ currentRole, productionJobs = [] }) {
+  const tailorName = currentRole?.name?.split(' (')[0] || '';
+  const assignedJobs = productionJobs.filter((order) => order.tailor === tailorName);
 
   return (
     <section className="panel">
@@ -1336,20 +2073,122 @@ function WeeklyLogView({ productionJobs = [] }) {
   );
 }
 
-function NotificationPanel() {
+function NotificationPanel({ role, currentRole }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const displayName = currentRole?.name?.split(' (')[0] || '';
+
+  useEffect(() => {
+    api.get('/oms/notifications', { params: { role, name: displayName } })
+      .then((response) => setItems(response.data?.data?.notifications || []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [role, displayName]);
+
+  const markAllRead = async () => {
+    await api.patch('/oms/notifications/read-all', { role, name: displayName });
+    setItems((current) => current.map((item) => ({ ...item, isRead: true })));
+    window.dispatchEvent(new Event('oms-notifications-read'));
+  };
+
   return (
     <section className="panel">
-      <SectionHeader eyebrow="Inbox" title="Notifications" />
+      <SectionHeader eyebrow="Inbox" title="Notifications">
+        {items.some((item) => !item.isRead) ? <button type="button" onClick={markAllRead}>Mark all read</button> : null}
+      </SectionHeader>
       <div className="notification-list">
-        {notifications.map((item) => (
-          <article key={`${item.channel}-${item.time}`}>
+        {loading ? <div className="invoice-preview-empty">Loading notifications...</div> : items.length ? items.map((item) => (
+          <article className={item.isRead ? 'notification-read' : 'notification-unread'} key={item.id}>
             <span>{item.channel}</span>
-            <p>{item.text}</p>
-            <small>{item.time}</small>
+            <p>{item.message}</p>
+            <small>{new Date(item.createdAt).toLocaleString('en-GB')}</small>
           </article>
-        ))}
+        )) : <div className="invoice-preview-empty">No notifications for this account yet.</div>}
       </div>
     </section>
+  );
+}
+
+function NotificationBell({ role, currentRole, onOpen }) {
+  const [unreadCount, setUnreadCount] = useState(0);
+  const displayName = currentRole?.name?.split(' (')[0] || '';
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadUnread = () => {
+      api.get('/oms/notifications', { params: { role, name: displayName } })
+        .then((response) => {
+          if (!cancelled) setUnreadCount(response.data?.data?.unreadCount || 0);
+        })
+        .catch(() => {});
+    };
+    loadUnread();
+    const intervalId = window.setInterval(loadUnread, 20000);
+    window.addEventListener('oms-notifications-read', loadUnread);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener('oms-notifications-read', loadUnread);
+    };
+  }, [role, displayName]);
+
+  return (
+    <button type="button" className="notification-bell" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} onClick={onOpen}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>
+      {unreadCount ? <span>{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
+    </button>
+  );
+}
+
+function ProfilePhotoControl({ account, onProfileImageChange }) {
+  const inputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState('');
+  const initials = (account?.name || account?.label || 'Staff')
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  const uploadImage = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setMessage('Please select an image file.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage('Profile photos must be 5 MB or smaller.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('pin', account.pin);
+    setUploading(true);
+    setMessage('');
+    try {
+      const response = await api.post(`/oms/staff/${encodeURIComponent(account.phone)}/profile-image`, formData);
+      onProfileImageChange(response.data?.data?.profileImageUrl || '');
+      setMessage('Profile photo updated.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to upload profile photo.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="profile-photo-control">
+      <input ref={inputRef} type="file" accept="image/*" onChange={uploadImage} hidden />
+      <button type="button" className="profile-photo-button" disabled={uploading} onClick={() => inputRef.current?.click()} aria-label="Upload profile photo">
+        {account.profileImageUrl ? <img src={account.profileImageUrl} alt="" /> : <span>{initials}</span>}
+        {uploading ? <i>...</i> : null}
+      </button>
+      {message ? <div className="profile-photo-message" role="status">{message}</div> : null}
+    </div>
   );
 }
 
@@ -1383,7 +2222,7 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
     let cancelled = false;
 
     const loadTracking = () => {
-      api.get(`/oms/track/${token}`)
+      api.get(`/oms/track/${encodeURIComponent(token)}`)
         .then((response) => {
           if (!cancelled) setTracking(response.data?.data?.tracking || null);
         })
@@ -1433,6 +2272,13 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
   const normalizedStatus = customerStatus(tracking?.status);
   const steps = ['In Progress', 'Ready for Collection'];
   const currentStep = Math.max(0, steps.indexOf(normalizedStatus));
+  const closeTrackingPage = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    window.close();
+  };
 
   if (loading) {
     return (
@@ -1496,6 +2342,100 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
         <p className="tracking-note">
           This page updates from the order sheet and production status managed by TWIF staff.
         </p>
+
+        <div className="tracking-actions">
+          <button type="button" className="tracking-close" onClick={closeTrackingPage}>Close</button>
+          <a className="tracking-profile-link" href={`/c/${encodeURIComponent(token)}/profile`}>Go to profile</a>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function CustomerPortalPage({ token, sentInvoices = [] }) {
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get(`/oms/track/${encodeURIComponent(token)}/profile`)
+      .then((response) => {
+        if (!cancelled) setProfile(response.data?.data?.profile || null);
+      })
+      .catch(() => {
+        const source = sentInvoices.find((invoice) => invoice.trackingToken === token);
+        if (!cancelled && source) {
+          const invoices = sentInvoices.filter((invoice) => invoice.customer === source.customer);
+          setProfile({
+            name: source.customer,
+            phone: '',
+            email: '',
+            totalOrders: invoices.length,
+            totalSpend: invoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0),
+            invoices: invoices.map((invoice) => ({
+              ...invoice,
+              invoiceDate: invoice.createdAt,
+              balanceDue: 0,
+              items: [{ description: invoice.item || 'Custom order', quantity: invoice.pieces || 1 }],
+            })),
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [token, sentInvoices]);
+
+  if (loading || !profile) {
+    return (
+      <main className="tracking-page">
+        <section className="tracking-card">
+          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>TWIF</strong></div>
+          <h1>{loading ? 'Loading your profile...' : 'Customer Profile Not Found'}</h1>
+          {!loading && <a className="tracking-profile-link portal-back-link" href={`/c/${encodeURIComponent(token)}`}>Back to tracking</a>}
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="tracking-page customer-portal-page">
+      <section className="tracking-card customer-portal-card">
+        <div className="tracking-top">
+          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><div><strong>TWIF</strong><span>Customer profile</span></div></div>
+          <a className="portal-back" href={`/c/${encodeURIComponent(token)}`}>Back to tracking</a>
+        </div>
+
+        <div className="portal-profile-head">
+          <div className="avatar">{profile.name.split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
+          <div><span>Your profile</span><h1>{profile.name}</h1><p>{[profile.phone, profile.email].filter(Boolean).join(' · ')}</p></div>
+        </div>
+
+        <dl className="portal-summary">
+          <div><dt>Orders</dt><dd>{profile.totalOrders}</dd></div>
+          <div><dt>Total invoiced</dt><dd>{money.format(profile.totalSpend)}</dd></div>
+        </dl>
+
+        <section className="portal-history">
+          <h2>Orders & invoices</h2>
+          {profile.invoices.length ? profile.invoices.map((invoice) => (
+            <article key={invoice.invoiceNumber}>
+              <div className="portal-invoice-head">
+                <div><span>{invoice.invoiceNumber}</span><strong>{invoice.items.map((item) => item.description).join(', ')}</strong></div>
+                <Status>{invoice.orderStatus}</Status>
+              </div>
+              <dl>
+                <div><dt>Date</dt><dd>{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('en-GB') : '—'}</dd></div>
+                <div><dt>Store</dt><dd>{invoice.store}</dd></div>
+                <div><dt>Invoice total</dt><dd>{money.format(invoice.total)}</dd></div>
+                <div><dt>Payment</dt><dd>{invoice.paymentStatus}</dd></div>
+              </dl>
+            </article>
+          )) : <p className="tracking-note">No invoices are available yet.</p>}
+        </section>
+
+        <p className="portal-magic-note">This secure link is your access to TWIF. No password or login is required, so keep it private.</p>
       </section>
     </main>
   );
@@ -1521,7 +2461,7 @@ function OrderTableLike({ columns, rows }) {
 }
 
 function renderView(activeView, role, viewProps = {}) {
-  if (activeView === 'Overview') return <Overview role={role} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
+  if (activeView === 'Overview') return <Overview role={role} currentRole={viewProps.currentRole} sentInvoices={viewProps.sentInvoices} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
   if (activeView === 'Orders') return <OrdersView sentInvoices={viewProps.sentInvoices} />;
   if (activeView === 'Customers') return <CustomersView />;
   if (activeView === 'New Invoice') return <NewInvoiceView currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
@@ -1529,11 +2469,11 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Payments') return <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
   if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
   if (activeView === 'Inventory') return <InventoryView />;
-  if (activeView === 'Staff') return <StaffView />;
+  if (activeView === 'Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
   if (activeView === 'Reports') return <ReportsView />;
-  if (activeView === 'My Tasks') return <TailorTasks productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
-  if (activeView === 'Weekly Log') return <WeeklyLogView productionJobs={viewProps.productionJobs} />;
-  if (activeView === 'Notifications') return <NotificationPanel />;
+  if (activeView === 'My Tasks') return <TailorTasks currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
+  if (activeView === 'Weekly Log') return <WeeklyLogView currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} />;
+  if (activeView === 'Notifications') return <NotificationPanel role={role} currentRole={viewProps.currentRole} />;
   return <Overview role={role} />;
 }
 
@@ -1543,21 +2483,21 @@ function App() {
   const visibleNav = navByRole[role];
   const [activeView, setActiveView] = useState('Overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [sentInvoices, setSentInvoices] = useState(loadSentInvoices);
-  const [productionJobs, setProductionJobs] = useState(() => {
-    const storedJobs = loadStoredProductionJobs();
-    return storedJobs.length ? storedJobs : initialProductionJobs;
-  });
+  const [sentInvoices, setSentInvoices] = useState([]);
+  const [productionJobs, setProductionJobs] = useState([]);
+  const [signedInAccount, setSignedInAccount] = useState(null);
+  const [staffProfile, setStaffProfile] = useState(null);
 
-  const currentRole = useMemo(() => roles.find((item) => item.id === role), [role]);
-
-  useEffect(() => {
-    localStorage.setItem(SENT_INVOICES_KEY, JSON.stringify(sentInvoices));
-  }, [sentInvoices]);
-
-  useEffect(() => {
-    localStorage.setItem(PRODUCTION_JOBS_KEY, JSON.stringify(productionJobs));
-  }, [productionJobs]);
+  const currentRole = useMemo(() => {
+    const roleDetails = roles.find((item) => item.id === role);
+    if (!roleDetails) return null;
+    return {
+      ...roleDetails,
+      ...signedInAccount,
+      name: staffProfile?.displayName || roleDetails.name,
+      profileImageUrl: staffProfile?.profileImageUrl || '',
+    };
+  }, [role, signedInAccount, staffProfile]);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -1569,10 +2509,7 @@ function App() {
         if (cancelled) return;
         const invoices = response.data?.data?.invoices || [];
         setSentInvoices(invoices);
-        setProductionJobs((current) => mergeJobsByInvoice(
-          current,
-          invoices.map(productionJobFromInvoice)
-        ));
+        setProductionJobs(invoices.map(productionJobFromInvoice).filter(Boolean));
       })
       .catch(() => {
         // Keep the local cache visible if the API is unavailable.
@@ -1582,6 +2519,17 @@ function App() {
       cancelled = true;
     };
   }, [signedIn]);
+
+  useEffect(() => {
+    if (!signedIn || !signedInAccount?.phone) return;
+    api.get('/oms/staff')
+      .then((response) => {
+        const phone = signedInAccount.phone.replace(/\D/g, '');
+        const profile = (response.data?.data?.staffUsers || []).find((item) => item.phone.replace(/\D/g, '') === phone);
+        if (profile) setStaffProfile(profile);
+      })
+      .catch(() => {});
+  }, [signedIn, signedInAccount]);
 
   const recordSentInvoice = (invoice) => {
     setSentInvoices((current) => [
@@ -1635,6 +2583,8 @@ function App() {
 
   const handleLogin = (account) => {
     setRole(account.role);
+    setSignedInAccount(account);
+    setStaffProfile(null);
     setActiveView(navByRole[account.role][0]);
     setSignedIn(true);
     setMobileMenuOpen(false);
@@ -1643,6 +2593,8 @@ function App() {
   const handleLogout = () => {
     setSignedIn(false);
     setRole(null);
+    setSignedInAccount(null);
+    setStaffProfile(null);
     setActiveView('Overview');
     setMobileMenuOpen(false);
   };
@@ -1652,7 +2604,12 @@ function App() {
     setMobileMenuOpen(false);
   };
 
-  const trackingMatch = window.location.pathname.match(/^\/c\/([^/?#]+)/);
+  const profileMatch = window.location.pathname.match(/^\/c\/([^/?#]+)\/profile\/?$/);
+  if (profileMatch) {
+    return <CustomerPortalPage token={decodeURIComponent(profileMatch[1])} sentInvoices={sentInvoices} />;
+  }
+
+  const trackingMatch = window.location.pathname.match(/^\/c\/([^/?#]+)\/?$/);
   if (trackingMatch) {
     return (
       <CustomerTrackingPage
@@ -1711,7 +2668,12 @@ function App() {
             <h1>{activeView === 'Portal Preview' ? 'Customer Tracking Preview' : activeView}</h1>
           </div>
           <div className="topbar-actions">
+            <NotificationBell role={role} currentRole={currentRole} onOpen={() => openView('Notifications')} />
             <div className="user-chip">
+              <ProfilePhotoControl
+                account={currentRole}
+                onProfileImageChange={(profileImageUrl) => setStaffProfile((current) => ({ ...current, profileImageUrl }))}
+              />
               <span>{currentRole?.name}</span>
               <button onClick={handleLogout}>Logout</button>
             </div>
