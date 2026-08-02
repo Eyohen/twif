@@ -1,41 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './lib/api';
-
-const money = new Intl.NumberFormat('en-NG', {
-  style: 'currency',
-  currency: 'NGN',
-  maximumFractionDigits: 0,
-});
-
-const roles = [
-  { id: 'owner', label: 'Owner', name: 'Jenni (Owner)' },
-  { id: 'admin', label: 'Admin', name: 'Jim (Admin)' },
-  { id: 'store_manager', label: 'Store Manager', name: 'Bola (Store Manager)' },
-  { id: 'accounts', label: 'Accounts', name: 'Funke (Accounts)' },
-  { id: 'production_manager', label: 'Production Mgr', name: 'Tunde (Production)' },
-  { id: 'inventory_manager', label: 'Inventory Mgr', name: 'Kemi (Inventory)' },
-  { id: 'tailor', label: 'Tailor', name: 'Segun (Tailor)' },
-];
-
-const demoCredentials = [
-  { phone: '08000000001', pin: 'owner26', role: 'owner', label: 'Owner' },
-  { phone: '08000000002', pin: 'admin26', role: 'admin', label: 'Admin' },
-  { phone: '08000000003', pin: 'store26', role: 'store_manager', label: 'Store Manager' },
-  { phone: '08000000004', pin: 'accounts26', role: 'accounts', label: 'Accounts' },
-  { phone: '08000000005', pin: 'production26', role: 'production_manager', label: 'Production Manager' },
-  { phone: '08000000006', pin: 'inventory26', role: 'inventory_manager', label: 'Inventory Manager' },
-  { phone: '08000000007', pin: 'tailor26', role: 'tailor', label: 'Tailor' },
-];
-
-const stores = ['All Stores', 'Ikeja', 'Lekki'];
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
-
-const invoiceSeed = () => `INV${Math.floor(Math.random() * 90000) + 10000}`;
-
-const invoiceItemSeed = () => `item-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-
-const trackingTokenSeed = () => Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-8);
+import LoginPage from './pages/auth/LoginPage';
+import MyTasksPage from './pages/tailor/MyTasksPage';
+import WeeklyLogPage from './pages/tailor/WeeklyLogPage';
+import StoreManagerOverviewPage from './pages/store-manager/OverviewPage';
+import StoreManagerCustomersPage from './pages/store-manager/CustomersPage';
+import StoreManagerOrdersPage from './pages/store-manager/OrdersPage';
+import AccountsInvoicesPage from './pages/accounts/InvoicesPage';
+import AccountsPaymentsPage from './pages/accounts/PaymentsPage';
+import AccountsInventoryReconciliationPage from './pages/accounts/InventoryReconciliationPage';
+import UserManagementPage from './pages/owner/UserManagementPage';
+import InventoryManagerOverviewPage from './pages/inventory/OverviewPage';
+import InventoryListPage from './pages/inventory/InventoryListPage';
+import { roles, demoCredentials, inventoryCategories, navByRole, accountTypeByRole } from './config/oms';
+import { Stat, Status, SectionHeader } from './components/oms/Common';
+import {
+  money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
+  dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
+  isInvoiceApproved, canShowJobInProduction, productionJobFromInvoice,
+  mergeJobsByInvoice, classNames,
+} from './utils/oms';
 
 const trackingBaseUrl = (
   import.meta.env.VITE_TRACKING_BASE_URL ||
@@ -44,252 +29,45 @@ const trackingBaseUrl = (
 ).replace(/\/+$/, '');
 
 const trackingUrlForToken = (token) => `${trackingBaseUrl}/c/${token}`;
-
-const toNumber = (value) => Number(value) || 0;
-
-const dateInputValue = (value, fallback = todayIso()) => {
-  if (!value) return fallback;
-  return String(value).slice(0, 10);
+const OMS_SESSION_KEY = 'twif_oms_session';
+const roleSlug = (value = '') => String(value || '').replaceAll('_', '-');
+const viewSlug = (value = '') => String(value || '').toLowerCase().replaceAll('&', 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const sessionFromStorage = () => {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(OMS_SESSION_KEY) || 'null');
+    if (!saved?.role || !navByRole[saved.role]) return null;
+    const roleDetails = roles.find((item) => item.id === saved.role);
+    const demoAccount = demoCredentials.find((item) => item.role === saved.role && (!saved.phone || item.phone === saved.phone));
+    return { ...roleDetails, ...demoAccount, ...saved };
+  } catch {
+    return null;
+  }
 };
 
-const customerStatus = (status) => {
-  if (status === 'Ready' || status === 'Ready for Collection') return 'Ready for Collection';
-  return 'In Progress';
-};
 
-const paymentStatusLabels = {
-  partial_paid: 'Partial Paid',
-  fully_paid: 'Fully Paid',
-};
-
-const invoiceApprovalStatus = (invoice) => invoice?.accountApprovalStatus || 'Pending Accounts';
-
-const isInvoiceApproved = (invoice) => invoiceApprovalStatus(invoice) === 'Approved';
-
-const canShowJobInProduction = (job, invoices) => {
-  if (!job.invoiceNumber) return true;
-  const invoice = invoices.find((item) => item.invoiceNumber === job.invoiceNumber);
-  return isInvoiceApproved(invoice);
-};
-
-const productionJobFromInvoice = (invoice) => {
-  if (!invoice?.orderSheet) return null;
-  const sheet = invoice.orderSheet;
-  const styleImages = Array.isArray(sheet.styleImages) ? sheet.styleImages : [];
-
-  return {
-    id: sheet.id || `JOB-${invoice.invoiceNumber}`,
-    invoiceNumber: invoice.invoiceNumber,
-    trackingToken: sheet.trackingToken || invoice.trackingToken,
-    trackingUrl: sheet.trackingUrl || invoice.trackingUrl,
-    customer: sheet.customer || invoice.customer || '',
-    phone: sheet.phone || '',
-    store: sheet.store || invoice.store || 'Lekki',
-    item: sheet.item || invoice.item || '',
-    pieces: toNumber(sheet.pieces || invoice.pieces) || 1,
-    delivery: sheet.delivery || dateInputValue(invoice.deliveryDate),
-    amount: toNumber(sheet.amount),
-    paid: toNumber(sheet.paid),
-    status: sheet.status || 'Order Sheet Confirmed',
-    requiresAccountApproval: true,
-    payment: sheet.payment || invoice.paymentStatus || 'Fully Paid',
-    fabric: sheet.fabric || '',
-    fabricId: sheet.fabricId || '',
-    tailor: sheet.tailor || 'Unassigned',
-    images: toNumber(sheet.images) || styleImages.length,
-    styleImages,
-    measurements: sheet.measurements || '',
-    designNotes: sheet.designNotes || '',
-    note: sheet.note || sheet.designNotes || invoice.itemNote || '',
-    productionNote: sheet.productionNote || '',
-    fabricConfirmed: Boolean(sheet.fabricConfirmed),
-    fabricAllocated: Boolean(sheet.fabricAllocated),
-    fabricUsage: sheet.fabricUsage || '',
-    fabricUnit: sheet.fabricUnit || '',
-    assignedAt: sheet.assignedAt || 'Pending assignment',
-    updatedAt: sheet.updatedAt,
-  };
-};
-
-const mergeJobsByInvoice = (currentJobs, incomingJobs) => {
-  const validIncoming = incomingJobs.filter(Boolean);
-  if (!validIncoming.length) return currentJobs;
-
-  const incomingInvoiceNumbers = new Set(validIncoming.map((job) => job.invoiceNumber));
-  return [
-    ...validIncoming,
-    ...currentJobs.filter((job) => !incomingInvoiceNumbers.has(job.invoiceNumber)),
-  ];
-};
-
-const inventoryCategories = [
-  'Suiting',
-  'Shirting',
-  'Jacket',
-  'Trouser',
-  'Native',
-  'Bridal',
-  'Lining',
-  'Trim',
-  'Accessories',
-  'Cloth',
-  'Add Ons',
-];
-
-const navByRole = {
-  owner: ['Overview', 'Orders', 'Customers', 'Payments', 'Production', 'Inventory', 'Staff', 'Reports', 'Notifications'],
-  admin: ['Overview', 'Orders', 'Customers', 'Payments', 'Production', 'Inventory', 'Staff', 'Reports', 'Notifications'],
-  store_manager: ['Overview', 'Orders', 'Customers', 'New Invoice', 'Order Sheet', 'Notifications'],
-  accounts: ['Overview', 'Payments', 'Reports', 'Notifications'],
-  production_manager: ['Overview', 'Production', 'Inventory', 'Notifications'],
-  inventory_manager: ['Overview', 'Inventory', 'Notifications'],
-  tailor: ['Overview', 'My Tasks', 'Weekly Log', 'Notifications'],
-};
-
-function classNames(...items) {
-  return items.filter(Boolean).join(' ');
-}
-
-function Stat({ label, value, detail, tone = 'dark' }) {
-  return (
-    <article className={classNames('stat', `stat-${tone}`)}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </article>
-  );
-}
-
-function Status({ children }) {
-  const normalized = String(children).toLowerCase().replace(/\s+/g, '-');
-  return <span className={classNames('status', `status-${normalized}`)}>{children}</span>;
-}
-
-function SectionHeader({ eyebrow, title, children }) {
-  return (
-    <div className="section-header">
-      <div>
-        <p>{eyebrow}</p>
-        <h2>{title}</h2>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function LoginScreen({ onLogin }) {
-  const [phone, setPhone] = useState('');
-  const [pin, setPin] = useState('');
-  const [showPin, setShowPin] = useState(false);
-  const [error, setError] = useState('');
-
-  const submit = (event) => {
-    event.preventDefault();
-    const account = demoCredentials.find((item) => (
-      item.phone === phone.trim() && item.pin === pin.trim()
-    ));
-
-    if (!account) {
-      setError('Invalid phone number or PIN');
-      return;
-    }
-
-    setError('');
-    onLogin(account);
-  };
-
-  return (
-    <main className="login-page">
-      <section className="login-app-frame">
-        <div className="login-brand-top">
-          <div className="app-mark">twif</div>
-          <div>
-            <span>THE WAY IT FITS</span>
-            <strong>Operations</strong>
-          </div>
-        </div>
-
-        <div className="login-welcome">
-          <p>Staff Access</p>
-          <h1>Manage the floor from anywhere.</h1>
-        </div>
-
-        <section className="login-panel">
-          <div className="login-panel-head">
-            <div>
-              <span>Secure sign in</span>
-              <h2>Welcome back</h2>
-            </div>
-            <div className="mark">TW</div>
-          </div>
-
-          <form onSubmit={submit}>
-            {error ? <div className="login-error">{error}</div> : null}
-            <label>
-              Phone number
-              <input value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="08000000003" />
-            </label>
-            <label>
-              PIN
-              <span className="pin-input-wrap">
-                <input
-                  value={pin}
-                  onChange={(event) => setPin(event.target.value)}
-                  type={showPin ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  placeholder="Enter PIN"
-                />
-                <button
-                  type="button"
-                  className="pin-toggle"
-                  aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
-                  onClick={() => setShowPin((current) => !current)}
-                >
-                  {showPin ? (
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M3 3l18 18" />
-                      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-                      <path d="M9.5 4.4A10.6 10.6 0 0 1 12 4c5 0 8.7 4.1 10 8a12.6 12.6 0 0 1-2.1 3.8" />
-                      <path d="M6.1 6.1A12.2 12.2 0 0 0 2 12c1.3 3.9 5 8 10 8 1.5 0 2.9-.4 4.1-1" />
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  )}
-                </button>
-              </span>
-            </label>
-            <button className="login-submit" type="submit">Continue</button>
-          </form>
-
-          <p>Access is matched to your assigned role automatically.</p>
-        </section>
-
-        <div className="login-bottom-safe">
-          <span />
-          <span />
-          <span />
-        </div>
-      </section>
-    </main>
-  );
-}
-
-function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], onUpdateJob }) {
+function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], onUpdateJob, onApproveInvoice }) {
   const isTailor = role === 'tailor';
 
   if (isTailor) {
     return <TailorOverview currentRole={currentRole} productionJobs={productionJobs} onUpdateJob={onUpdateJob} />;
   }
 
-  if (role === 'inventory_manager') {
-    return <InventoryOverview />;
-  }
+  if (role === 'inventory_manager') return <InventoryManagerOverviewPage />;
 
   if (role === 'production_manager') {
     return <ProductionOverview productionJobs={productionJobs} />;
+  }
+
+  if (role === 'owner') {
+    return <OwnerOverview sentInvoices={sentInvoices} productionJobs={productionJobs} />;
+  }
+
+  if (role === 'accounts') {
+    return <AccountsOverview sentInvoices={sentInvoices} onApproveInvoice={onApproveInvoice} />;
+  }
+
+  if (role === 'store_manager') {
+    return <StoreManagerOverviewPage sentInvoices={sentInvoices} productionJobs={productionJobs} />;
   }
 
   return <OperationsOverview role={role} sentInvoices={sentInvoices} productionJobs={productionJobs} />;
@@ -373,6 +151,162 @@ function OperationsOverview({ role, sentInvoices = [], productionJobs = [] }) {
           <div className="panel"><SectionHeader eyebrow="Inventory" title="Stock Health" /><div className="inventory-category-list"><div><span>Healthy</span><strong>{inventory.length - lowStock.length}</strong></div><div><span>Low or out</span><strong>{lowStock.length}</strong></div><div><span>Total records</span><strong>{inventory.length}</strong></div></div></div>
         </section>
       ) : null}
+    </div>
+  );
+}
+
+function AccountsOverview({ sentInvoices = [], onApproveInvoice }) {
+  const [inventory, setInventory] = useState([]);
+
+  useEffect(() => {
+    api.get('/oms/fabrics')
+      .then((response) => setInventory(response.data?.data?.fabrics || []))
+      .catch(() => setInventory([]));
+  }, []);
+
+  const pending = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts');
+  const approved = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Approved');
+  const flagged = sentInvoices.filter((invoice) => ['Flagged', 'Rejected'].includes(invoiceApprovalStatus(invoice)));
+  const partial = sentInvoices.filter((invoice) => invoice.paymentStatus === 'Partial Paid');
+  const paid = sentInvoices.filter((invoice) => invoice.paymentStatus === 'Fully Paid');
+  const unpaid = sentInvoices.filter((invoice) => !['Fully Paid', 'Partial Paid'].includes(invoice.paymentStatus));
+  const total = sentInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
+  const pendingTotal = pending.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
+  const approvedTotal = approved.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
+  const partialTotal = partial.reduce((sum, invoice) => sum + Math.max(0, toNumber(invoice.total) - toNumber(invoice.paid)), 0);
+  const lowStock = inventory.filter((item) => toNumber(item.quantity) <= toNumber(item.lowStockThreshold || 5));
+  const outOfStock = inventory.filter((item) => toNumber(item.quantity) <= 0);
+  const healthyStock = inventory.filter((item) => toNumber(item.quantity) > toNumber(item.lowStockThreshold || 5));
+  const queue = (pending.length ? pending : sentInvoices).slice(0, 5);
+
+  return (
+    <div className="accounts-dashboard">
+      <section className="accounts-kpis">
+        {[
+          ['Awaiting Review', pending.length, 'Invoices', money.format(pendingTotal), 'Total Amount', 'dark', '▣'],
+          ['Approved (This Month)', approved.length, 'Invoices', money.format(approvedTotal), 'Total Amount', 'green', '▤'],
+          ['Rejected / Flagged', flagged.length, 'Invoices', money.format(flagged.reduce((sum, invoice) => sum + toNumber(invoice.total), 0)), 'Total Amount', 'red', '⚑'],
+          ['Partial Payments', partial.length, 'Invoices', money.format(partialTotal), 'Outstanding', 'gold', '◔'],
+          ['Total Invoiced', money.format(total), 'Across all invoices', '↗ 18.7% vs last 30 days', '', 'chart', '⌁'],
+          ['Inventory Alerts', lowStock.length, 'Items', 'Requires attention', '', 'alert', '△'],
+        ].map(([label, value, line, amount, caption, tone, icon]) => (
+          <article className={`accounts-kpi accounts-${tone}`} key={label}>
+            <i>{icon}</i><span>{label}</span><strong>{value}</strong><small>{line}</small><b>{amount}</b>{caption ? <em>{caption}</em> : null}
+          </article>
+        ))}
+      </section>
+
+      <section className="accounts-primary-grid">
+        <section className="accounts-panel invoice-review">
+          <header><div><h2>Invoice Review Queue</h2><p>Invoices awaiting your action.</p></div><button>View all invoices →</button></header>
+          <div className="accounts-table-wrap">
+            <table><thead><tr><th>Invoice</th><th>Customer</th><th>Store</th><th>Total</th><th>Status</th><th>Payment</th><th>Action</th></tr></thead>
+            <tbody>{queue.map((invoice) => <tr key={invoice.invoiceNumber}>
+              <td><strong>{invoice.invoiceNumber}</strong></td><td>{invoice.customer}</td><td>{invoice.store}</td><td><strong>{money.format(invoice.total)}</strong></td>
+              <td><Status>{invoice.orderStatus || 'Unpaid'}</Status></td><td><Status>{invoice.paymentStatus}</Status></td>
+              <td><div className="accounts-row-actions"><button title="Approve" onClick={() => onApproveInvoice?.(invoice.invoiceNumber, 'Approved')}>✓</button><button title="Reject" onClick={() => onApproveInvoice?.(invoice.invoiceNumber, 'Rejected')}>×</button><button title="Flag" onClick={() => onApproveInvoice?.(invoice.invoiceNumber, 'Flagged')}>⚑</button><button>•••</button></div></td>
+            </tr>)}</tbody></table>
+            {!queue.length ? <div className="accounts-empty">No invoices are awaiting review.</div> : null}
+          </div>
+          <footer>View full queue →</footer>
+        </section>
+
+        <section className="accounts-panel payment-overview">
+          <header><h2>Payment Overview</h2></header>
+          <div className="payment-overview-body">
+            <div className="payment-donut" style={{ '--paid': `${sentInvoices.length ? (paid.length / sentInvoices.length) * 100 : 0}%`, '--partial': `${sentInvoices.length ? ((paid.length + partial.length) / sentInvoices.length) * 100 : 0}%` }}><span><strong>{sentInvoices.length}</strong>Total</span></div>
+            <div className="payment-legend">
+              {[['Paid in Full', paid.length, paid.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), 'green'], ['Partial Paid', partial.length, partialTotal, 'gold'], ['Unpaid', unpaid.length, unpaid.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), 'gray'], ['Overdue', flagged.length, flagged.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), 'red']].map(([label, count, amount, tone]) => <article key={label}><i className={tone}/><span><strong>{label}</strong><small>{count} ({sentInvoices.length ? Math.round((count / sentInvoices.length) * 100) : 0}%)</small></span><b>{money.format(amount)}</b></article>)}
+            </div>
+          </div>
+          <footer><span>Total Outstanding</span><strong>{money.format(partialTotal)}</strong></footer>
+        </section>
+      </section>
+
+      <section className="accounts-secondary-grid">
+        <section className="accounts-panel stock-snapshot"><header><h2>Inventory Reconciliation Snapshot</h2><small>As of {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</small></header><div>
+          {[['Total Items', inventory.length, 'Across all categories', '◇'], ['In Stock', healthyStock.length, 'Available inventory', '✓'], ['Low Stock', lowStock.length, 'Below reorder level', '△'], ['Out of Stock', outOfStock.length, 'Requires attention', '⊖']].map(([label, value, detail, icon]) => <article key={label}><span>{label}</span><strong>{value}</strong><small>{detail}</small><i>{icon}</i></article>)}
+        </div><footer>View inventory →</footer></section>
+
+        <section className="accounts-panel recent-alerts"><header><h2>Recent Inventory Alerts</h2><button>View all alerts →</button></header><div>
+          {(lowStock.length ? lowStock : [{ id: 'a1', name: 'Satin Fabric (Black)', type: 'Fabrics', quantity: 4.2, unit: 'yards' }, { id: 'a2', name: 'Buttons (Metal)', type: 'Accessories', quantity: 8, unit: 'sets' }, { id: 'a3', name: 'Thread (Black)', type: 'Accessories', quantity: 0, unit: '' }]).slice(0, 5).map((item) => <article key={item.id}><i className={toNumber(item.quantity) <= 0 ? 'red' : ''}/><strong>{item.name}</strong><span>{item.type}</span><small className={toNumber(item.quantity) <= 0 ? 'red' : ''}>{toNumber(item.quantity) <= 0 ? 'Out of stock' : `${item.quantity} ${item.unit} left`}</small></article>)}
+        </div></section>
+
+        <section className="accounts-panel quick-actions"><header><h2>Quick Actions</h2></header><div>{[['✓', 'Approve Invoices'], ['⚑', 'Reject / Flag Invoices'], ['▣', 'Record Payment'], ['⟳', 'Inventory Reconciliation'], ['⇩', 'Download Reports'], ['▤', 'View Audit Log']].map(([icon, label]) => <button key={label}><i>{icon}</i>{label}</button>)}</div></section>
+      </section>
+
+      <section className="accounts-panel accounts-activity"><header><h2>Recent Activity</h2></header><div>
+        {sentInvoices.slice(0, 5).map((invoice, index) => <article key={invoice.invoiceNumber}><i>{['✓', '▣', '⚑', '◇', '▤'][index]}</i><span><strong>{invoice.invoiceNumber} {invoiceApprovalStatus(invoice).toLowerCase()}</strong><small>by Funke</small><time>{invoice.createdAt || 'Recently'}</time></span></article>)}
+        {!sentInvoices.length ? <div className="accounts-empty">Account activity will appear here.</div> : null}
+        <button>View full activity →</button>
+      </div></section>
+    </div>
+  );
+}
+
+function OwnerOverview({ sentInvoices = [], productionJobs = [] }) {
+  const [inventory, setInventory] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [staff, setStaff] = useState([]);
+
+  useEffect(() => {
+    Promise.allSettled([api.get('/oms/fabrics'), api.get('/oms/customers'), api.get('/oms/staff')]).then(([fabricsResult, customersResult, staffResult]) => {
+      if (fabricsResult.status === 'fulfilled') setInventory(fabricsResult.value.data?.data?.fabrics || []);
+      if (customersResult.status === 'fulfilled') setCustomers(customersResult.value.data?.data?.customers || []);
+      if (staffResult.status === 'fulfilled') setStaff(staffResult.value.data?.data?.staffUsers || []);
+    });
+  }, []);
+
+  const totalRevenue = sentInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
+  const completed = productionJobs.filter((job) => job.status === 'Ready');
+  const inProgress = productionJobs.filter((job) => ['Assigned', 'In Progress'].includes(job.status));
+  const pendingJobs = productionJobs.filter((job) => ['Order Sheet Confirmed'].includes(job.status));
+  const delayed = productionJobs.filter((job) => job.delivery && new Date(`${job.delivery}T23:59:59`) < new Date() && job.status !== 'Ready');
+  const lowStock = inventory.filter((item) => toNumber(item.quantity) <= toNumber(item.lowStockThreshold || 5));
+  const outstanding = sentInvoices.filter((invoice) => invoice.paymentStatus !== 'Fully Paid').reduce((sum, invoice) => sum + Math.max(0, toNumber(invoice.total) - toNumber(invoice.paid)), 0);
+  const storeRows = ['Lekki', 'Ikeja', 'Surulere'].map((store) => {
+    const storeInvoices = sentInvoices.filter((invoice) => String(invoice.store).toLowerCase().includes(store.toLowerCase()));
+    return { store, revenue: storeInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), orders: storeInvoices.length };
+  });
+  const topCustomers = customers.length ? [...customers].sort((a, b) => toNumber(b.lifetimeSpend) - toNumber(a.lifetimeSpend)).slice(0, 5) : sentInvoices.slice(0, 5).map((invoice) => ({ id: invoice.invoiceNumber, fullName: invoice.customer, lifetimeSpend: invoice.total, totalOrders: 1 }));
+  const tailorRows = staff.filter((person) => person.role === 'tailor').slice(0, 5);
+
+  return (
+    <div className="owner-dashboard">
+      <section className="owner-kpis">{[
+        ['Total Revenue (MTD)', money.format(totalRevenue), '↑ 18.7% vs last 30 days', 'gold', '▣'],
+        ['Total Orders', sentInvoices.length, '↑ 12.5% vs last 30 days', 'gold', '▤'],
+        ['Completed Jobs', completed.length, '↑ 22.3% vs last 30 days', 'green', '▥'],
+        ['Active Customers', customers.length, '↑ 8.1% vs last 30 days', 'blue', '♙'],
+        ['Low Stock Items', lowStock.length, '↓ 14.3% vs last 30 days', 'red', '△'],
+        ['Outstanding Payments', money.format(outstanding), '↓ 6.7% vs last 30 days', 'red', '▣'],
+      ].map(([label, value, change, tone, icon], index) => <article className={`owner-kpi tone-${tone}`} key={label}><span>{label}</span><strong>{value}</strong><small>{change}</small><i>{icon}</i>{index < 5 ? <div className="owner-sparkline"><b/><b/><b/><b/><b/><b/><b/></div> : null}</article>)}</section>
+
+      <section className="owner-action-row">
+        <section className="owner-panel action-insights"><header>Action Insights</header><div>
+          {[
+            ['▤', `${sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts').length} invoices are awaiting Accounts approval.`, 'Review', 'gold'],
+            ['△', `${delayed.length} orders are overdue by more than 2 days.`, 'View', 'red'],
+            ['△', `${lowStock[0]?.name || 'Inventory'} requires restocking.`, 'Restock', 'blue'],
+            ['↗', 'Revenue is up this month compared to last month.', 'View Report', 'green'],
+            ['♙', `${topCustomers[0]?.fullName || 'A customer'} is a top customer this month.`, 'View Customer', 'blue'],
+            ['♧', `${tailorRows[0]?.displayName || 'Production staff'} leads weekly production.`, 'View Performance', 'purple'],
+          ].map(([icon, text, action, tone]) => <article key={text}><i className={tone}>{icon}</i><span>{text}</span><button className={tone}>{action}</button></article>)}
+        </div><footer>View all insights &nbsp; →</footer></section>
+        <section className="owner-panel owner-quick-actions"><header>Quick Actions</header><div>{[['✓', 'Approve Invoices'], ['▣', 'Review Payments'], ['♙', 'Assign Tailor'], ['▤', 'Create Invoice'], ['♙', 'Add Customer'], ['▣', 'Record Payment'], ['◇', 'Adjust Inventory'], ['▥', 'Generate Report']].map(([icon, label]) => <button key={label}><i>{icon}</i>{label}</button>)}</div></section>
+      </section>
+
+      <section className="owner-analytics-grid">
+        <section className="owner-panel sales-overview"><header><span>Sales Overview</span><select><option>This Month</option></select></header><div className="sales-chart"><div className="chart-bars">{[28, 43, 36, 50, 62, 39, 72, 61, 48, 59, 92].map((height, index) => <i style={{ height: `${height}%` }} key={index}/>)}</div><svg viewBox="0 0 500 130" preserveAspectRatio="none"><polyline points="0,105 45,65 90,85 135,50 180,75 225,38 270,58 315,20 360,55 405,72 455,24 500,48"/></svg></div><footer>{[[money.format(totalRevenue), 'Total Revenue'], [sentInvoices.length, 'Total Orders'], [sentInvoices.length ? money.format(totalRevenue / sentInvoices.length) : money.format(0), 'Avg. Order Value'], ['18.7%', 'Growth vs Last 30 Days']].map(([value, label]) => <div key={label}><strong>{value}</strong><small>{label}</small></div>)}</footer></section>
+        <section className="owner-panel owner-production"><header><span>Production Overview</span><select><option>This Week</option></select></header><div><div className="owner-production-donut"><span><strong>{productionJobs.length}</strong>Total Jobs</span></div><div>{[['Completed', completed.length, 'green'], ['In Progress', inProgress.length, 'gold'], ['Pending', pendingJobs.length, 'blue'], ['Delayed', delayed.length, 'red']].map(([label, value, tone]) => <article key={label}><i className={tone}/><span>{label}</span><strong>{value}</strong></article>)}</div></div><footer><div><strong>{completed.length}</strong><small>Ready for Collection</small></div><div><strong className="red">{delayed.length}</strong><small>Delayed Jobs</small></div><div><strong className="green">{productionJobs.length ? Math.round((completed.length / productionJobs.length) * 100) : 0}%</strong><small>Completion Rate</small></div></footer></section>
+        <section className="owner-panel store-performance"><header><span>Store Performance</span><select><option>This Month</option></select></header><table><thead><tr><th>Store</th><th>Revenue</th><th>Orders</th><th>% Revenue</th><th>Status</th></tr></thead><tbody>{storeRows.map((row, index) => <tr key={row.store}><td>{row.store}</td><td>{money.format(row.revenue)}</td><td>{row.orders}</td><td>{totalRevenue ? Math.round((row.revenue / totalRevenue) * 100) : 0}%</td><td><i className={index === 0 ? 'green' : index === 1 ? 'gold' : 'red'}/>{index === 0 ? 'Excellent' : index === 1 ? 'Average' : 'Needs Attention'}</td></tr>)}</tbody></table><footer>View all stores &nbsp; →</footer></section>
+      </section>
+
+      <section className="owner-bottom-grid">
+        <section className="owner-panel owner-table-panel"><header><span>Top Customers (This Month)</span><button>View all customers →</button></header><table><thead><tr><th>Customer</th><th>Revenue</th><th>Orders</th><th>Last Order</th></tr></thead><tbody>{topCustomers.map((customer) => <tr key={customer.id || customer.fullName}><td><i>{customer.fullName?.slice(0, 1)}</i>{customer.fullName}</td><td>{money.format(customer.lifetimeSpend)}</td><td>{customer.totalOrders || 1}</td><td>Recently</td></tr>)}</tbody></table></section>
+        <section className="owner-panel owner-table-panel"><header><span>Inventory Alerts</span><button>View full inventory →</button></header><table><thead><tr><th>Item</th><th>Category</th><th>Stock</th><th>Status</th><th>Location</th></tr></thead><tbody>{lowStock.slice(0, 5).map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.type}</td><td>{item.quantity} {item.unit}</td><td><Status>{toNumber(item.quantity) <= 0 ? 'Out of Stock' : 'Low Stock'}</Status></td><td>{item.store || 'Lekki'}</td></tr>)}</tbody></table></section>
+        <section className="owner-panel owner-table-panel"><header><span>Staff Performance (This Week)</span><button>View all staff →</button></header><table><thead><tr><th>Staff Member</th><th>Role</th><th>Jobs Completed</th><th>Rating</th></tr></thead><tbody>{tailorRows.map((person, index) => <tr key={person.id}><td><i>{person.displayName?.slice(0, 1)}</i>{person.displayName}</td><td>Tailor</td><td>{productionJobs.filter((job) => job.tailor === person.displayName && job.status === 'Ready').length}</td><td>★ {(4.9 - index * .2).toFixed(1)}</td></tr>)}</tbody></table></section>
+      </section>
     </div>
   );
 }
@@ -845,6 +779,170 @@ function OrdersView({ sentInvoices }) {
   );
 }
 
+function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
+  const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const filteredInvoices = sentInvoices.filter((invoice) => {
+    const matchesSearch = `${invoice.invoiceNumber} ${invoice.customer} ${invoice.store} ${invoice.paymentStatus}`.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === 'All'
+      || (statusFilter === 'Pending' && invoiceApprovalStatus(invoice) === 'Pending Accounts')
+      || (statusFilter === 'Approved' && isInvoiceApproved(invoice))
+      || (statusFilter === 'Partial' && invoice.paymentStatus === 'Partial Paid');
+    return matchesSearch && matchesStatus;
+  });
+  const total = sentInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
+  const pending = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts');
+  const approved = sentInvoices.filter(isInvoiceApproved);
+  const partial = sentInvoices.filter((invoice) => invoice.paymentStatus === 'Partial Paid');
+
+  if (creating) {
+    return (
+      <div className="store-invoice-create">
+        <div className="store-detail-toolbar">
+          <button type="button" onClick={() => setCreating(false)}>← &nbsp; Back to Invoices</button>
+        </div>
+        <NewInvoiceView currentRole={currentRole} onInvoiceSent={(invoice) => {
+          onInvoiceSent?.(invoice);
+          setCreating(false);
+        }} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="store-invoices-dashboard">
+      <section className="store-invoice-kpis">
+        {[
+          ['▤', 'Total Invoices', sentInvoices.length, money.format(total), 'gold'],
+          ['⌛', 'Pending Approval', pending.length, 'Waiting for Accounts', 'dark'],
+          ['✓', 'Approved', approved.length, 'Released for production', 'green'],
+          ['◔', 'Partial Payments', partial.length, 'Outstanding balances', 'blue'],
+        ].map(([icon, label, value, detail, tone]) => <article className={`store-order-kpi ${tone}`} key={label}><i>{icon}</i><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>)}
+      </section>
+      <section className="store-invoices-panel">
+        <header>
+          <div><h2>Sent Invoices</h2><p>Review and manage every invoice sent to customers.</p></div>
+          <button className="new-invoice-button" type="button" onClick={() => setCreating(true)}>＋ &nbsp; New Invoice</button>
+        </header>
+        <div className="store-invoice-tools">
+          <label>⌕<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search invoice, customer or store..." /></label>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All</option><option>Pending</option><option>Approved</option><option>Partial</option></select>
+          <button>⇅ &nbsp; Newest first</button>
+        </div>
+        <div className="store-invoice-table-wrap">
+          <table className="store-invoice-table">
+            <thead><tr><th>Invoice</th><th>Customer</th><th>Store</th><th>Date Sent</th><th>Total</th><th>Payment</th><th>Accounts Status</th><th>Order Status</th><th>Action</th></tr></thead>
+            <tbody>{filteredInvoices.map((invoice) => <tr key={invoice.invoiceNumber}>
+              <td><strong>{invoice.invoiceNumber}</strong></td>
+              <td><div className="invoice-customer-cell"><i>{invoice.customer?.split(' ').map((part) => part[0]).join('').slice(0, 2)}</i><span><strong>{invoice.customer}</strong><small>{invoice.email || invoice.phone || 'Customer'}</small></span></div></td>
+              <td>{invoice.store}</td>
+              <td>{invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+              <td><strong>{money.format(invoice.total)}</strong></td>
+              <td><Status>{invoice.paymentStatus}</Status></td>
+              <td><Status>{invoiceApprovalStatus(invoice)}</Status></td>
+              <td><Status>{invoice.orderStatus || 'Awaiting'}</Status></td>
+              <td><div className="store-invoice-actions"><button>View</button><button>⋮</button></div></td>
+            </tr>)}</tbody>
+          </table>
+          {!filteredInvoices.length ? <div className="accounts-empty">{sentInvoices.length ? 'No invoices match your search.' : 'No invoices have been sent yet.'}</div> : null}
+        </div>
+        <footer><span>Showing {filteredInvoices.length ? 1 : 0} to {filteredInvoices.length} of {sentInvoices.length} invoices</span><div><button>‹</button><button className="active">1</button><button>›</button><button>10 / page⌄</button></div></footer>
+      </section>
+    </div>
+  );
+}
+
+function StoreOrdersView({ sentInvoices = [] }) {
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('All Orders');
+  const [sort, setSort] = useState('Newest first');
+  const orders = sentInvoices.map((invoice) => ({
+    ...invoice,
+    job: productionJobFromInvoice(invoice),
+    displayStatus: invoice.orderSheet?.status || invoice.orderStatus || invoiceApprovalStatus(invoice),
+  }));
+  const counts = {
+    'All Orders': orders.length,
+    'Pending Approval': orders.filter((order) => invoiceApprovalStatus(order) === 'Pending Accounts').length,
+    'In Progress': orders.filter((order) => ['Assigned', 'In Progress'].includes(order.displayStatus)).length,
+    'Ready for Collection': orders.filter((order) => ['Ready', 'Ready for Collection'].includes(order.displayStatus)).length,
+    Unassigned: orders.filter((order) => !order.job?.tailor || order.job?.tailor === 'Unassigned').length,
+  };
+  const visibleOrders = orders
+    .filter((order) => filter === 'All Orders'
+      || (filter === 'Pending Approval' && invoiceApprovalStatus(order) === 'Pending Accounts')
+      || (filter === 'In Progress' && ['Assigned', 'In Progress'].includes(order.displayStatus))
+      || (filter === 'Ready for Collection' && ['Ready', 'Ready for Collection'].includes(order.displayStatus))
+      || (filter === 'Unassigned' && (!order.job?.tailor || order.job?.tailor === 'Unassigned')))
+    .filter((order) => `${order.invoiceNumber} ${order.customer} ${order.item}`.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => sort === 'Oldest first'
+      ? new Date(a.createdAt || 0) - new Date(b.createdAt || 0)
+      : new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+  if (selectedInvoice) {
+    const invoice = selectedInvoice;
+    const job = invoice.job || {};
+    const paidAmount = toNumber(invoice.paid || invoice.amountPaid || (invoice.paymentStatus === 'Fully Paid' ? invoice.total : invoice.paymentStatus === 'Partial Paid' ? toNumber(invoice.total) / 2 : 0));
+    const balance = Math.max(0, toNumber(invoice.total) - paidAmount);
+    return (
+      <div className="store-order-detail">
+        <div className="store-detail-toolbar"><button type="button" onClick={() => setSelectedInvoice(null)}>← &nbsp; Back to Orders</button><div><button>▣ &nbsp; Print</button><button>More &nbsp; •••</button></div></div>
+        <section className="store-order-hero">
+          <div><span>{invoice.invoiceNumber}</span><h2>{invoice.customer}</h2><p>{invoice.item} · {invoice.pieces || job.pieces || 1} pieces · {invoice.store}</p></div>
+          <Status>{invoice.paymentStatus}</Status>
+          <dl><div><dt>▣ &nbsp; Invoice Date</dt><dd>{invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</dd></div><div><dt>▣ &nbsp; Due Date</dt><dd>{job.delivery ? new Date(`${job.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</dd></div><div><dt>▱ &nbsp; Store</dt><dd>{invoice.store} Store</dd></div></dl>
+        </section>
+        <nav className="store-detail-tabs">{['Order Details', 'Items & Pricing', 'Payments', 'Communications', 'Notes & History'].map((tab, index) => <button className={index === 0 ? 'active' : ''} key={tab}>{tab}</button>)}</nav>
+        <div className="store-detail-grid">
+          <div className="store-detail-main">
+            <section className="store-detail-panel order-information"><h3>Order Information</h3><dl>
+              <div><dt>Payment Status</dt><dd><Status>{invoice.paymentStatus}</Status></dd><dt>Payment Method</dt><dd>{invoice.paymentMethod || 'Bank Transfer'}</dd><dt>Store</dt><dd>{invoice.store} Store</dd><dt>Customer Phone</dt><dd>{invoice.phone || job.phone || '—'}</dd></div>
+              <div><dt>Invoice Number</dt><dd>{invoice.invoiceNumber}</dd><dt>Sales Person</dt><dd>{invoice.createdBy || 'Bola'}</dd><dt>Customer Email</dt><dd>{invoice.email || '—'}</dd></div>
+            </dl></section>
+            <section className="store-detail-panel production-details"><h3>Production Details</h3><dl><div><dt>♙ &nbsp; Tailor</dt><dd>{job.tailor || 'Unassigned'}</dd></div><div><dt>▦ &nbsp; Fabric</dt><dd>{job.fabric || 'Not selected'}</dd></div><div><dt>▧ &nbsp; Style Images</dt><dd>{job.images || 0}</dd></div><div><dt>▤ &nbsp; Special Instructions</dt><dd>{job.productionNote || job.designNotes || invoice.itemNote || 'No special instructions'}</dd></div></dl></section>
+            <section className="store-detail-panel order-timeline"><h3>Timeline</h3><div><article className="done"><i>✓</i><span><strong>Invoice Created</strong><small>by {invoice.createdBy || 'Bola'}</small></span><time>{invoice.createdAt || 'Recently'}</time></article><article className="paid"><i>●</i><span><strong>Payment Made ({invoice.paymentStatus})</strong><small>{money.format(paidAmount)} received via {invoice.paymentMethod || 'Bank Transfer'}</small></span><time>Recently</time></article><article><i>○</i><span><strong>{invoiceApprovalStatus(invoice) === 'Approved' ? 'Accounts Approved' : 'Awaiting Approval'}</strong><small>{invoiceApprovalStatus(invoice) === 'Approved' ? 'Invoice approved by accounts' : 'Waiting for accounts approval'}</small></span><time>Recently</time></article></div></section>
+          </div>
+          <aside className="store-detail-rail">
+            <section className="store-detail-panel order-summary"><h3>Order Summary</h3><dl><div><dt>Invoice Total</dt><dd>{money.format(invoice.total)}</dd></div><div><dt>Amount Paid</dt><dd className="green">{money.format(paidAmount)}</dd></div><div><dt>Balance Due</dt><dd className="red">{money.format(balance)}</dd></div></dl><div><span>Balance Due</span><strong>{money.format(balance)}</strong></div></section>
+            <section className="store-detail-panel detail-actions"><h3>Quick Actions</h3>{['⊕  Record Payment', '➤  Send Payment Reminder', '⌕  Edit Order', '♲  Cancel Order'].map((action, index) => <button className={index === 3 ? 'danger' : ''} key={action}>{action}</button>)}</section>
+            <section className="store-detail-panel detail-documents"><h3>Documents</h3>{[['▤', 'Invoice PDF', 'Download'], ['▤', 'Order Sheet', 'Download'], ['▧', `Style Images (${job.images || 0})`, 'View']].map(([icon, label, action]) => <article key={label}><i>{icon}</i><span><strong>{label}</strong><small>{action}</small></span></article>)}</section>
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="store-orders-dashboard">
+      <section className="store-order-kpis">
+        {[
+          ['▤', 'Invoices Sent', orders.length, 'Live customer invoices', 'gold'],
+          ['⌛', 'Pending Approval', counts['Pending Approval'], 'Waiting for accounts', 'dark'],
+          ['▥', 'Active Orders', counts['In Progress'], 'Currently in production', 'green'],
+          ['✓', 'Ready Orders', counts['Ready for Collection'], 'Ready for customer handoff', 'blue'],
+        ].map(([icon, label, value, detail, tone]) => <article className={`store-order-kpi ${tone}`} key={label}><i>{icon}</i><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>)}
+      </section>
+      <section className="store-orders-panel">
+        <header><label>⌕<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by invoice, customer..." /></label><button>▽ &nbsp; Filter</button><select value={sort} onChange={(event) => setSort(event.target.value)}><option>Newest first</option><option>Oldest first</option></select><button className="new-order">＋ &nbsp; New Order</button></header>
+        <nav>{Object.keys(counts).map((tab) => <button className={filter === tab ? 'active' : ''} onClick={() => setFilter(tab)} key={tab}>{tab} <span>{counts[tab]}</span></button>)}</nav>
+        <div className="store-order-grid">{visibleOrders.map((invoice) => {
+          const job = invoice.job || {};
+          return <article className="store-order-card" key={invoice.invoiceNumber} onClick={() => setSelectedInvoice(invoice)}>
+            <header><span>{invoice.invoiceNumber}</span><Status>{invoice.displayStatus}</Status></header><h3>{invoice.customer}</h3><p>{invoice.item} · {invoice.pieces || job.pieces || 1} pieces · {invoice.store}</p>
+            <div className="card-due">▣ &nbsp; Due: {job.delivery ? new Date(`${job.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Not set'}</div>
+            <div className="card-total"><small>Total</small><strong>{money.format(invoice.total)}</strong></div>
+            <dl><div><dt>Tailor</dt><dd>{job.tailor || 'Unassigned'}</dd></div><div><dt>Fabric</dt><dd>{job.fabric || 'Not selected'}</dd></div></dl>
+            <footer><span>▧ &nbsp; Style Images<br/><b>{job.images || 0}</b></span><button aria-label="View order">›</button></footer>
+          </article>;
+        })}{!visibleOrders.length ? <div className="accounts-empty">No orders match this view.</div> : null}</div>
+        <footer><span>Showing 1 to {visibleOrders.length} of {orders.length} orders</span><div><button>‹</button><button className="active">1</button><button>›</button></div></footer>
+      </section>
+    </div>
+  );
+}
+
 function CustomersView() {
   const [customers, setCustomers] = useState([]);
   const [search, setSearch] = useState('');
@@ -938,6 +1036,9 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
     { id: invoiceItemSeed(), description: '', rate: 0, quantity: 1, discountPercent: 0, amount: 0, note: '' },
   ]);
   const [previewHtml, setPreviewHtml] = useState('');
+  const [previewMode, setPreviewMode] = useState(false);
+  const [previewTab, setPreviewTab] = useState('invoice');
+  const [paymentEvidence, setPaymentEvidence] = useState(null);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -1004,15 +1105,43 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
     balanceDue,
     trackingUrl: form.trackingUrl || trackingUrlForToken(form.trackingToken),
     notes: form.notes.split('\n').map((note) => note.trim()).filter(Boolean),
+    paymentEvidence: paymentEvidence ? {
+      name: paymentEvidence.name,
+      type: paymentEvidence.type,
+      size: paymentEvidence.size,
+      dataUrl: paymentEvidence.dataUrl,
+      uploadedAt: paymentEvidence.uploadedAt,
+    } : null,
   });
+
+  const evidenceRequired = form.paymentStatus !== 'unpaid';
+  const selectEvidence = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setMessage('Payment evidence must be an image or screenshot.'); return; }
+    if (file.size > 5 * 1024 * 1024) { setMessage('Payment evidence must be smaller than 5 MB.'); return; }
+    const reader = new FileReader();
+    reader.onload = () => setPaymentEvidence({ name: file.name, type: file.type, size: file.size, dataUrl: reader.result, uploadedAt: new Date().toISOString() });
+    reader.readAsDataURL(file);
+  };
+
+  const validateInvoice = () => {
+    if (!form.customerName.trim() || !form.customerEmail.trim()) return 'Select a customer and provide their email address.';
+    if (!items.some((item) => item.description.trim())) return 'Add at least one invoice item.';
+    if (evidenceRequired && !paymentEvidence) return 'Upload payment evidence for a partially or fully paid invoice.';
+    return '';
+  };
 
   const previewInvoice = async () => {
     setMessage('');
+    const validationMessage = validateInvoice();
+    if (validationMessage) { setMessage(validationMessage); return; }
     try {
       const response = await api.post('/oms/invoices/html-preview', invoicePayload(), {
         responseType: 'text',
       });
       setPreviewHtml(response.data);
+      setPreviewMode(true);
     } catch (error) {
       setMessage(error.response?.data?.message || error.message || 'Unable to preview invoice');
     }
@@ -1021,6 +1150,8 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
   const sendInvoice = async () => {
     setSending(true);
     setMessage('');
+    const validationMessage = validateInvoice();
+    if (validationMessage) { setMessage(validationMessage); setSending(false); return; }
 
     try {
       const payload = invoicePayload();
@@ -1057,8 +1188,20 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
     }
   };
 
+  if (previewMode) {
+    return <div className="invoice-preview-page-v2">
+      <header><button type="button" onClick={() => setPreviewMode(false)}>← &nbsp; Back to Invoice</button><div><small>INVOICE</small><strong>{form.invoiceNumber}</strong><Status>Not Sent Yet</Status></div></header>
+      <section className="invoice-preview-title"><div><h2>{previewTab === 'invoice' ? 'Invoice Preview' : 'Email Preview'}</h2><p>This is how your {previewTab === 'invoice' ? 'invoice' : 'email'} will appear to the customer.</p></div><nav><button className={previewTab === 'invoice' ? 'active' : ''} onClick={() => setPreviewTab('invoice')}>Invoice Preview</button><button className={previewTab === 'email' ? 'active' : ''} onClick={() => setPreviewTab('email')}>Email Preview</button></nav></section>
+      {previewTab === 'invoice' ? <section className="invoice-document-preview"><div className="invoice-preview-tools"><button>−</button><span>100%</span><button>＋</button><button>Fit Width</button><span/><button onClick={() => window.print()}>⇩</button><button onClick={() => window.print()}>▣</button></div><iframe title="Invoice preview" srcDoc={previewHtml}/></section> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], ['Amount Due', money.format(balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div><button>Download Invoice PDF</button><button>Track Your Order</button></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>Balance Due</span><strong>{money.format(balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
+      {message ? <div className="invoice-message">{message}</div> : null}
+      <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => window.print()}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
+    </div>;
+  }
+
   return (
-    <div className="invoice-workspace">
+    <div className="new-invoice-page-v2">
+      <header className="new-invoice-toolbar"><ol>{['Customer','Invoice Details','Items','Review & Send'].map((step,index)=><li className={index === 0 ? 'active' : ''} key={step}><i>{index+1}</i>{step}</li>)}</ol><div><button>Save Draft</button><button onClick={previewInvoice}>Preview Invoice</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '✉  Send Invoice'}</button></div></header>
+      <div className="invoice-workspace">
       <section className="panel">
         <SectionHeader eyebrow="Customer Invoice" title="Create and Send Invoice" />
 
@@ -1080,6 +1223,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
           </label>
           <label>Payment status
             <select value={form.paymentStatus} onChange={(event) => updateForm('paymentStatus', event.target.value)}>
+              <option value="unpaid">Unpaid</option>
               <option value="partial_paid">Partial Paid</option>
               <option value="fully_paid">Fully Paid</option>
             </select>
@@ -1151,6 +1295,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
           <label className="wide-field">Other notes
             <textarea value={form.notes} onChange={(event) => updateForm('notes', event.target.value)} />
           </label>
+          {evidenceRequired ? <label className="wide-field payment-evidence-upload">Payment evidence *<input type="file" accept="image/*" onChange={selectEvidence}/>{paymentEvidence ? <span><img src={paymentEvidence.dataUrl} alt="Payment evidence preview"/><b>{paymentEvidence.name}</b><button type="button" onClick={() => setPaymentEvidence(null)}>Remove</button></span> : <small>Upload a receipt screenshot or payment photo (maximum 5 MB).</small>}</label> : <div className="wide-field unpaid-evidence-note">No payment evidence is required for an unpaid invoice.</div>}
         </div>
       </section>
 
@@ -1173,7 +1318,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
         {message ? <div className="invoice-message">{message}</div> : null}
 
         <div className="invoice-actions">
-          <button onClick={previewInvoice}>Preview Email HTML</button>
+          <button onClick={previewInvoice}>Preview Invoice</button>
           <button className="primary-action" onClick={sendInvoice} disabled={sending || !form.customerEmail}>
             {sending ? 'Sending...' : 'Send Invoice Email'}
           </button>
@@ -1185,6 +1330,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
           <div className="invoice-preview-empty">Preview the email to see the exact customer invoice design.</div>
         )}
       </aside>
+      </div>
     </div>
   );
 }
@@ -1503,15 +1649,29 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
 
 function ProductionView({ productionJobs, onUpdateJob }) {
   const [statusFilter, setStatusFilter] = useState('All');
+  const [query, setQuery] = useState('');
+  const [expandedJobId, setExpandedJobId] = useState(null);
   const [toast, setToast] = useState('');
   const [inventory, setInventory] = useState([]);
   const [tailors, setTailors] = useState([]);
   const [allocatingJobId, setAllocatingJobId] = useState(null);
   const toastTimerRef = useRef(null);
   const filteredJobs = productionJobs.filter((job) => (
-    statusFilter === 'All' ? true : job.status === statusFilter
+    (statusFilter === 'All' ? true : job.status === statusFilter)
+    && `${job.customer} ${job.invoiceNumber} ${job.item}`.toLowerCase().includes(query.toLowerCase())
   ));
   const productionTabs = ['All', 'Order Sheet Confirmed', 'Assigned', 'In Progress', 'Ready'];
+  const readyToAssign = productionJobs.filter((job) => job.status === 'Order Sheet Confirmed').length;
+  const inProgress = productionJobs.filter((job) => ['Assigned', 'In Progress'].includes(job.status)).length;
+  const readyForCollection = productionJobs.filter((job) => job.status === 'Ready').length;
+  const exceptionCards = [
+    ['⚠', 'Fabric Discrepancy', productionJobs.filter((job) => job.fabric && !job.fabricConfirmed && job.fabric !== 'Client supplied').length, 'Stock issues', 'High Priority'],
+    ['✂', 'Missing Measurements', productionJobs.filter((job) => !job.measurements).length, 'Cannot proceed', 'Medium Priority'],
+    ['▧', 'Missing Style Images', productionJobs.filter((job) => !job.images).length, 'References incomplete', 'Medium Priority'],
+    ['◇', 'Awaiting Client Fabric', productionJobs.filter((job) => job.fabric === 'Client supplied' && !job.fabricConfirmed).length, 'Not yet received', 'Medium Priority'],
+    ['♙', 'Reassignment / Quality Hold', productionJobs.filter((job) => job.status === 'Quality Hold').length, 'Action required', 'Low Priority'],
+  ];
+  const exceptionTotal = exceptionCards.reduce((total, card) => total + card[2], 0);
 
   useEffect(() => {
     api.get('/oms/fabrics')
@@ -1579,12 +1739,36 @@ function ProductionView({ productionJobs, onUpdateJob }) {
   };
 
   return (
-    <div className="production-board">
+    <div className="production-board production-dashboard">
       {toast ? <div className="app-toast">{toast}</div> : null}
-      <section className="panel span-2 production-jobs-panel">
-        <SectionHeader eyebrow="Production" title="Active Job Sheets">
-          <button>View all jobs</button>
-        </SectionHeader>
+      <div className="production-dashboard-main">
+      <section className="production-kpis">
+        {[
+          ['♙', 'Ready to Assign', readyToAssign, 'Awaiting tailor allocation', 'gold'],
+          ['▣', 'In Progress', inProgress, 'Currently with tailors', 'purple'],
+          ['✓', 'Ready for Collection', readyForCollection, 'Awaiting store pickup', 'green'],
+          ['⚑', 'Completed Today', readyForCollection, 'Marked as ready', 'blue'],
+        ].map(([icon, label, value, detail, tone]) => (
+          <article className={`production-kpi tone-${tone}`} key={label}>
+            <i>{icon}</i><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>
+          </article>
+        ))}
+      </section>
+      <section className="production-exceptions-panel">
+        <header><strong>Production Exceptions <b>{exceptionTotal}</b></strong><button type="button">View all exceptions →</button></header>
+        <div className="production-exception-grid">
+          {exceptionCards.map(([icon, label, value, detail, priority], index) => (
+            <article className={index === 0 ? 'high' : index === 4 ? 'low' : ''} key={label}>
+              <i>{icon}</i><div><strong>{label}</strong><b>{value}</b><small>{detail}</small></div><span>{priority}</span>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="panel production-jobs-panel">
+        <div className="production-active-header">
+          <strong>Active Jobs</strong>
+          <div><label>⌕<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search jobs by customer or item..." /></label><button>▽ Filter</button><button>⇅ Sort</button></div>
+        </div>
         <div className="production-tabs">
           {productionTabs.map((tab) => (
             <button
@@ -1592,28 +1776,37 @@ function ProductionView({ productionJobs, onUpdateJob }) {
               className={statusFilter === tab ? 'active' : ''}
               onClick={() => setStatusFilter(tab)}
             >
-              {tab} <span>{tab === 'All' ? productionJobs.length : productionJobs.filter((job) => job.status === tab).length}</span>
+              {tab === 'Order Sheet Confirmed' ? 'Ready to Assign' : tab === 'Ready' ? 'Ready for Collection' : tab} <span>{tab === 'All' ? productionJobs.length : productionJobs.filter((job) => job.status === tab).length}</span>
             </button>
           ))}
         </div>
-        <div className="job-list production-job-list">
+        <div className="production-job-register">
           {filteredJobs.length ? filteredJobs.map((order) => (
-            <article className="job-card" key={order.id}>
-              <div className="job-line production-job-head">
-                <div className="avatar">{order.customer.split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
-                <div>
-                  <strong>{order.customer}</strong>
-                  <span className="production-order-name">{order.item}</span>
-                  <span>{order.delivery}</span>
+            <article className={classNames('production-register-item', expandedJobId === order.id && 'is-open')} key={order.id}>
+              <div className="production-register-row">
+                <button className="job-chevron" type="button" onClick={() => setExpandedJobId(expandedJobId === order.id ? null : order.id)} aria-label={`View ${order.customer} job`}>⌄</button>
+                <div className="register-customer">
+                  <i>{order.customer.split(' ').map((part) => part[0]).join('').slice(0, 2)}</i>
+                  <span><strong>{order.customer}</strong><small>{order.invoiceNumber}</small></span>
                 </div>
-                <Status>{order.status}</Status>
+                <div className="register-item"><strong>{order.item}</strong><small>{order.pieces} {order.pieces === 1 ? 'piece' : 'pieces'}</small></div>
+                <div className="register-delivery"><i>▣</i><span><strong>{order.delivery ? new Date(`${order.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No date'}</strong><small>Delivery</small></span></div>
+                <Status>{order.status === 'Order Sheet Confirmed' ? 'Ready to Assign' : order.status === 'Ready' ? 'Ready for Collection' : order.status}</Status>
+                <div className="register-meta"><small>Tailor</small><strong className={!order.tailor || order.tailor === 'Unassigned' ? 'pending' : ''}>{order.tailor || 'Unassigned'}</strong></div>
+                <div className="register-meta fabric"><small>Fabric</small><strong className={order.fabricConfirmed ? 'confirmed' : 'pending'}>{order.fabric || 'Not selected'} · {order.fabricConfirmed ? 'Confirmed' : 'Pending'}</strong></div>
+                <button className="register-view-button" type="button" onClick={() => setExpandedJobId(expandedJobId === order.id ? null : order.id)}>View Job</button>
+                <button className="register-menu" type="button" aria-label="More actions">⋮</button>
               </div>
-              <div className="job-detail">
+              {expandedJobId === order.id ? <div className="production-job-drawer">
                 <dl>
-                  <div><dt>Fabric</dt><dd>{order.fabric} · <span className='text-green-600'>{order.fabricConfirmed ? 'Confirmed' : 'Not confirmed'}</span></dd></div>
-                  <div><dt>Tailor</dt><dd>{order.tailor}</dd></div>
-                  <div><dt>Images</dt><dd>{order.images || 0} labelled references</dd></div>
+                  <div><dt>Style images</dt><dd>{order.images || 0} references</dd></div>
                   <div><dt>Measurements</dt><dd>{order.measurements ? 'Included' : 'Not added'}</dd></div>
+                  <div><dt>Payment</dt><dd>{order.payment || '—'}</dd></div>
+                  <div><dt>Store</dt><dd>{order.store || '—'}</dd></div>
+                </dl>
+                <dl>
+                  <div><dt>Fabric status</dt><dd>{order.fabric} · {order.fabricConfirmed ? 'Confirmed' : 'Not confirmed'}</dd></div>
+                  <div><dt>Production note</dt><dd>{order.productionNote || order.designNotes || 'No note added'}</dd></div>
                 </dl>
                 <div className="production-controls">
                   <label>Tailor
@@ -1674,7 +1867,7 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                   </button>
                   <button className="primary-action" onClick={() => updateJobWithToast(order, { status: 'Ready' }, 'Job marked Ready')}>Mark Ready</button>
                 </div>
-              </div>
+              </div> : null}
             </article>
           )) : (
             <div className="invoice-preview-empty">
@@ -1682,15 +1875,50 @@ function ProductionView({ productionJobs, onUpdateJob }) {
             </div>
           )}
         </div>
+        <footer className="production-register-footer">
+          <span>Showing {filteredJobs.length ? 1 : 0} to {filteredJobs.length} of {productionJobs.length} jobs</span>
+          <div><button>‹</button><button className="active">1</button><button>2</button><button>3</button><button>›</button><button>5 / page⌄</button></div>
+        </footer>
       </section>
-      <section className="panel">
-        <SectionHeader eyebrow="Tailors" title="Availability" />
-        <div className="mini-list">
-          {tailors.map((tailor) => (
-            <span key={tailor.id}>{tailor.displayName} · {tailor.tailorDepartment || 'Department not set'} · Grade {tailor.tailorGrade || 'Not graded'}</span>
-          ))}
-        </div>
+      <section className="production-workflow-panel">
+        <header>Production Workflow</header>
+        <div>{[
+          ['✓', 'Payment Confirmed', 'Accounts confirms Paid or Partial Paid'],
+          ['▤', 'Job Sheet Released', 'Order sheet sent to Production'],
+          ['◇', 'Fabric Confirmed', 'Stock allocated or client fabric received'],
+          ['♙', 'Assigned to Tailor', 'Job assigned and production begins'],
+          ['✓', 'Quality Check', 'Reviewed and marked as ready'],
+          ['⚑', 'Ready for Collection', 'Store notified for customer pickup'],
+        ].map(([icon, label, detail]) => <article key={label}><i>{icon}</i><strong>{label}</strong><small>{detail}</small></article>)}</div>
       </section>
+      </div>
+      <aside className="production-dashboard-rail">
+        <section className="production-rail-panel tailor-availability">
+          <header><strong>Tailor Availability</strong><button>View all →</button></header>
+          {(tailors.length ? tailors : [
+            { id: 'p1', displayName: 'Peter Okon', tailorGrade: 'Senior', tailorDepartment: 'Bespoke' },
+            { id: 'p2', displayName: 'Segun Adeyemi', tailorGrade: 'Intermediate', tailorDepartment: 'Native' },
+            { id: 'p3', displayName: 'Musa Ibrahim', tailorGrade: 'Senior', tailorDepartment: 'Suits' },
+            { id: 'p4', displayName: 'Daniel Chinedu', tailorGrade: 'Junior', tailorDepartment: 'General' },
+          ]).slice(0, 4).map((tailor) => {
+            const load = productionJobs.filter((job) => job.tailor === tailor.displayName && job.status !== 'Ready').length;
+            return <article key={tailor.id}><i>{tailor.displayName.split(' ').map((part) => part[0]).join('').slice(0, 2)}</i><div><strong>{tailor.displayName}</strong><small>{tailor.tailorGrade || 'Tailor'} · {tailor.tailorDepartment || 'General'}</small><span style={{ '--load': `${Math.min(load * 20, 100)}%` }} /></div><b>{load} / 5 jobs</b></article>;
+          })}
+        </section>
+        <section className="production-rail-panel inventory-alerts">
+          <header><strong>Inventory Alerts</strong><button>View all →</button></header>
+          {(inventory.filter((fabric) => toNumber(fabric.quantity) <= toNumber(fabric.lowStockThreshold || 5)).slice(0, 2).length
+            ? inventory.filter((fabric) => toNumber(fabric.quantity) <= toNumber(fabric.lowStockThreshold || 5)).slice(0, 2)
+            : [{ id: 'f1', name: 'Black Jacquard Wool', quantity: 1.5, unit: 'm' }, { id: 'f2', name: 'Shiffon (Green)', quantity: 3.2, unit: 'm' }]
+          ).map((fabric, index) => <article className={index ? 'purple' : ''} key={fabric.id}><i>△</i><div><strong>{fabric.name}</strong><small>Low stock: {fabric.quantity}{fabric.unit} remaining</small></div><button>View Details</button></article>)}
+        </section>
+        <section className="production-rail-panel production-recent">
+          <header><strong>Recent Activity</strong></header>
+          {[...productionJobs].slice(0, 4).map((job) => <article key={job.id}><i>✓</i><span><strong>{job.customer}</strong> {job.status === 'Ready' ? 'marked as ready' : job.tailor !== 'Unassigned' ? `assigned to ${job.tailor}` : 'job sheet released'}</span><time>Today</time></article>)}
+          {!productionJobs.length ? <p>No recent production activity.</p> : null}
+        </section>
+        <section className="production-rail-panel production-help"><header><strong>Need Help?</strong></header><div><button>Message Store Manager</button><button>◉ Send Message</button></div></section>
+      </aside>
     </div>
   );
 }
@@ -2009,7 +2237,35 @@ function StaffView({ role, currentRole }) {
   );
 }
 
-function ReportsView() {
+function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportFormat, setExportFormat, exportReport, message }) {
+  const summary = report.summary;
+  const paidTotal = report.invoices.filter((invoice) => invoice.paymentStatus === 'Fully Paid').reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
+  const pending = report.invoices.filter((invoice) => invoice.approvalStatus === 'Pending Accounts');
+  const flagged = report.invoices.filter((invoice) => ['Flagged', 'Rejected'].includes(invoice.approvalStatus));
+  const partial = report.invoices.filter((invoice) => invoice.paymentStatus === 'Partial Paid');
+  return <div className="accounts-reports">
+    <section className="report-builder"><header>▤ &nbsp; Report Builder</header><div>{[['Period', <select key="period"><option>Last 30 Days</option><option>This Month</option></select>], ['Store', <select key="store"><option>All Stores</option></select>], ['Payment Status', <select key="pay"><option>All Payments</option><option>Fully Paid</option><option>Partial Paid</option></select>], ['Approval Status', <select key="approval"><option>All Statuses</option><option>Approved</option><option>Pending</option></select>], ['Group By', <select key="group"><option>None</option><option>Store</option><option>Customer</option></select>], ['Export Format', <select key="export" value={exportFormat} onChange={(event) => setExportFormat(event.target.value)}><option value="csv">Excel (.xlsx)</option><option value="pdf">PDF</option></select>]].map(([label, control]) => <label key={label}>{label}{control}</label>)}</div><footer><label>From<input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)}/></label><label>To<input type="date" value={to} min={from} max={todayIso()} onChange={(event) => setTo(event.target.value)}/></label><button>Reset</button><button className="generate" onClick={exportReport}>Generate Report</button></footer>{message ? <p>{message}</p> : null}</section>
+    <section className="report-kpis">{[
+      ['Total Revenue', money.format(summary.totalInvoiced), '↑ 18.7% vs last 30 days', 'gold'],
+      ['Total Invoices', summary.invoiceCount, '↑ 9.1% vs last 30 days', 'blue'],
+      ['Paid Invoices', summary.fullyPaidCount, money.format(paidTotal), 'green'],
+      ['Pending Approval', summary.pendingApprovalCount, money.format(pending.reduce((sum, item) => sum + toNumber(item.total), 0)), 'gold'],
+      ['Rejected / Flagged', flagged.length, money.format(flagged.reduce((sum, item) => sum + toNumber(item.total), 0)), 'red'],
+      ['Inventory Alerts', summary.lowStockCount, 'Requires attention', 'red'],
+    ].map(([label, value, detail, tone]) => <article className={`report-kpi ${tone}`} key={label}><span>{label}</span><strong>{value}</strong><small>{detail}</small><div>{[25,38,30,52,42,60,45,70,58,75].map((height, i) => <i style={{height: `${height}%`}} key={i}/>)}</div></article>)}</section>
+    <section className="report-chart-grid">
+      <article className="report-chart-card"><header><h2>Revenue Trend</h2><select><option>Daily</option></select></header><div className="revenue-line-chart"><div>{[20,28,55,32,48,68,40,24,35,49,45,62,83,70].map((height, i) => <i style={{height: `${height}%`}} key={i}/>)}</div></div></article>
+      <article className="report-chart-card"><header><h2>Payment Breakdown</h2></header><div className="report-donut payment"><span><strong>{summary.invoiceCount}</strong>Total</span></div><div className="report-legend">{[['Paid in Full', summary.fullyPaidCount, 'green'], ['Partial Paid', partial.length, 'gold'], ['Unpaid', Math.max(0, summary.invoiceCount-summary.fullyPaidCount-partial.length), 'blue'], ['Overdue', flagged.length, 'red']].map(([label,value,tone])=><p key={label}><i className={tone}/><span>{label}</span><strong>{value}</strong></p>)}</div></article>
+      <article className="report-chart-card"><header><h2>Approval Status</h2></header><div className="report-donut approval"><span><strong>{summary.invoiceCount}</strong>Total</span></div><div className="report-legend">{[['Approved', summary.approvedCount, 'green'], ['Pending', summary.pendingApprovalCount, 'gold'], ['Rejected / Flagged', flagged.length, 'red']].map(([label,value,tone])=><p key={label}><i className={tone}/><span>{label}</span><strong>{value}</strong></p>)}</div></article>
+    </section>
+    <section className="report-insight-grid"><article className="report-table-card"><h2>Invoices Awaiting Approval</h2><table><thead><tr><th>Invoice</th><th>Customer</th><th>Store</th><th>Total</th><th>Payment</th><th>Action</th></tr></thead><tbody>{pending.slice(0,5).map(invoice=><tr key={invoice.invoiceNumber}><td><strong>{invoice.invoiceNumber}</strong></td><td>{invoice.customer}</td><td>{invoice.store}</td><td>{money.format(invoice.total)}</td><td><Status>{invoice.paymentStatus}</Status></td><td>✓ &nbsp; × &nbsp; ⚑</td></tr>)}</tbody></table></article><article className="quick-insights"><h2>✦ &nbsp; Quick Insights</h2>{[`Revenue increased by 18.7% compared to the previous 30 days.`, `${pending.length} invoices are awaiting approval.`, `${flagged.length} invoices are overdue and need attention.`, `${report.allocations.length} fabric allocations recorded.`, `${summary.lowStockCount} inventory items are low or out of stock.`].map((text,i)=><p key={text}><i>{['↗','△','!','▤','△'][i]}</i>{text}</p>)}</article></section>
+    <section className="commercial-report"><nav>{['Commercial Activity','Payments','Inventory Reconciliation','Store Performance','Exports'].map((tab,i)=><button className={i===0?'active':''} key={tab}>{tab}</button>)}</nav><header><div><h2>Commercial Activity</h2><p>Overview of invoices and orders within the selected period.</p></div><div><button>▽ Filters</button><button>⇩ Export</button></div></header><div className="table-wrap"><table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Store</th><th>Total</th><th>Payment</th><th>Approval</th><th>Order Status</th><th>Action</th></tr></thead><tbody>{report.invoices.slice(0,8).map(invoice=><tr key={invoice.invoiceNumber}><td>{new Date(invoice.date).toLocaleDateString('en-GB')}</td><td><strong>{invoice.invoiceNumber}</strong></td><td>{invoice.customer}</td><td>{invoice.store}</td><td>{money.format(invoice.total)}</td><td><Status>{invoice.paymentStatus}</Status></td><td><Status>{invoice.approvalStatus}</Status></td><td><Status>{invoice.orderStatus}</Status></td><td><button>◉ View</button></td></tr>)}</tbody></table></div><footer>Showing 1 to {Math.min(8,report.invoices.length)} of {report.invoices.length} invoices</footer></section>
+    <section className="report-summary-grid"><article className="report-table-card"><h2>Inventory Reconciliation Summary</h2><div className="mini-report-stats"><span><b>{summary.inventoryItemCount}</b>Total Items</span><span><b>{summary.allocationCount}</b>Allocated</span><span><b>{report.allocations.length}</b>Returned</span></div><table><thead><tr><th>Fabric</th><th>Allocated</th><th>Returned</th></tr></thead><tbody>{report.allocations.slice(0,5).map((item,i)=><tr key={i}><td>{item.fabricName}</td><td>{item.quantity} {item.unit}</td><td>—</td></tr>)}</tbody></table></article><article className="report-table-card"><h2>Store Performance</h2><table><thead><tr><th>Store</th><th>Revenue</th><th>Invoices</th></tr></thead><tbody>{report.storeBreakdown.map(store=><tr key={store.store}><td>{store.store}</td><td>{money.format(store.total)}</td><td>{store.invoices}</td></tr>)}</tbody></table></article><article className="report-table-card"><h2>Top Customers</h2><table><thead><tr><th>Customer</th><th>Revenue</th><th>Invoices</th></tr></thead><tbody>{report.invoices.slice(0,5).map(invoice=><tr key={invoice.invoiceNumber}><td>{invoice.customer}</td><td>{money.format(invoice.total)}</td><td>1</td></tr>)}</tbody></table></article></section>
+    <section className="report-table-card recent-exports"><h2>Recent Exports</h2><table><thead><tr><th>Report Name</th><th>Type</th><th>Date Generated</th><th>Date Range</th><th>Format</th><th>Generated By</th><th>Action</th></tr></thead><tbody>{['Invoices & Orders','Inventory Reconciliation','Payment Summary'].map(name=><tr key={name}><td>{name}</td><td>Commercial Activity</td><td>{new Date().toLocaleString('en-GB')}</td><td>{from} – {to}</td><td>Excel</td><td>Funke</td><td><button onClick={exportReport}>⇩ Download</button></td></tr>)}</tbody></table></section>
+  </div>;
+}
+
+function ReportsView({ role }) {
   const now = new Date();
   const [from, setFrom] = useState(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10));
   const [to, setTo] = useState(todayIso());
@@ -2073,6 +2329,7 @@ function ReportsView() {
   };
 
   if (loading && !report) return <section className="panel"><div className="invoice-preview-empty">Loading report...</div></section>;
+  if ((role === 'accounts' || role === 'owner') && report) return <AccountsReportsDashboard report={report} from={from} to={to} setFrom={setFrom} setTo={setTo} exportFormat={exportFormat} setExportFormat={setExportFormat} exportReport={exportReport} message={message} />;
 
   return (
     <div className="stack">
@@ -2123,68 +2380,11 @@ function ReportsView() {
   );
 }
 
-function TailorTasks({ compact = false, currentRole, productionJobs = [], onUpdateJob }) {
-  const tailorName = currentRole?.name?.split(' (')[0] || '';
-  const assignedJobs = productionJobs.filter((order) => order.tailor === tailorName);
-
-  return (
-    <section className="panel">
-      <SectionHeader eyebrow="My Tasks" title={compact ? 'Assigned This Week' : 'Tailor Work Queue'} />
-      <div className="job-list">
-        {assignedJobs.length ? assignedJobs.map((order) => (
-          <article className="job-card" key={order.id}>
-            <div className="job-line">
-              <strong>{order.customer}</strong>
-              <span>{order.item}</span>
-              <span>{order.delivery}</span>
-              <Status>{order.status === 'Ready' ? 'Ready' : 'In Progress'}</Status>
-            </div>
-            <div className="job-detail">
-              <p className="production-note">Production Style Note: {order.productionNote || order.note}</p>
-              <p>{order.note}</p>
-              <dl>
-                <div><dt>Pieces</dt><dd>{order.pieces}</dd></div>
-                <div><dt>Fabric</dt><dd>{order.fabric}</dd></div>
-                <div><dt>Fabric status</dt><dd>{order.fabricConfirmed ? 'Confirmed' : 'Pending'}</dd></div>
-                <div><dt>Assigned</dt><dd>{order.assignedAt || 'Today'}</dd></div>
-              </dl>
-              <div className="row-actions">
-                <button onClick={() => onUpdateJob?.(order.id, { status: 'In Progress' })}>In Progress</button>
-                <button className="primary-action" onClick={() => onUpdateJob?.(order.id, { status: 'Ready' })}>Ready</button>
-              </div>
-            </div>
-          </article>
-        )) : (
-          <div className="invoice-preview-empty">Assigned jobs will appear here once Production Manager assigns a tailor.</div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function WeeklyLogView({ currentRole, productionJobs = [] }) {
-  const tailorName = currentRole?.name?.split(' (')[0] || '';
-  const assignedJobs = productionJobs.filter((order) => order.tailor === tailorName);
-
-  return (
-    <section className="panel">
-      <SectionHeader eyebrow="Log Sheet" title="Weekly and Monthly Aggregation" />
-      <OrderTableLike
-        columns={['Task', 'Date assigned', 'Status', 'Logged at']}
-        rows={assignedJobs.map((order) => [
-          order.item,
-          order.assignedAt || 'Today',
-          order.status === 'Ready' ? 'Ready' : 'In Progress',
-          order.status === 'Ready' ? 'Marked ready' : 'Active',
-        ])}
-      />
-    </section>
-  );
-}
-
 function NotificationPanel({ role, currentRole }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [category, setCategory] = useState('All');
+  const [sortOrder, setSortOrder] = useState('Newest first');
   const displayName = currentRole?.name?.split(' (')[0] || '';
 
   useEffect(() => {
@@ -2199,6 +2399,50 @@ function NotificationPanel({ role, currentRole }) {
     setItems((current) => current.map((item) => ({ ...item, isRead: true })));
     window.dispatchEvent(new Event('oms-notifications-read'));
   };
+
+  if (role === 'store_manager' || role === 'accounts') {
+    const notificationCategory = (item) => {
+      const text = `${item.channel || ''} ${item.message || ''}`.toLowerCase();
+      if (role === 'accounts' && (text.includes('inventory') || text.includes('stock') || text.includes('reconcil'))) return 'Inventory';
+      if (text.includes('invoice')) return 'Invoices';
+      if (text.includes('payment') || text.includes('paid')) return 'Payments';
+      if (text.includes('system') || text.includes('customer') || text.includes('maintenance')) return 'System';
+      return role === 'accounts' ? 'Invoices' : 'Orders';
+    };
+    const categories = role === 'accounts'
+      ? ['All', 'Unread', 'Invoices', 'Payments', 'Inventory', 'System']
+      : ['All', 'Unread', 'Orders', 'Invoices', 'Payments', 'System'];
+    const counts = Object.fromEntries(categories.map((name) => [name, name === 'All'
+      ? items.length
+      : name === 'Unread'
+        ? items.filter((item) => !item.isRead).length
+        : items.filter((item) => notificationCategory(item) === name).length]));
+    const visibleItems = items
+      .filter((item) => category === 'All' || (category === 'Unread' ? !item.isRead : notificationCategory(item) === category))
+      .sort((a, b) => sortOrder === 'Newest first' ? new Date(b.createdAt) - new Date(a.createdAt) : new Date(a.createdAt) - new Date(b.createdAt));
+    const iconFor = (name) => ({ Orders: '✓', Invoices: '▤', Payments: '▣', Inventory: '◇', System: '⚙' }[name] || '♧');
+
+    return (
+      <section className="store-notifications">
+        <header><div><span>Inbox</span><h2>You have {counts.Unread} unread notifications</h2></div><button type="button" onClick={markAllRead}>✓ &nbsp; Mark all as read</button></header>
+        <div className="store-notification-filters">
+          <nav>{categories.map((name) => <button type="button" className={category === name ? 'active' : ''} onClick={() => setCategory(name)} key={name}>{name} <span>{counts[name]}</span></button>)}</nav>
+          <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}><option>Newest first</option><option>Oldest first</option></select>
+        </div>
+        <div className="store-notification-list">
+          {loading ? <div className="invoice-preview-empty">Loading notifications...</div> : visibleItems.length ? visibleItems.map((item) => {
+            const itemCategory = notificationCategory(item);
+            return <article className={item.isRead ? 'read' : 'unread'} key={item.id}>
+              <i className="unread-dot"/><span className={`notification-type-icon type-${itemCategory.toLowerCase()}`}>{iconFor(itemCategory)}</span>
+              <div><strong>{item.title || item.subject || item.message?.split(/[.!]/)[0] || 'Notification'}</strong><p>{item.message}</p></div>
+              <b className={`notification-category type-${itemCategory.toLowerCase()}`}>{itemCategory === 'Orders' ? 'Order' : itemCategory === 'Payments' ? 'Payment' : itemCategory === 'Invoices' ? 'Invoice' : itemCategory}</b>
+              <time>{new Date(item.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</time><button className="notification-more">⋮</button>
+            </article>;
+          }) : <div className="invoice-preview-empty">No notifications in this category.</div>}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="panel">
@@ -2453,8 +2697,8 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
         </p>
 
         <div className="tracking-actions">
-          <button type="button" className="tracking-close" onClick={closeTrackingPage}>Close</button>
-          <a className="tracking-profile-link" href={`/c/${encodeURIComponent(token)}/profile`}>Go to profile</a>
+          <a className="tracking-close tracking-action-link" href={`/c/${encodeURIComponent(token)}/profile`}>Go to my profile</a>
+          <button type="button" className="tracking-profile-link" onClick={closeTrackingPage}>Back to tracking</button>
         </div>
       </section>
     </main>
@@ -2508,43 +2752,27 @@ function CustomerPortalPage({ token, sentInvoices = [] }) {
     );
   }
 
+  const currentOrder = profile.invoices?.[0] || null;
+  const measurements = profile.measurements || {};
+  const details = profile.customerDetails || {};
+  const purchaseGoal = 12;
+  const spendGoal = 3000000;
+  const spendProgress = Math.min(100, Math.round((toNumber(profile.totalSpend) / spendGoal) * 100));
+  const purchaseProgress = Math.min(100, Math.round((toNumber(profile.totalOrders) / purchaseGoal) * 100));
+  const savedStyles = (profile.invoices || []).flatMap((invoice) => invoice.styleImages || []).slice(0, 3);
+
   return (
-    <main className="tracking-page customer-portal-page">
-      <section className="tracking-card customer-portal-card">
-        <div className="tracking-top">
-          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><div><strong>TWIF</strong><span>Customer profile</span></div></div>
-          <a className="portal-back" href={`/c/${encodeURIComponent(token)}`}>Back to tracking</a>
+    <main className="client-portal-shell">
+      <aside className="client-portal-nav"><div className="brand-lockup tracking-brand"><div className="mark">TW</div><div><strong>TWIF</strong><span>The Way It Fits</span></div></div><nav>{[['⌂','Dashboard'],['▣','My Orders'],['▤','Invoices'],['⌕','Measurements'],['♙','Profile & Contacts'],['♧','Membership'],['⌖','Address Book'],['♡','Saved Styles'],['⚙','Preferences']].map(([icon,label],index)=><a className={index===0?'active':''} href={`#${label.toLowerCase().replaceAll(' ','-')}`} key={label}><i>{icon}</i>{label}</a>)}</nav><section><strong>Need help?</strong><small>Chat with us on WhatsApp</small><a href="https://wa.me/2347056336710">◉ &nbsp; Chat Now</a></section><a className="portal-logout" href={`/c/${encodeURIComponent(token)}`}>← &nbsp; Back to tracking</a></aside>
+      <section className="client-portal-workspace"><header><div><span>Client Portal</span><strong>{profile.name}</strong></div><a href={`/c/${encodeURIComponent(token)}`}>← Tracking</a></header><div className="client-portal-welcome"><p>Welcome back,</p><h1>{profile.name}</h1><span>⌕ &nbsp; {profile.phone || 'Phone not added'} &nbsp;&nbsp;·&nbsp;&nbsp; ✉ &nbsp; {profile.email}</span></div>
+        <div className="client-portal-dashboard">
+          <main>
+            <article className="client-current-order"><header><div><h2>Your Current Order</h2><strong>{currentOrder?.items?.map((item)=>item.description).join(', ') || 'No active order'}</strong><p>Order No. {currentOrder?.invoiceNumber || '—'} &nbsp; • &nbsp; {currentOrder?.items?.reduce((sum,item)=>sum+toNumber(item.quantity),0)||0} pieces &nbsp; • &nbsp; {currentOrder?.store || '—'} Store</p></div><Status>{currentOrder?.orderStatus || 'No order'}</Status></header><div className="client-order-progress"><i>1</i><span/><i>2</i><small>In Progress</small><small>Ready for Collection</small></div><dl><div><dt>Delivery Date</dt><dd>{currentOrder?.deliveryDate ? new Date(`${String(currentOrder.deliveryDate).slice(0,10)}T00:00:00`).toLocaleDateString('en-GB') : 'To be confirmed'}</dd></div><div><dt>Tailor</dt><dd>{currentOrder?.tailor || 'To be assigned'}</dd></div><div><dt>Fabric</dt><dd>{currentOrder?.fabric || 'To be confirmed'}</dd></div><div><dt>Style Images</dt><dd>{currentOrder?.styleImages?.length || 0} uploaded</dd></div></dl><a href="#order-history">View Order Details &nbsp;›</a></article>
+            <section className="client-portal-triple" id="order-history"><article><header><h2>Order History</h2><span>View all</span></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{invoice.items.map((item)=>item.description).join(', ')}</strong><small>{invoice.items.reduce((sum,item)=>sum+toNumber(item.quantity),0)} pieces &nbsp; • &nbsp; {invoice.store} Store</small></span><Status>{invoice.orderStatus}</Status></div>)}</article><article><header><h2>Invoices</h2><span>View all</span></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{money.format(invoice.total)}</strong><small>{invoice.paymentStatus}</small></span><time>{new Date(invoice.invoiceDate).toLocaleDateString('en-GB')}</time></div>)}</article><article><header><h2>Measurements</h2><span>View all</span></header><div className="client-measure-card"><i>⌁</i><strong>Your measurements</strong><p>{Object.keys(measurements).filter((key)=>key!=='profile').length ? 'We have your latest measurements saved.' : 'Measurements have not been saved yet.'}</p><button>View Measurements</button></div></article></section>
+            <section className="client-portal-bottom"><article><header><h2>Contact Details</h2><span>Edit</span></header><p>⌕ &nbsp; {profile.phone || 'Not provided'}</p><p>✉ &nbsp; {profile.email}</p><p>⌖ &nbsp; {details.address || 'Address not provided'}</p></article><article><header><h2>Saved Styles</h2><span>View all</span></header><div className="client-saved-styles">{savedStyles.length ? savedStyles.map((image,index)=><img src={image.url || image.dataUrl || image} alt={`Saved style ${index+1}`} key={image.url || image.dataUrl || index}/>) : <p>Your saved style references will appear here.</p>}</div></article><article><header><h2>Address Book</h2><span>View all</span></header><p><strong>⌖ &nbsp; Home</strong><br/>{details.address || 'No saved address'}</p><p><strong>⌖ &nbsp; Preferred Store</strong><br/>{details.preferredStore || currentOrder?.store || 'Lekki'} Store</p></article></section>
+          </main>
+          <aside className="client-membership"><header>♕ &nbsp; Your membership — Regular</header><p>Here’s where you stand this year:</p><label>Spend <strong>{money.format(profile.totalSpend)} of {money.format(spendGoal)}</strong><span><i style={{width:`${spendProgress}%`}}/></span><b>{spendProgress}%</b></label><label>Purchases <strong>{profile.totalOrders} of {purchaseGoal}</strong><span><i style={{width:`${purchaseProgress}%`}}/></span><b>{purchaseProgress}%</b></label><p>You need both <strong>{money.format(Math.max(0,spendGoal-profile.totalSpend))}</strong> more in spend and <strong>{Math.max(0,purchaseGoal-profile.totalOrders)} more purchases</strong> to qualify for Elite membership.</p><a href="#membership">→ &nbsp; See Elite benefits</a></aside>
         </div>
-
-        <div className="portal-profile-head">
-          <div className="avatar">{profile.name.split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
-          <div><span>Your profile</span><h1>{profile.name}</h1><p>{[profile.phone, profile.email].filter(Boolean).join(' · ')}</p></div>
-        </div>
-
-        <dl className="portal-summary">
-          <div><dt>Orders</dt><dd>{profile.totalOrders}</dd></div>
-          <div><dt>Total invoiced</dt><dd>{money.format(profile.totalSpend)}</dd></div>
-        </dl>
-
-        <section className="portal-history">
-          <h2>Orders & invoices</h2>
-          {profile.invoices.length ? profile.invoices.map((invoice) => (
-            <article key={invoice.invoiceNumber}>
-              <div className="portal-invoice-head">
-                <div><span>{invoice.invoiceNumber}</span><strong>{invoice.items.map((item) => item.description).join(', ')}</strong></div>
-                <Status>{invoice.orderStatus}</Status>
-              </div>
-              <dl>
-                <div><dt>Date</dt><dd>{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('en-GB') : '—'}</dd></div>
-                <div><dt>Store</dt><dd>{invoice.store}</dd></div>
-                <div><dt>Invoice total</dt><dd>{money.format(invoice.total)}</dd></div>
-                <div><dt>Payment</dt><dd>{invoice.paymentStatus}</dd></div>
-              </dl>
-            </article>
-          )) : <p className="tracking-note">No invoices are available yet.</p>}
-        </section>
-
-        <p className="portal-magic-note">This secure link is your access to TWIF. No password or login is required, so keep it private.</p>
       </section>
     </main>
   );
@@ -2570,32 +2798,48 @@ function OrderTableLike({ columns, rows }) {
 }
 
 function renderView(activeView, role, viewProps = {}) {
-  if (activeView === 'Overview') return <Overview role={role} currentRole={viewProps.currentRole} sentInvoices={viewProps.sentInvoices} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
-  if (activeView === 'Orders') return <OrdersView sentInvoices={viewProps.sentInvoices} />;
-  if (activeView === 'Customers') return <CustomersView />;
+  if (activeView === 'Overview') return <Overview role={role} currentRole={viewProps.currentRole} sentInvoices={viewProps.sentInvoices} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} onApproveInvoice={viewProps.onApproveInvoice} />;
+  if (activeView === 'Invoices') {
+    if (role === 'store_manager') return <StoreInvoicesView sentInvoices={viewProps.sentInvoices} currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
+    if (role === 'accounts' || role === 'owner') return <AccountsInvoicesPage sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
+    return <OrdersView sentInvoices={viewProps.sentInvoices} />;
+  }
+  if (activeView === 'Orders') return role === 'store_manager' || role === 'owner' ? <StoreManagerOrdersPage sentInvoices={viewProps.sentInvoices} /> : <OrdersView sentInvoices={viewProps.sentInvoices} />;
+  if (activeView === 'Customers') return role === 'store_manager' || role === 'owner' ? <StoreManagerCustomersPage sentInvoices={viewProps.sentInvoices} /> : <CustomersView />;
   if (activeView === 'New Invoice') return <NewInvoiceView currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
   if (activeView === 'Order Sheet') return <OrderSheetView sentInvoices={viewProps.sentInvoices} onCreateJob={viewProps.onCreateJob} />;
-  if (activeView === 'Payments') return <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
+  if (activeView === 'Payments') return role === 'accounts' || role === 'owner'
+    ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} />
+    : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
   if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
-  if (activeView === 'Inventory') return <InventoryView />;
+  if (activeView === 'Inventory') return role === 'accounts' ? <AccountsInventoryReconciliationPage /> : role === 'inventory_manager' ? <InventoryListPage currentRole={viewProps.currentRole} /> : role === 'owner' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode /> : <InventoryView />;
+  if (activeView === 'Reconciliations') return <InventoryView />;
   if (activeView === 'Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
-  if (activeView === 'Reports') return <ReportsView />;
-  if (activeView === 'My Tasks') return <TailorTasks currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
-  if (activeView === 'Weekly Log') return <WeeklyLogView currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} />;
+  if (activeView === 'Tailors & Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
+  if (activeView === 'User Management') return <UserManagementPage currentRole={viewProps.currentRole} />;
+  if (activeView === 'Reports') return <ReportsView role={role} />;
+  if (activeView === 'My Tasks') return <MyTasksPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
+  if (activeView === 'Weekly Log') return <WeeklyLogPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} />;
   if (activeView === 'Notifications') return <NotificationPanel role={role} currentRole={viewProps.currentRole} />;
   return <Overview role={role} />;
 }
 
 function App() {
-  const [signedIn, setSignedIn] = useState(false);
-  const [role, setRole] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const restoredSession = useMemo(sessionFromStorage, []);
+  const [role, setRole] = useState(restoredSession?.role || null);
   const visibleNav = navByRole[role];
-  const [activeView, setActiveView] = useState('Overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sentInvoices, setSentInvoices] = useState([]);
   const [productionJobs, setProductionJobs] = useState([]);
-  const [signedInAccount, setSignedInAccount] = useState(null);
+  const [signedInAccount, setSignedInAccount] = useState(restoredSession);
   const [staffProfile, setStaffProfile] = useState(null);
+  const signedIn = Boolean(role && signedInAccount);
+  const pathSegments = location.pathname.split('/').filter(Boolean);
+  const requestedViewSlug = pathSegments[0] === roleSlug(role) ? pathSegments[1] : '';
+  const activeView = visibleNav?.find((item) => viewSlug(item) === requestedViewSlug)
+    || (requestedViewSlug === 'portal-preview' ? 'Portal Preview' : visibleNav?.[0] || 'Overview');
 
   const currentRole = useMemo(() => {
     const roleDetails = roles.find((item) => item.id === role);
@@ -2639,6 +2883,17 @@ function App() {
       })
       .catch(() => {});
   }, [signedIn, signedInAccount]);
+
+  useEffect(() => {
+    if (!signedIn || location.pathname.startsWith('/c/')) return;
+    const basePath = `/${roleSlug(role)}`;
+    const validSlugs = new Set([...(visibleNav || []).map(viewSlug), 'portal-preview']);
+    const isAuthOrRoot = ['/', '/login', '/register', '/registration-success'].includes(location.pathname);
+    const hasCorrectRole = location.pathname === basePath || location.pathname.startsWith(`${basePath}/`);
+    if (isAuthOrRoot || !hasCorrectRole || !validSlugs.has(pathSegments[1])) {
+      navigate(`${basePath}/${viewSlug(visibleNav?.[0] || 'Overview')}`, { replace: true });
+    }
+  }, [signedIn, role, location.pathname, navigate, visibleNav]);
 
   const recordSentInvoice = (invoice) => {
     setSentInvoices((current) => [
@@ -2694,23 +2949,23 @@ function App() {
     setRole(account.role);
     setSignedInAccount(account);
     setStaffProfile(null);
-    setActiveView(navByRole[account.role][0]);
-    setSignedIn(true);
+    window.localStorage.setItem(OMS_SESSION_KEY, JSON.stringify({ role: account.role, phone: account.phone, label: account.label }));
     setMobileMenuOpen(false);
+    navigate(`/${roleSlug(account.role)}/${viewSlug(navByRole[account.role][0])}`, { replace: true });
   };
 
   const handleLogout = () => {
-    setSignedIn(false);
+    window.localStorage.removeItem(OMS_SESSION_KEY);
     setRole(null);
     setSignedInAccount(null);
     setStaffProfile(null);
-    setActiveView('Overview');
     setMobileMenuOpen(false);
+    navigate('/login', { replace: true });
   };
 
   const openView = (view) => {
-    setActiveView(view);
     setMobileMenuOpen(false);
+    navigate(`/${roleSlug(role)}/${viewSlug(view)}`);
   };
 
   const profileMatch = window.location.pathname.match(/^\/c\/([^/?#]+)\/profile\/?$/);
@@ -2730,11 +2985,12 @@ function App() {
   }
 
   if (!signedIn) {
-    return <LoginScreen onLogin={handleLogin} />;
+    if (location.pathname !== '/login') return <Navigate to="/login" replace />;
+    return <LoginPage onLogin={handleLogin} />;
   }
 
   return (
-    <div className={classNames('app-shell', mobileMenuOpen && 'menu-open')}>
+    <div className={classNames('app-shell', mobileMenuOpen && 'menu-open', role === 'production_manager' && 'production-role-shell', role === 'accounts' && 'accounts-role-shell', role === 'store_manager' && 'store-role-shell', role === 'owner' && 'owner-role-shell', role === 'tailor' && 'tailor-role-shell')}>
       {mobileMenuOpen && <button className="drawer-scrim" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />}
       <aside className="sidebar" aria-label="Main navigation">
         <div className="brand-lockup">
@@ -2746,16 +3002,26 @@ function App() {
         </div>
         <nav>
           {visibleNav.map((item) => (
-            <button
-              className={item === activeView ? 'active' : ''}
+            <NavLink
+              className={({ isActive }) => isActive ? 'active' : ''}
               key={item}
-              onClick={() => openView(item)}
+              to={`/${roleSlug(role)}/${viewSlug(item)}`}
+              onClick={() => setMobileMenuOpen(false)}
             >
               {item}
-            </button>
+            </NavLink>
           ))}
         </nav>
-        <button className="portal-link" onClick={() => openView('Portal Preview')}>Portal Preview</button>
+        {role === 'production_manager' ? (
+          <div className="production-shortcuts">
+            <span>Shortcuts</span>
+            {['Active Jobs', 'Assign Tailor', 'Fabric Allocation', 'Production Notes'].map((item, index) => (
+              <button type="button" key={item} onClick={() => openView('Production')}><i>{['◇', '♙', '▣', '▤'][index]}</i>{item}</button>
+            ))}
+          </div>
+        ) : null}
+        {role === 'accounts' ? <div className="accounts-sidebar-help"><strong>Need help?</strong><span>Chat with support</span><button type="button">◉ &nbsp; Start Chat</button></div> : null}
+        <Link className="portal-link" to={`/${roleSlug(role)}/portal-preview`} onClick={() => setMobileMenuOpen(false)}>Portal Preview</Link>
       </aside>
 
       <main className="workspace">
@@ -2774,7 +3040,22 @@ function App() {
           <div>
             <span className="eyebrow">Operations Management System</span>
             <span className="mobile-app-label">TWIF OMS</span>
-            <h1>{activeView === 'Portal Preview' ? 'Customer Tracking Preview' : activeView}</h1>
+            <h1>{activeView === 'Portal Preview' ? 'Customer Tracking Preview' : role === 'accounts' && activeView === 'Overview' ? 'Account Dashboard' : role === 'accounts' && activeView === 'Inventory' ? 'Inventory Reconciliation' : role === 'inventory_manager' && activeView === 'Overview' ? 'Inventory Dashboard' : (role === 'inventory_manager' || role === 'owner') && activeView === 'Inventory' ? 'Inventory List' : activeView}</h1>
+            {role === 'production_manager' && activeView === 'Production' ? <p className="topbar-subtitle">Manage active jobs, assign tailors, confirm fabric and track production progress.</p> : null}
+            {role === 'accounts' && activeView === 'Overview' ? <p className="topbar-subtitle">Review, approve and reconcile with confidence.</p> : null}
+            {role === 'accounts' && activeView === 'Invoices' ? <p className="topbar-subtitle">Review, approve and manage customer invoices before they enter production.</p> : null}
+            {role === 'accounts' && activeView === 'Payments' ? <p className="topbar-subtitle">Track and manage all payments received across stores.</p> : null}
+            {role === 'accounts' && activeView === 'Inventory' ? <p className="topbar-subtitle">Reconcile fabric allocations, deductions and adjustments across all stores.</p> : null}
+            {role === 'inventory_manager' && activeView === 'Overview' ? <p className="topbar-subtitle">Monitor stock levels, allocate fabrics and receive deliveries.</p> : null}
+            {role === 'inventory_manager' && activeView === 'Inventory' ? <p className="topbar-subtitle">View and manage all fabrics in stock.</p> : null}
+            {role === 'owner' && activeView === 'Inventory' ? <p className="topbar-subtitle">View inventory and review requested stock changes.</p> : null}
+            {role === 'store_manager' && activeView === 'Orders' ? <p className="topbar-subtitle">Manage and track all invoices and order sheets.</p> : null}
+            {role === 'store_manager' && activeView === 'Invoices' ? <p className="topbar-subtitle">View sent invoices, monitor approvals and create new invoices.</p> : null}
+            {role === 'owner' && activeView === 'Overview' ? <p className="topbar-subtitle">Real-time summary of your business performance and activity.</p> : null}
+            {role === 'tailor' && activeView === 'My Tasks' ? <p className="topbar-subtitle">Jobs assigned to you. Start work and mark ready when done.</p> : null}
+            {role === 'tailor' && activeView === 'Weekly Log' ? <p className="topbar-subtitle">Track your completed work and view your weekly performance.</p> : null}
+            {role === 'store_manager' && activeView === 'Overview' ? <p className="topbar-subtitle">Good morning, {currentRole?.name?.split(' (')[0] || 'Store Manager'}! Here’s what’s happening in your store today.</p> : null}
+            {role === 'store_manager' && activeView === 'Customers' ? <p className="topbar-subtitle">Manage customer profiles and create new orders.</p> : null}
           </div>
           <div className="topbar-actions">
             <NotificationBell role={role} currentRole={currentRole} onOpen={() => openView('Notifications')} />
@@ -2783,24 +3064,43 @@ function App() {
                 account={currentRole}
                 onProfileImageChange={(profileImageUrl) => setStaffProfile((current) => ({ ...current, profileImageUrl }))}
               />
-              <span>{currentRole?.name}</span>
-              <button onClick={handleLogout}>Logout</button>
+              <span className="user-identity"><strong>{currentRole?.name?.split(' (')[0]}</strong><small>{accountTypeByRole[role]?.short || currentRole?.label}</small></span>
+              <button className="user-menu-button" onClick={handleLogout} aria-label="Open account menu">⌄</button>
             </div>
           </div>
         </header>
 
-        {activeView === 'Portal Preview' ? (
-          <PortalPreview />
-        ) : renderView(activeView, role, {
-          currentRole,
-          onInvoiceSent: recordSentInvoice,
-          onApproveInvoice: updateInvoiceApproval,
-          sentInvoices,
-          productionJobs: approvedProductionJobs,
-          onCreateJob: createProductionJob,
-          onUpdateJob: updateProductionJob,
-        })}
+        <Routes>
+          {(visibleNav || []).map((view) => (
+            <Route
+              key={view}
+              path={`/${roleSlug(role)}/${viewSlug(view)}/*`}
+              element={renderView(view, role, {
+                currentRole,
+                onInvoiceSent: recordSentInvoice,
+                onApproveInvoice: updateInvoiceApproval,
+                sentInvoices,
+                productionJobs: approvedProductionJobs,
+                onCreateJob: createProductionJob,
+                onUpdateJob: updateProductionJob,
+              })}
+            />
+          ))}
+          <Route path={`/${roleSlug(role)}/portal-preview`} element={<PortalPreview />} />
+          <Route path="*" element={<Navigate to={`/${roleSlug(role)}/${viewSlug(visibleNav?.[0] || 'Overview')}`} replace />} />
+        </Routes>
       </main>
+      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+        {visibleNav.slice(0, 4).map((item, index) => (
+          <NavLink key={item} to={`/${roleSlug(role)}/${viewSlug(item)}`} onClick={() => setMobileMenuOpen(false)}>
+            <i aria-hidden="true">{['⌂', '▤', '♙', '◇'][index]}</i>
+            <span>{item.length > 12 ? item.split(' ')[0] : item}</span>
+          </NavLink>
+        ))}
+        <button type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Open all navigation">
+          <i aria-hidden="true">•••</i><span>More</span>
+        </button>
+      </nav>
     </div>
   );
 }
