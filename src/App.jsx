@@ -248,6 +248,9 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [] }) {
   const [inventory, setInventory] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [staff, setStaff] = useState([]);
+  const [period, setPeriod] = useState('month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState(todayIso());
 
   useEffect(() => {
     Promise.allSettled([api.get('/oms/fabrics'), api.get('/oms/customers'), api.get('/oms/staff')]).then(([fabricsResult, customersResult, staffResult]) => {
@@ -257,25 +260,54 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [] }) {
     });
   }, []);
 
-  const totalRevenue = sentInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
+  const filteredInvoices = useMemo(() => {
+    const today = todayIso();
+    const now = new Date();
+    const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const yearStart = `${today.slice(0, 4)}-01-01`;
+    if (period === 'today') return sentInvoices.filter(inv => String(inv.createdAt || '').slice(0, 10) === today);
+    if (period === 'week') return sentInvoices.filter(inv => inv.createdAt && new Date(inv.createdAt) >= weekAgo);
+    if (period === 'month') return sentInvoices.filter(inv => String(inv.createdAt || '').slice(0, 10) >= monthStart);
+    if (period === 'year') return sentInvoices.filter(inv => String(inv.createdAt || '').slice(0, 10) >= yearStart);
+    if (period === 'custom' && customFrom) return sentInvoices.filter(inv => {
+      const d = String(inv.createdAt || '').slice(0, 10);
+      return d >= customFrom && (!customTo || d <= customTo);
+    });
+    return sentInvoices;
+  }, [sentInvoices, period, customFrom, customTo]);
+
+  const totalRevenue = filteredInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
   const completed = productionJobs.filter((job) => job.status === 'Ready');
   const inProgress = productionJobs.filter((job) => ['Assigned', 'In Progress'].includes(job.status));
   const pendingJobs = productionJobs.filter((job) => ['Order Sheet Confirmed'].includes(job.status));
   const delayed = productionJobs.filter((job) => job.delivery && new Date(`${job.delivery}T23:59:59`) < new Date() && job.status !== 'Ready');
   const lowStock = inventory.filter((item) => toNumber(item.quantity) <= toNumber(item.lowStockThreshold || 5));
-  const outstanding = sentInvoices.filter((invoice) => invoice.paymentStatus !== 'Fully Paid').reduce((sum, invoice) => sum + Math.max(0, toNumber(invoice.total) - toNumber(invoice.paid)), 0);
+  const outstanding = filteredInvoices.filter((invoice) => invoice.paymentStatus !== 'Fully Paid').reduce((sum, invoice) => sum + Math.max(0, toNumber(invoice.total) - toNumber(invoice.paid)), 0);
   const storeRows = ['Lekki', 'Ikeja', 'Surulere'].map((store) => {
-    const storeInvoices = sentInvoices.filter((invoice) => String(invoice.store).toLowerCase().includes(store.toLowerCase()));
+    const storeInvoices = filteredInvoices.filter((invoice) => String(invoice.store).toLowerCase().includes(store.toLowerCase()));
     return { store, revenue: storeInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), orders: storeInvoices.length };
   });
-  const topCustomers = customers.length ? [...customers].sort((a, b) => toNumber(b.lifetimeSpend) - toNumber(a.lifetimeSpend)).slice(0, 5) : sentInvoices.slice(0, 5).map((invoice) => ({ id: invoice.invoiceNumber, fullName: invoice.customer, lifetimeSpend: invoice.total, totalOrders: 1 }));
+  const topCustomers = customers.length ? [...customers].sort((a, b) => toNumber(b.lifetimeSpend) - toNumber(a.lifetimeSpend)).slice(0, 5) : filteredInvoices.slice(0, 5).map((invoice) => ({ id: invoice.invoiceNumber, fullName: invoice.customer, lifetimeSpend: invoice.total, totalOrders: 1 }));
   const tailorRows = staff.filter((person) => person.role === 'tailor').slice(0, 5);
 
   return (
     <div className="owner-dashboard">
+      <div className="owner-period-filter">
+        {[['today','Today'],['week','This Week'],['month','This Month'],['year','This Year'],['custom','Custom']].map(([key,label]) => (
+          <button key={key} className={period === key ? 'active' : ''} onClick={() => setPeriod(key)}>{label}</button>
+        ))}
+        {period === 'custom' && (
+          <div className="owner-custom-range">
+            <input type="date" value={customFrom} max={customTo} onChange={e => setCustomFrom(e.target.value)} placeholder="From" />
+            <span>→</span>
+            <input type="date" value={customTo} min={customFrom} max={todayIso()} onChange={e => setCustomTo(e.target.value)} placeholder="To" />
+          </div>
+        )}
+      </div>
       <section className="owner-kpis">{[
         ['Total Revenue (MTD)', money.format(totalRevenue), '↑ 18.7% vs last 30 days', 'gold', '▣'],
-        ['Total Orders', sentInvoices.length, '↑ 12.5% vs last 30 days', 'gold', '▤'],
+        ['Total Orders', filteredInvoices.length, '↑ 12.5% vs last 30 days', 'gold', '▤'],
         ['Completed Jobs', completed.length, '↑ 22.3% vs last 30 days', 'green', '▥'],
         ['Active Customers', customers.length, '↑ 8.1% vs last 30 days', 'blue', '♙'],
         ['Low Stock Items', lowStock.length, '↓ 14.3% vs last 30 days', 'red', '△'],
@@ -285,7 +317,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [] }) {
       <section className="owner-action-row">
         <section className="owner-panel action-insights"><header>Action Insights</header><div>
           {[
-            ['▤', `${sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts').length} invoices are awaiting Accounts approval.`, 'Review', 'gold'],
+            ['▤', `${filteredInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts').length} invoices are awaiting Accounts approval.`, 'Review', 'gold'],
             ['△', `${delayed.length} orders are overdue by more than 2 days.`, 'View', 'red'],
             ['△', `${lowStock[0]?.name || 'Inventory'} requires restocking.`, 'Restock', 'blue'],
             ['↗', 'Revenue is up this month compared to last month.', 'View Report', 'green'],
@@ -297,7 +329,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [] }) {
       </section>
 
       <section className="owner-analytics-grid">
-        <section className="owner-panel sales-overview"><header><span>Sales Overview</span><select><option>This Month</option></select></header><div className="sales-chart"><div className="chart-bars">{[28, 43, 36, 50, 62, 39, 72, 61, 48, 59, 92].map((height, index) => <i style={{ height: `${height}%` }} key={index}/>)}</div><svg viewBox="0 0 500 130" preserveAspectRatio="none"><polyline points="0,105 45,65 90,85 135,50 180,75 225,38 270,58 315,20 360,55 405,72 455,24 500,48"/></svg></div><footer>{[[money.format(totalRevenue), 'Total Revenue'], [sentInvoices.length, 'Total Orders'], [sentInvoices.length ? money.format(totalRevenue / sentInvoices.length) : money.format(0), 'Avg. Order Value'], ['18.7%', 'Growth vs Last 30 Days']].map(([value, label]) => <div key={label}><strong>{value}</strong><small>{label}</small></div>)}</footer></section>
+        <section className="owner-panel sales-overview"><header><span>Sales Overview</span><select><option>This Month</option></select></header><div className="sales-chart"><div className="chart-bars">{[28, 43, 36, 50, 62, 39, 72, 61, 48, 59, 92].map((height, index) => <i style={{ height: `${height}%` }} key={index}/>)}</div><svg viewBox="0 0 500 130" preserveAspectRatio="none"><polyline points="0,105 45,65 90,85 135,50 180,75 225,38 270,58 315,20 360,55 405,72 455,24 500,48"/></svg></div><footer>{[[money.format(totalRevenue), 'Total Revenue'], [filteredInvoices.length, 'Total Orders'], [filteredInvoices.length ? money.format(totalRevenue / filteredInvoices.length) : money.format(0), 'Avg. Order Value'], ['18.7%', 'Growth vs Last 30 Days']].map(([value, label]) => <div key={label}><strong>{value}</strong><small>{label}</small></div>)}</footer></section>
         <section className="owner-panel owner-production"><header><span>Production Overview</span><select><option>This Week</option></select></header><div><div className="owner-production-donut"><span><strong>{productionJobs.length}</strong>Total Jobs</span></div><div>{[['Completed', completed.length, 'green'], ['In Progress', inProgress.length, 'gold'], ['Pending', pendingJobs.length, 'blue'], ['Delayed', delayed.length, 'red']].map(([label, value, tone]) => <article key={label}><i className={tone}/><span>{label}</span><strong>{value}</strong></article>)}</div></div><footer><div><strong>{completed.length}</strong><small>Ready for Collection</small></div><div><strong className="red">{delayed.length}</strong><small>Delayed Jobs</small></div><div><strong className="green">{productionJobs.length ? Math.round((completed.length / productionJobs.length) * 100) : 0}%</strong><small>Completion Rate</small></div></footer></section>
         <section className="owner-panel store-performance"><header><span>Store Performance</span><select><option>This Month</option></select></header><table><thead><tr><th>Store</th><th>Revenue</th><th>Orders</th><th>% Revenue</th><th>Status</th></tr></thead><tbody>{storeRows.map((row, index) => <tr key={row.store}><td>{row.store}</td><td>{money.format(row.revenue)}</td><td>{row.orders}</td><td>{totalRevenue ? Math.round((row.revenue / totalRevenue) * 100) : 0}%</td><td><i className={index === 0 ? 'green' : index === 1 ? 'gold' : 'red'}/>{index === 0 ? 'Excellent' : index === 1 ? 'Average' : 'Needs Attention'}</td></tr>)}</tbody></table><footer>View all stores &nbsp; →</footer></section>
       </section>
@@ -307,6 +339,134 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [] }) {
         <section className="owner-panel owner-table-panel"><header><span>Inventory Alerts</span><button>View full inventory →</button></header><table><thead><tr><th>Item</th><th>Category</th><th>Stock</th><th>Status</th><th>Location</th></tr></thead><tbody>{lowStock.slice(0, 5).map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.type}</td><td>{item.quantity} {item.unit}</td><td><Status>{toNumber(item.quantity) <= 0 ? 'Out of Stock' : 'Low Stock'}</Status></td><td>{item.store || 'Lekki'}</td></tr>)}</tbody></table></section>
         <section className="owner-panel owner-table-panel"><header><span>Staff Performance (This Week)</span><button>View all staff →</button></header><table><thead><tr><th>Staff Member</th><th>Role</th><th>Jobs Completed</th><th>Rating</th></tr></thead><tbody>{tailorRows.map((person, index) => <tr key={person.id}><td><i>{person.displayName?.slice(0, 1)}</i>{person.displayName}</td><td>Tailor</td><td>{productionJobs.filter((job) => job.tailor === person.displayName && job.status === 'Ready').length}</td><td>★ {(4.9 - index * .2).toFixed(1)}</td></tr>)}</tbody></table></section>
       </section>
+    </div>
+  );
+}
+
+function OwnerStoresPage({ sentInvoices = [] }) {
+  const [stores, setStores] = useState([
+    { id: 1, name: 'Lekki Store', location: 'Lekki Phase 1, Lagos', manager: 'Bola', phone: '08012345678', status: 'Active' },
+    { id: 2, name: 'Ikeja Store', location: 'Allen Avenue, Ikeja, Lagos', manager: 'Grace', phone: '08023456789', status: 'Active' },
+    { id: 3, name: 'VI Store', location: 'Victoria Island, Lagos', manager: '—', phone: '—', status: 'Coming Soon' },
+  ]);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const emptyForm = { name: '', location: '', manager: '', phone: '', status: 'Active' };
+  const [form, setForm] = useState(emptyForm);
+
+  const storeRevenue = (storeName) => {
+    const matches = sentInvoices.filter(inv => String(inv.store || '').toLowerCase().includes(storeName.toLowerCase().split(' ')[0]));
+    return { revenue: matches.reduce((s, inv) => s + toNumber(inv.total), 0), orders: matches.length };
+  };
+
+  const openCreate = () => { setForm(emptyForm); setEditing(null); setShowForm(true); };
+  const openEdit = (store) => { setForm({ name: store.name, location: store.location, manager: store.manager, phone: store.phone, status: store.status }); setEditing(store.id); setShowForm(true); };
+  const saveStore = (e) => {
+    e.preventDefault();
+    if (editing) {
+      setStores(current => current.map(s => s.id === editing ? { ...s, ...form } : s));
+    } else {
+      setStores(current => [...current, { id: Date.now(), ...form }]);
+    }
+    setShowForm(false);
+  };
+  const deleteStore = () => {
+    setStores(current => current.filter(s => s.id !== deletingId));
+    setDeletingId(null);
+  };
+
+  const totalRevenue = stores.reduce((s, store) => s + storeRevenue(store.name).revenue, 0);
+  const activeStores = stores.filter(s => s.status === 'Active');
+  const topStore = activeStores.reduce((best, store) => {
+    const { revenue } = storeRevenue(store.name);
+    return !best || revenue > storeRevenue(best.name).revenue ? store : best;
+  }, null);
+
+  return (
+    <div className="owner-stores-page">
+      <section className="owner-stores-kpis">
+        {[
+          ['▣', 'Total Stores', stores.length, `${activeStores.length} active`, 'gold'],
+          ['✓', 'Active Stores', activeStores.length, 'Currently operating', 'green'],
+          ['▤', 'Total Revenue', money.format(totalRevenue), 'Across all stores', 'blue'],
+          ['↗', 'Top Store', topStore?.name || '—', money.format(storeRevenue(topStore?.name || '').revenue), 'purple'],
+        ].map(([icon, label, value, detail, tone]) => (
+          <article key={label} className={`owner-store-kpi tone-${tone}`}>
+            <i>{icon}</i><span><small>{label}</small><strong>{value}</strong><p>{detail}</p></span>
+          </article>
+        ))}
+      </section>
+
+      <section className="owner-stores-panel panel">
+        <header className="owner-stores-header">
+          <div><h2>Store Management</h2><p>Create, monitor and manage your stores.</p></div>
+          <button className="primary-action" type="button" onClick={openCreate}>＋ &nbsp; New Store</button>
+        </header>
+        <div className="owner-stores-table-wrap">
+          <table className="owner-stores-table">
+            <thead><tr><th>Store</th><th>Location</th><th>Manager</th><th>Phone</th><th>Revenue</th><th>Orders</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              {stores.map(store => {
+                const { revenue, orders } = storeRevenue(store.name);
+                return (
+                  <tr key={store.id}>
+                    <td><strong>{store.name}</strong></td>
+                    <td>{store.location}</td>
+                    <td>{store.manager}</td>
+                    <td>{store.phone}</td>
+                    <td><strong>{money.format(revenue)}</strong></td>
+                    <td>{orders}</td>
+                    <td><Status>{store.status}</Status></td>
+                    <td className="store-actions-cell">
+                      <button type="button" onClick={() => openEdit(store)}>Edit</button>
+                      <button type="button" className="danger-action" onClick={() => setDeletingId(store.id)}>Delete</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {showForm && (
+        <div className="receive-stock-backdrop">
+          <form className="owner-store-form" onSubmit={saveStore}>
+            <button type="button" className="modal-close" onClick={() => setShowForm(false)}>×</button>
+            <h2>{editing ? 'Edit Store' : 'New Store'}</h2>
+            <p>{editing ? 'Update store information.' : 'Add a new store location to the platform.'}</p>
+            <label>Store Name<input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Lekki Store" /></label>
+            <label>Location / Address<input required value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Lekki Phase 1, Lagos" /></label>
+            <label>Manager Name<input value={form.manager} onChange={e => setForm(f => ({ ...f, manager: e.target.value }))} placeholder="Assigned store manager" /></label>
+            <label>Phone Number<input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="Store contact number" /></label>
+            <label>Status
+              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                <option>Active</option>
+                <option>Coming Soon</option>
+                <option>Inactive</option>
+              </select>
+            </label>
+            <footer>
+              <button type="button" onClick={() => setShowForm(false)}>Cancel</button>
+              <button type="submit" className="primary-action">{editing ? 'Save Changes' : 'Create Store'}</button>
+            </footer>
+          </form>
+        </div>
+      )}
+
+      {deletingId && (
+        <div className="receive-stock-backdrop">
+          <div className="owner-store-form">
+            <h2>Delete Store?</h2>
+            <p>Are you sure you want to delete <strong>{stores.find(s => s.id === deletingId)?.name}</strong>? This action cannot be undone.</p>
+            <footer>
+              <button type="button" onClick={() => setDeletingId(null)}>Cancel</button>
+              <button type="button" className="danger-action" onClick={deleteStore}>Yes, Delete Store</button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1024,14 +1184,41 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
     customerName: '',
     customerPhone: '',
     customerEmail: '',
-    paymentStatus: 'partial_paid',
-    paymentMethod: 'transfer',
+    paymentStatus: '',
+    paymentMethod: '',
     eliteDiscountEnabled: false,
     eliteDiscountAmount: 0,
     storeCreditApplied: 0,
     trackingUrl: '',
     notes: 'Your order will be ready in 3-4 weeks from date of payment and measurements.\nThis invoice is only valid for 48 hours.',
   });
+  const [customers, setCustomers] = useState([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const customerSuggestionsRef = useRef(null);
+
+  useEffect(() => {
+    api.get('/oms/customers')
+      .then((response) => setCustomers(response.data?.data?.customers || []))
+      .catch(() => {});
+  }, []);
+
+  const customerSuggestions = useMemo(() => {
+    if (!customerSearch.trim()) return [];
+    const q = customerSearch.toLowerCase();
+    return customers.filter((c) =>
+      c.fullName?.toLowerCase().includes(q) || c.phone?.includes(q)
+    ).slice(0, 8);
+  }, [customers, customerSearch]);
+
+  const selectCustomer = (customer) => {
+    setForm((current) => ({
+      ...current,
+      customerName: customer.fullName || '',
+      customerPhone: customer.phone || '',
+      customerEmail: customer.email || '',
+    }));
+    setCustomerSearch('');
+  };
   const [items, setItems] = useState([
     { id: invoiceItemSeed(), description: '', rate: 0, quantity: 1, discountPercent: 0, amount: 0, note: '' },
   ]);
@@ -1114,7 +1301,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
     } : null,
   });
 
-  const evidenceRequired = form.paymentStatus !== 'unpaid';
+  const evidenceRequired = form.paymentStatus && form.paymentStatus !== 'unpaid';
   const selectEvidence = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1200,7 +1387,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
 
   return (
     <div className="new-invoice-page-v2">
-      <header className="new-invoice-toolbar"><ol>{['Customer','Invoice Details','Items','Review & Send'].map((step,index)=><li className={index === 0 ? 'active' : ''} key={step}><i>{index+1}</i>{step}</li>)}</ol><div><button>Save Draft</button><button onClick={previewInvoice}>Preview Invoice</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '✉  Send Invoice'}</button></div></header>
+      <header className="new-invoice-toolbar"><div><button>Save Draft</button><button onClick={previewInvoice}>Preview Invoice</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '✉  Send Invoice'}</button></div></header>
       <div className="invoice-workspace">
       <section className="panel">
         <SectionHeader eyebrow="Customer Invoice" title="Create and Send Invoice" />
@@ -1223,6 +1410,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
           </label>
           <label>Payment status
             <select value={form.paymentStatus} onChange={(event) => updateForm('paymentStatus', event.target.value)}>
+              <option value="" disabled>— Select status —</option>
               <option value="unpaid">Unpaid</option>
               <option value="partial_paid">Partial Paid</option>
               <option value="fully_paid">Fully Paid</option>
@@ -1230,6 +1418,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
           </label>
           <label>Payment method
             <select value={form.paymentMethod} onChange={(event) => updateForm('paymentMethod', event.target.value)}>
+              <option value="" disabled>— Select method —</option>
               <option value="transfer">Transfer</option>
               <option value="card">Card</option>
               <option value="check">Check</option>
@@ -1237,7 +1426,25 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
             </select>
           </label>
           <label>Customer name
-            <input value={form.customerName} onChange={(event) => updateForm('customerName', event.target.value)} />
+            <div className="customer-search-wrap" ref={customerSuggestionsRef}>
+              <input
+                value={form.customerName}
+                onChange={(event) => { updateForm('customerName', event.target.value); setCustomerSearch(event.target.value); }}
+                onFocus={(event) => setCustomerSearch(event.target.value)}
+                placeholder="Search or type customer name..."
+                autoComplete="off"
+              />
+              {customerSearch.trim() && customerSuggestions.length > 0 && (
+                <div className="customer-suggestions">
+                  {customerSuggestions.map((customer) => (
+                    <button type="button" key={customer.id} onMouseDown={() => selectCustomer(customer)}>
+                      <strong>{customer.fullName}</strong>
+                      <small>{customer.phone || customer.email || ''}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </label>
           <label>Customer phone
             <input value={form.customerPhone} onChange={(event) => updateForm('customerPhone', event.target.value)} />
@@ -1290,7 +1497,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
             <input type="number" min="0" value={form.storeCreditApplied} onChange={(event) => updateForm('storeCreditApplied', event.target.value)} />
           </label>
           <label className="wide-field">Tracking link
-            <input value={form.trackingUrl} onChange={(event) => updateForm('trackingUrl', event.target.value)} />
+            <input readOnly value={trackingUrlForToken(form.trackingToken)} className="readonly-field" />
           </label>
           <label className="wide-field">Other notes
             <textarea value={form.notes} onChange={(event) => updateForm('notes', event.target.value)} />
@@ -2817,6 +3024,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
   if (activeView === 'Tailors & Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
   if (activeView === 'User Management') return <UserManagementPage currentRole={viewProps.currentRole} />;
+  if (activeView === 'Stores') return <OwnerStoresPage sentInvoices={viewProps.sentInvoices} />;
   if (activeView === 'Reports') return <ReportsView role={role} />;
   if (activeView === 'My Tasks') return <MyTasksPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
   if (activeView === 'Weekly Log') return <WeeklyLogPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} />;
@@ -2831,6 +3039,8 @@ function App() {
   const [role, setRole] = useState(restoredSession?.role || null);
   const visibleNav = navByRole[role];
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
   const [sentInvoices, setSentInvoices] = useState([]);
   const [productionJobs, setProductionJobs] = useState([]);
   const [signedInAccount, setSignedInAccount] = useState(restoredSession);
@@ -2960,8 +3170,20 @@ function App() {
     setSignedInAccount(null);
     setStaffProfile(null);
     setMobileMenuOpen(false);
+    setUserMenuOpen(false);
     navigate('/login', { replace: true });
   };
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [userMenuOpen]);
 
   const openView = (view) => {
     setMobileMenuOpen(false);
@@ -3059,13 +3281,18 @@ function App() {
           </div>
           <div className="topbar-actions">
             <NotificationBell role={role} currentRole={currentRole} onOpen={() => openView('Notifications')} />
-            <div className="user-chip">
+            <div className="user-chip" ref={userMenuRef}>
               <ProfilePhotoControl
                 account={currentRole}
                 onProfileImageChange={(profileImageUrl) => setStaffProfile((current) => ({ ...current, profileImageUrl }))}
               />
               <span className="user-identity"><strong>{currentRole?.name?.split(' (')[0]}</strong><small>{accountTypeByRole[role]?.short || currentRole?.label}</small></span>
-              <button className="user-menu-button" onClick={handleLogout} aria-label="Open account menu">⌄</button>
+              <button className="user-menu-button" onClick={() => setUserMenuOpen((prev) => !prev)} aria-label="Open account menu" aria-expanded={userMenuOpen}>⌄</button>
+              {userMenuOpen && (
+                <div className="user-menu-dropdown">
+                  <button type="button" onClick={handleLogout}>← &nbsp; Logout</button>
+                </div>
+              )}
             </div>
           </div>
         </header>

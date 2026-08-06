@@ -63,6 +63,29 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
           const status = statusOf(invoice);
           return <tr className={selected?.invoiceNumber === invoice.invoiceNumber ? 'selected' : ''} key={invoice.invoiceNumber}><td><strong>{invoice.invoiceNumber}</strong></td><td><strong>{invoice.customer}</strong>{['Jimmy Aki', 'Henry Eyo'].includes(invoice.customer) && <small>ELITE</small>}</td><td>{invoice.store || 'Lekki'}</td><td><strong>{money.format(invoice.total)}</strong></td><td><Status>{invoice.paymentStatus}</Status></td><td><Status>{status}</Status></td><td>{invoice.submitted || 'Today'}<small>by {invoice.createdBy || 'Bola'}</small></td><td><button onClick={() => setReviewInvoice(invoice)}>{status === 'Awaiting Review' ? 'Review' : status === 'Flagged' ? 'Resolve' : 'View'}</button><button className="dots" onClick={() => setSelected(invoice)}>⋮</button></td></tr>;
         })}</tbody></table></div>
+        <div className="owner-mobile-invoice-list">{filtered.slice(0, 8).map((invoice) => {
+          const status = statusOf(invoice);
+          return <article key={invoice.invoiceNumber}>
+            <header>
+              <div>
+                <small>{invoice.invoiceNumber}</small>
+                <strong>{invoice.customer}</strong>
+                <span>{invoice.store || 'Lekki'}</span>
+              </div>
+              <Status>{status}</Status>
+            </header>
+            <section>
+              <div><small>Amount</small><strong>{money.format(invoice.total)}</strong></div>
+              <div><small>Payment</small><Status>{invoice.paymentStatus}</Status></div>
+              <div><small>Submitted</small><span>{invoice.submitted || 'Today'}</span></div>
+              <div><small>By</small><span>{invoice.createdBy || 'Bola'}</span></div>
+            </section>
+            <footer>
+              <span>{invoice.submitted || 'Today'}</span>
+              <button type="button" onClick={() => setReviewInvoice(invoice)}>{status === 'Awaiting Review' ? 'Review' : status === 'Flagged' ? 'Resolve' : 'View'} &nbsp;›</button>
+            </footer>
+          </article>;
+        })}{!filtered.length ? <div className="accounts-empty">No invoices match this view.</div> : null}</div>
         <footer><span>Showing {filtered.length ? 1 : 0} to {Math.min(8, filtered.length)} of {invoices.length} invoices</span><div><button>‹</button><button className="active">1</button><button>2</button><button>3</button><button>…</button><button>6</button><button>›</button></div></footer>
       </section>
     </div>

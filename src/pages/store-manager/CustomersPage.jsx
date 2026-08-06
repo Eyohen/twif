@@ -116,6 +116,30 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
             </td>
           </tr>)}
         </tbody></table>{!filtered.length ? <div className="accounts-empty">No customers match this view.</div> : null}</div>}
+        <div className="owner-mobile-customer-list">{filtered.slice(0, 10).map((customer, index) => (
+          <article key={customer.id}>
+            <header>
+              <div className="customer-card-identity">
+                <i className="customer-card-avatar">{customer.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2)}</i>
+                <div className="customer-card-info">
+                  <strong>{customer.fullName}</strong>
+                  <small>{customer.phone || customer.email || 'No contact info'}</small>
+                </div>
+              </div>
+              <span className={`customer-card-badge ${Number(customer.totalOrders) > 1 ? 'returning' : 'new'}`}>{Number(customer.totalOrders) > 1 ? 'Returning' : 'New'}</span>
+            </header>
+            <section>
+              <div><small>Email</small><span>{customer.email || '—'}</span></div>
+              <div><small>Last Visit</small><span>{customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : `${22-index} Jul 2026`}</span></div>
+              <div><small>Measurements</small><span className={customer.measurementsAdded ? 'measure-saved' : 'measure-missing'}>{customer.measurementsAdded ? '✓ Saved' : '× Not saved'}</span></div>
+              <div><small>Store</small><span>{customer.stores?.[0] || 'Lekki'}</span></div>
+            </section>
+            <footer>
+              <span>Since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', {month:'short',year:'numeric'}) : 'Jan 2026'}</span>
+              <button type="button" onClick={() => setSelectedCustomer(customer)}>View Profile &nbsp;›</button>
+            </footer>
+          </article>
+        ))}{!filtered.length ? <div className="accounts-empty">No customers match this view.</div> : null}</div>
         <footer><span>Showing {filtered.length ? 1 : 0} to {Math.min(10, filtered.length)} of {customers.length} customers</span><div><button>‹</button><button className="active">1</button><button>2</button><button>3</button><button>…</button><button>{Math.max(1, Math.ceil(customers.length / 10))}</button><button>›</button></div></footer>
       </section>
       {creating ? <div className="receive-stock-backdrop"><form onSubmit={createCustomer}><button type="button" onClick={() => setCreating(false)}>×</button><h2>New Customer</h2><p>Create a customer profile that can be used for orders and invoices.</p><label>Full Name<input value={createForm.fullName} onChange={(event) => setCreateForm({ ...createForm, fullName: event.target.value })} required /></label><label>Phone Number<input value={createForm.phone} onChange={(event) => setCreateForm({ ...createForm, phone: event.target.value })} required /></label><label>Email Address<input type="email" value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} /></label><label>Customer Type<select value={createForm.category} onChange={(event) => setCreateForm({ ...createForm, category: event.target.value })}><option>New</option><option>Returning</option></select></label><footer><button type="button" onClick={() => setCreating(false)}>Cancel</button><button type="submit">Create Customer</button></footer></form></div> : null}

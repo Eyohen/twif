@@ -30,7 +30,7 @@ export const navByRole = {
   accounts: ['Overview', 'Invoices', 'Payments', 'Reports', 'Inventory', 'Notifications'],
   production_manager: ['Overview', 'Production', 'Inventory', 'Notifications'],
   inventory_manager: ['Overview', 'Inventory', 'Notifications'],
-  tailor: ['Overview', 'My Tasks', 'Weekly Log', 'Notifications'],
+  tailor: ['My Tasks', 'Weekly Log', 'Notifications'],
 };
 
 export const accountTypeByRole = {

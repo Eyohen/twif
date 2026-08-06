@@ -8,6 +8,49 @@
   font-display: swap;
 }
 
+/* Owner mobile pages: card-based records. Desktop styles remain unchanged. */
+@media (max-width: 900px) {
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.inventory-list-table,.commercial-report,.report-table-card) { overflow: visible; }
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.commercial-report) > header { display:grid;grid-template-columns:1fr;gap:10px;padding:12px; }
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.commercial-report) > nav { display:flex;overflow-x:auto;gap:8px;padding:10px 12px;scrollbar-width:none; }
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.commercial-report) > nav::-webkit-scrollbar { display:none; }
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.commercial-report) > nav button { flex:0 0 auto;white-space:nowrap; }
+  .owner-role-shell :is(.orders-register-table,.store-customer-table-wrap,.accounts-invoice-table,.payments-table,.inventory-list-table,.commercial-report .table-wrap,.report-table-card) { overflow:visible;border:0;background:transparent; }
+
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.inventory-list-table,.commercial-report,.report-table-card) table { display:block;min-width:0;width:100%;background:transparent; }
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.inventory-list-table,.commercial-report,.report-table-card) thead { display:none; }
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.inventory-list-table,.commercial-report,.report-table-card) tbody { display:grid;gap:12px; }
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.inventory-list-table,.commercial-report,.report-table-card) tr { position:relative;display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #e8e2d9;border-radius:14px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.08);overflow:visible; }
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.inventory-list-table,.commercial-report,.report-table-card) td { min-width:0;height:auto!important;display:grid!important;align-content:start;gap:5px;border:0;border-bottom:1px solid #f0ece6;padding:11px 12px!important;font-size:11px;overflow-wrap:anywhere; }
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.inventory-list-table,.commercial-report,.report-table-card) td::before { display:block;color:#7b8088;font-size:7px;font-weight:800;letter-spacing:.08em;text-transform:uppercase; }
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.inventory-list-table,.commercial-report,.report-table-card) td:nth-last-child(1) { border-bottom:0; }
+
+  .owner-role-shell .orders-register td:nth-child(1)::before { content:'Invoice'; }.owner-role-shell .orders-register td:nth-child(2)::before { content:'Customer'; }.owner-role-shell .orders-register td:nth-child(3)::before { content:'Items'; }.owner-role-shell .orders-register td:nth-child(4)::before { content:'Invoice Total'; }.owner-role-shell .orders-register td:nth-child(5)::before { content:'Payment'; }.owner-role-shell .orders-register td:nth-child(6)::before { content:'Delivery'; }.owner-role-shell .orders-register td:nth-child(7)::before { content:'Production'; }.owner-role-shell .orders-register td:nth-child(8)::before { content:'Created'; }.owner-role-shell .orders-register td:nth-child(9)::before { content:'Actions'; }
+  .owner-role-shell .orders-register td:nth-child(1),.owner-role-shell .orders-register td:nth-child(2),.owner-role-shell .orders-register td:nth-child(7) { grid-column:1/-1; }.owner-role-shell .orders-register td:nth-child(9) { position:absolute;right:8px;top:8px;padding:0!important;border:0; }.owner-role-shell .orders-register td:nth-child(9)::before { display:none; }
+
+  .owner-role-shell .store-customer-register td:nth-child(1)::before { content:'Customer'; }.owner-role-shell .store-customer-register td:nth-child(2)::before { content:'Phone'; }.owner-role-shell .store-customer-register td:nth-child(3)::before { content:'Email'; }.owner-role-shell .store-customer-register td:nth-child(4)::before { content:'Status'; }.owner-role-shell .store-customer-register td:nth-child(5)::before { content:'Last Visit'; }.owner-role-shell .store-customer-register td:nth-child(6)::before { content:'Measurements'; }.owner-role-shell .store-customer-register td:nth-child(7)::before { content:'Store'; }.owner-role-shell .store-customer-register td:nth-child(8)::before { content:'Actions'; }
+  .owner-role-shell .store-customer-register td:nth-child(1),.owner-role-shell .store-customer-register td:nth-child(3) { grid-column:1/-1; }.owner-role-shell .store-customer-register td:nth-child(8) { position:absolute;right:8px;top:8px;padding:0!important;border:0; }.owner-role-shell .store-customer-register td:nth-child(8)::before { display:none; }
+
+  .owner-role-shell .accounts-invoice-register td:nth-child(1)::before { content:'Invoice'; }.owner-role-shell .accounts-invoice-register td:nth-child(2)::before { content:'Customer'; }.owner-role-shell .accounts-invoice-register td:nth-child(3)::before { content:'Store'; }.owner-role-shell .accounts-invoice-register td:nth-child(4)::before { content:'Amount'; }.owner-role-shell .accounts-invoice-register td:nth-child(5)::before { content:'Payment'; }.owner-role-shell .accounts-invoice-register td:nth-child(6)::before { content:'Status'; }.owner-role-shell .accounts-invoice-register td:nth-child(7)::before { content:'Submitted'; }.owner-role-shell .accounts-invoice-register td:nth-child(8)::before { content:'Actions'; }
+  .owner-role-shell .accounts-invoice-register td:nth-child(1),.owner-role-shell .accounts-invoice-register td:nth-child(2),.owner-role-shell .accounts-invoice-register td:nth-child(8) { grid-column:1/-1; }.owner-role-shell .accounts-invoice-register td:nth-child(8) { display:flex!important;flex-direction:row; }
+
+  .owner-role-shell .payments-register td:nth-child(1)::before { content:'Date'; }.owner-role-shell .payments-register td:nth-child(2)::before { content:'Invoice'; }.owner-role-shell .payments-register td:nth-child(3)::before { content:'Customer'; }.owner-role-shell .payments-register td:nth-child(4)::before { content:'Store'; }.owner-role-shell .payments-register td:nth-child(5)::before { content:'Amount Received'; }.owner-role-shell .payments-register td:nth-child(6)::before { content:'Method'; }.owner-role-shell .payments-register td:nth-child(7)::before { content:'Status'; }.owner-role-shell .payments-register td:nth-child(8)::before { content:'Reference'; }.owner-role-shell .payments-register td:nth-child(9)::before { content:'Actions'; }
+  .owner-role-shell .payments-register td:nth-child(2),.owner-role-shell .payments-register td:nth-child(3) { grid-column:1/-1; }.owner-role-shell .payments-register td:nth-child(9) { position:absolute;right:8px;top:8px;padding:0!important;border:0; }.owner-role-shell .payments-register td:nth-child(9)::before { display:none; }
+
+  .owner-role-shell .inventory-list-table td:nth-child(1)::before { content:'Item'; }.owner-role-shell .inventory-list-table td:nth-child(2)::before { content:'Category'; }.owner-role-shell .inventory-list-table td:nth-child(3)::before { content:'Colour'; }.owner-role-shell .inventory-list-table td:nth-child(4)::before { content:'Stock'; }.owner-role-shell .inventory-list-table td:nth-child(5)::before { content:'Unit'; }.owner-role-shell .inventory-list-table td:nth-child(6)::before { content:'Status'; }.owner-role-shell .inventory-list-table td:nth-child(7)::before { content:'Updated'; }
+  .owner-role-shell .inventory-list-table td:nth-child(1) { grid-column:1/-1;display:flex!important;align-items:center;padding:14px!important; }.owner-role-shell .inventory-list-table td:nth-child(1)::before { display:none; }
+
+  .owner-role-shell .commercial-report td:nth-child(1)::before { content:'Date'; }.owner-role-shell .commercial-report td:nth-child(2)::before { content:'Invoice'; }.owner-role-shell .commercial-report td:nth-child(3)::before { content:'Customer'; }.owner-role-shell .commercial-report td:nth-child(4)::before { content:'Store'; }.owner-role-shell .commercial-report td:nth-child(5)::before { content:'Total'; }.owner-role-shell .commercial-report td:nth-child(6)::before { content:'Payment'; }.owner-role-shell .commercial-report td:nth-child(7)::before { content:'Approval'; }.owner-role-shell .commercial-report td:nth-child(8)::before { content:'Order'; }.owner-role-shell .commercial-report td:nth-child(9)::before { content:'Action'; }
+  .owner-role-shell .commercial-report td:nth-child(2),.owner-role-shell .commercial-report td:nth-child(3),.owner-role-shell .commercial-report td:nth-child(9) { grid-column:1/-1; }
+
+  .owner-role-shell :is(.orders-register,.store-customer-register,.accounts-invoice-register,.payments-register,.inventory-list-table) > footer { display:flex;align-items:flex-start;flex-direction:column;gap:10px;padding:13px 2px; }
+  .owner-role-shell :is(.accounts-invoice-heading,.accounts-payments-toolbar,.inventory-list-action) { align-items:stretch;flex-direction:column;gap:10px;margin:0 0 12px; }
+  .owner-role-shell .accounts-invoice-drawer { inset:calc(8px + env(safe-area-inset-top)) 8px calc(82px + env(safe-area-inset-bottom));width:auto;border-radius:18px;overflow-y:auto; }
+  .owner-role-shell .payments-summary-side,.owner-role-shell .reconciliation-side { display:grid;grid-template-columns:1fr; }
+  .owner-role-shell .report-chart-card { min-height:330px; }.owner-role-shell .report-donut { position:relative;left:auto;bottom:auto;margin:20px auto; }.owner-role-shell .report-legend { position:relative;right:auto;bottom:auto;width:100%;padding:0 16px 18px; }
+  .owner-role-shell .report-table-card { overflow:hidden;padding:12px; }.owner-role-shell .report-table-card tr { grid-template-columns:1fr; }.owner-role-shell .report-table-card td::before { content:none; }.owner-role-shell .report-table-card td { display:flex!important;justify-content:space-between; }
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -856,6 +899,22 @@ input[readonly] {
 .profile-photo-button img { width: 100%; height: 100%; object-fit: cover; }
 .profile-photo-button i { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .55); color: #fff; font-style: normal; }
 .profile-photo-message { position: absolute; z-index: 20; top: calc(100% + 10px); right: 0; width: 210px; border: 1px solid #e3d4a8; border-radius: 7px; background: #fff9e8; color: #69470d; padding: 10px; box-shadow: 0 12px 28px rgba(0, 0, 0, .15); font-size: 11px; font-weight: 800; }
+
+.user-chip { position: relative; }
+.user-menu-dropdown { position: absolute; z-index: 200; top: calc(100% + 8px); right: 0; min-width: 140px; border: 1px solid #e8e0d5; border-radius: 10px; background: #fff; box-shadow: 0 12px 32px rgba(0,0,0,.14); overflow: hidden; }
+.user-menu-dropdown button { display: flex; width: 100%; border: 0; border-radius: 0; background: transparent; padding: 13px 16px; font-size: 13px; font-weight: 700; color: #c0392b; box-shadow: none; cursor: pointer; }
+.user-menu-dropdown button:hover { background: #fff4f2; }
+
+.customer-search-wrap { position: relative; }
+.customer-search-wrap input { width: 100%; }
+.customer-suggestions { position: absolute; z-index: 100; top: calc(100% + 4px); left: 0; right: 0; border: 1px solid #e8e0d5; border-radius: 8px; background: #fff; box-shadow: 0 10px 28px rgba(0,0,0,.12); overflow: hidden; }
+.customer-suggestions button { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; width: 100%; border: 0; border-radius: 0; border-bottom: 1px solid #f4ede6; background: transparent; padding: 10px 14px; text-align: left; cursor: pointer; box-shadow: none; }
+.customer-suggestions button:last-child { border-bottom: 0; }
+.customer-suggestions button:hover { background: #faf5ed; }
+.customer-suggestions strong { font-size: 13px; color: #1a1208; }
+.customer-suggestions small { font-size: 11px; color: #7b6f62; }
+
+input.readonly-field { background: #f7f4f0; color: #6b6157; cursor: default; }
 
 .stack {
   display: grid;
@@ -6874,7 +6933,8 @@ dd {
   .production-role-shell .workspace,
   .accounts-role-shell .workspace,
   .store-role-shell .workspace,
-  .tailor-role-shell .workspace {
+  .tailor-role-shell .workspace,
+  .owner-role-shell .workspace {
     padding: 12px 12px calc(92px + env(safe-area-inset-bottom));
   }
 
@@ -6882,7 +6942,8 @@ dd {
   .production-role-shell .topbar,
   .accounts-role-shell .topbar,
   .store-role-shell .topbar,
-  .tailor-role-shell .topbar {
+  .tailor-role-shell .topbar,
+  .owner-role-shell .topbar {
     position: sticky;
     z-index: 30;
     top: 0;
@@ -6897,7 +6958,8 @@ dd {
   .production-role-shell .topbar h1,
   .accounts-role-shell .topbar h1,
   .store-role-shell .topbar h1,
-  .tailor-role-shell .topbar h1 { margin: 1px 0 0; font-size: 21px; }
+  .tailor-role-shell .topbar h1,
+  .owner-role-shell .topbar h1 { margin: 1px 0 0; font-size: 21px; }
   .topbar-subtitle { display: none; }
   .mobile-app-label { font-size: 8px; letter-spacing: .15em; }
   .menu-button { width: 42px; height: 42px; border-radius: 12px; }
@@ -6906,7 +6968,9 @@ dd {
   .notification-bell { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 12px; }
   .user-chip { min-width: 0; min-height: 42px; border: 0; padding: 0; background: transparent; }
   .user-chip > :first-child { width: 38px; height: 38px; }
-  .user-identity, .user-menu-button { display: none; }
+  .user-identity { display: none; }
+  .user-menu-button { display: flex; min-width: 24px; font-size: 13px; padding: 4px; }
+  .user-menu-dropdown { right: 0; top: calc(100% + 4px); }
 
   .mobile-bottom-nav {
     position: fixed;
@@ -7089,7 +7153,8 @@ dd {
   }
 
   .accounts-payments-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: hidden;
   }
 
   .payments-summary-side {
@@ -7101,7 +7166,8 @@ dd {
   }
 
   .reconciliation-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: hidden;
   }
 
   .reconciliation-side {
@@ -7281,4 +7347,456 @@ dd {
     padding: 10px;
   }
   .inventory-list-filters,.inventory-list-kpis { grid-template-columns:1fr }.inventory-list-table > footer { align-items:flex-start;flex-direction:column;gap:12px }
+}
+
+/* Dedicated mobile Orders UI. The desktop table remains unchanged. */
+.owner-mobile-order-list { display: none; }
+@media (max-width: 1180px), (hover: none) and (pointer: coarse) {
+  .owner-role-shell .store-orders-table-page { display:grid;gap:12px;grid-template-columns:minmax(0,1fr);overflow-x:hidden; }
+  .owner-role-shell .orders-breadcrumb { margin:0 2px 2px;color:#8d929a;font-size:10px; }
+  .owner-role-shell .orders-table-kpis { display:flex!important;gap:10px;margin:0 -12px 2px 0;padding-right:12px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none; }
+  .owner-role-shell .orders-table-kpis::-webkit-scrollbar { display:none; }
+  .owner-role-shell .orders-table-kpis > article { min-width:74vw;min-height:126px;scroll-snap-align:start;border-radius:15px;padding:16px; }
+  .owner-role-shell .orders-register { overflow:visible;border:0;border-radius:0;background:transparent;box-shadow:none; }
+  .owner-role-shell .orders-register > header { display:grid!important;grid-template-columns:1fr auto!important;gap:9px;border:0;padding:0!important; }
+  .owner-role-shell .orders-register > header > label { grid-column:1/-1;min-height:48px;border-radius:12px;background:#fff; }
+  .owner-role-shell .orders-register > header .order-date-filter { min-height:44px;overflow:hidden;border-radius:10px;background:#fff;font-size:9px;white-space:nowrap; }
+  .owner-role-shell .orders-register > header > button { min-height:44px;border-radius:10px;background:#fff; }
+  .owner-role-shell .orders-register > nav { display:flex!important;align-items:center!important;flex-direction:column!important;gap:10px;border:0;padding:2px 0 0!important;overflow:visible; }
+  .owner-role-shell .orders-register > nav > div { width:100%;display:flex;gap:7px;overflow-x:auto;padding:2px 1px 6px;scrollbar-width:none; }
+  .owner-role-shell .orders-register > nav > div::-webkit-scrollbar { display:none; }
+  .owner-role-shell .orders-register > nav button { min-height:38px;flex:0 0 auto;border:1px solid #e5ded4;border-radius:20px;background:#fff;padding:0 14px;white-space:nowrap; }
+  .owner-role-shell .orders-register > nav button.active { border-color:#d99300;background:#fff5df;color:#9b6000; }
+  .owner-role-shell .orders-register > nav select { width:100%;min-height:44px;border-radius:10px;background:#fff; }
+  .owner-role-shell .orders-register-table { display:none!important; }
+  .owner-role-shell .owner-mobile-order-list { display:grid;gap:12px; }
+  .owner-role-shell .owner-mobile-order-list > article { overflow:hidden;border:1px solid #e9e2d8;border-radius:16px;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.09); }
+  .owner-role-shell .owner-mobile-order-list article > header { display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-bottom:1px solid #f0ebe5;padding:15px; }
+  .owner-role-shell .owner-mobile-order-list header > div { min-width:0;display:grid;gap:5px; }
+  .owner-role-shell .owner-mobile-order-list header small { color:#a26800;font-size:9px;font-weight:800;letter-spacing:.06em; }
+  .owner-role-shell .owner-mobile-order-list h3 { margin:0;overflow:hidden;font-size:17px;text-overflow:ellipsis;white-space:nowrap; }
+  .owner-role-shell .owner-mobile-order-list header span { color:#747b85;font-size:10px; }
+  .owner-role-shell .owner-mobile-order-list article > section { display:grid;grid-template-columns:1fr 1fr; }
+  .owner-role-shell .owner-mobile-order-list section > div { min-height:78px;display:grid;align-content:center;gap:6px;border-bottom:1px solid #f0ebe5;padding:12px 15px; }
+  .owner-role-shell .owner-mobile-order-list section > div:nth-child(odd) { border-right:1px solid #f0ebe5; }
+  .owner-role-shell .owner-mobile-order-list section small { color:#7a8089;font-size:8px;font-weight:700;letter-spacing:.05em;text-transform:uppercase; }
+  .owner-role-shell .owner-mobile-order-list section strong { font-size:13px; }
+  .owner-role-shell .owner-mobile-order-list section span.late { color:#d52c25;font-size:9px; }
+  .owner-role-shell .owner-mobile-order-list article > footer { min-height:58px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 15px; }
+  .owner-role-shell .owner-mobile-order-list footer > span { color:#767d87;font-size:9px; }
+  .owner-role-shell .owner-mobile-order-list footer button { min-height:40px;border:0;border-radius:9px;background:#d99100;color:#17120a;padding:0 15px;font-weight:800; }
+  .owner-role-shell .orders-register > footer { display:none!important; }
+}
+
+/* ─── Owner mobile customer cards ─────────────────────────────────────────── */
+.owner-mobile-customer-list { display: none; }
+.owner-mobile-invoice-list { display: none; }
+
+@media (max-width: 780px) {
+  /* Show mobile card lists, hide desktop tables */
+  .owner-role-shell .owner-mobile-customer-list { display: grid; gap: 12px; }
+  .owner-role-shell .store-customer-table-wrap { display: none !important; }
+  .owner-role-shell .store-customer-register > footer { display: none !important; }
+  .owner-role-shell .owner-mobile-invoice-list { display: grid; gap: 12px; }
+  .owner-role-shell .accounts-invoice-table { display: none !important; }
+  .owner-role-shell .accounts-invoice-drawer { display: none !important; }
+  .owner-role-shell .accounts-invoices-page.drawer-open { padding-right: 0; }
+  .owner-role-shell .accounts-invoices-page.drawer-open .accounts-invoice-main { width: 100%; }
+  .owner-role-shell .accounts-invoice-register > footer { display: none !important; }
+
+  /* Customer card base */
+  .owner-role-shell .owner-mobile-customer-list > article { overflow: hidden; border: 1px solid #e9e2d8; border-radius: 16px; background: #fff; box-shadow: 0 10px 28px rgba(0,0,0,.09); }
+  .owner-role-shell .owner-mobile-customer-list article > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #f0ebe5; padding: 15px; }
+  .owner-role-shell .owner-mobile-customer-list header > .customer-card-identity { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+  .owner-role-shell .owner-mobile-customer-list header .customer-card-avatar { width: 44px; height: 44px; display: grid; place-items: center; flex: 0 0 44px; border-radius: 50%; background: #fde7ba; color: #875800; font-size: 12px; font-style: normal; font-weight: 700; }
+  .owner-role-shell .owner-mobile-customer-list header .customer-card-info { min-width: 0; display: grid; gap: 4px; }
+  .owner-role-shell .owner-mobile-customer-list header .customer-card-info strong { overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+  .owner-role-shell .owner-mobile-customer-list header .customer-card-info small { color: #747b85; font-size: 10px; }
+  .owner-role-shell .owner-mobile-customer-list header .customer-card-badge { flex: 0 0 auto; display: inline-grid; place-items: center; min-width: 70px; border-radius: 20px; padding: 6px 10px; font-size: 9px; font-weight: 800; text-align: center; }
+  .owner-role-shell .owner-mobile-customer-list header .customer-card-badge.returning { background: #e5f4e8; color: #18753c; }
+  .owner-role-shell .owner-mobile-customer-list header .customer-card-badge.new { background: #eaf1fb; color: #2459a1; }
+
+  /* Customer card body grid */
+  .owner-role-shell .owner-mobile-customer-list article > section { display: grid; grid-template-columns: 1fr 1fr; }
+  .owner-role-shell .owner-mobile-customer-list section > div { min-height: 68px; display: grid; align-content: center; gap: 6px; border-bottom: 1px solid #f0ebe5; padding: 12px 15px; }
+  .owner-role-shell .owner-mobile-customer-list section > div:nth-child(odd) { border-right: 1px solid #f0ebe5; }
+  .owner-role-shell .owner-mobile-customer-list section small { color: #7a8089; font-size: 8px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .owner-role-shell .owner-mobile-customer-list section > div > span { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Customer card footer */
+  .owner-role-shell .owner-mobile-customer-list article > footer { min-height: 55px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 15px; }
+  .owner-role-shell .owner-mobile-customer-list footer > span { color: #767d87; font-size: 9px; }
+  .owner-role-shell .owner-mobile-customer-list footer button { min-height: 40px; border: 0; border-radius: 9px; background: #d99100; color: #17120a; padding: 0 15px; font-weight: 800; font-size: 11px; }
+
+  /* Invoice card base */
+  .owner-role-shell .owner-mobile-invoice-list > article { overflow: hidden; border: 1px solid #e9e2d8; border-radius: 16px; background: #fff; box-shadow: 0 10px 28px rgba(0,0,0,.09); cursor: pointer; }
+  .owner-role-shell .owner-mobile-invoice-list article > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; border-bottom: 1px solid #f0ebe5; padding: 15px; }
+  .owner-role-shell .owner-mobile-invoice-list header > div { min-width: 0; display: grid; gap: 5px; }
+  .owner-role-shell .owner-mobile-invoice-list header small { color: #a26800; font-size: 9px; font-weight: 800; letter-spacing: .06em; }
+  .owner-role-shell .owner-mobile-invoice-list header strong { margin: 0; overflow: hidden; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+  .owner-role-shell .owner-mobile-invoice-list header span { color: #747b85; font-size: 10px; }
+
+  /* Invoice card body */
+  .owner-role-shell .owner-mobile-invoice-list article > section { display: grid; grid-template-columns: 1fr 1fr; }
+  .owner-role-shell .owner-mobile-invoice-list section > div { min-height: 68px; display: grid; align-content: center; gap: 6px; border-bottom: 1px solid #f0ebe5; padding: 12px 15px; }
+  .owner-role-shell .owner-mobile-invoice-list section > div:nth-child(odd) { border-right: 1px solid #f0ebe5; }
+  .owner-role-shell .owner-mobile-invoice-list section small { color: #7a8089; font-size: 8px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .owner-role-shell .owner-mobile-invoice-list section strong { font-size: 13px; }
+  .owner-role-shell .owner-mobile-invoice-list section > div > span { font-size: 11px; }
+
+  /* Invoice card footer */
+  .owner-role-shell .owner-mobile-invoice-list article > footer { min-height: 55px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 15px; }
+  .owner-role-shell .owner-mobile-invoice-list footer > span { color: #767d87; font-size: 9px; }
+  .owner-role-shell .owner-mobile-invoice-list footer button { min-height: 40px; border: 0; border-radius: 9px; background: #d99100; color: #17120a; padding: 0 15px; font-weight: 800; font-size: 11px; }
+
+  /* Owner mobile page-level improvements */
+  .owner-role-shell .store-customers-page { gap: 12px; grid-template-columns: minmax(0, 1fr); overflow-x: hidden; }
+  .owner-role-shell .store-customer-create { margin-bottom: 0; }
+  .owner-role-shell .store-customer-register { border-radius: 14px; overflow: visible; }
+  .owner-role-shell .accounts-invoice-heading { margin-top: 0; padding: 0; }
+  .owner-role-shell .accounts-invoices-page { min-height: auto; }
+
+  /* Payments — overflow guard + KPI carousel */
+  .owner-role-shell .accounts-payments-page { overflow-x: hidden; }
+  .owner-role-shell .payment-kpis { display:flex!important;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px; }
+  .owner-role-shell .payment-kpis::-webkit-scrollbar { display:none; }
+  .owner-role-shell .payment-kpis > article { flex:0 0 auto;min-width:72vw;scroll-snap-align:start;border-radius:14px; }
+
+  /* Production — overflow guard + KPI carousel */
+  .owner-role-shell .production-board { overflow-x: hidden; }
+  .owner-role-shell .production-kpis { display:flex!important;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px; }
+  .owner-role-shell .production-kpis::-webkit-scrollbar { display:none; }
+  .owner-role-shell .production-kpis > article { flex:0 0 auto;min-width:72vw;scroll-snap-align:start; }
+  .owner-role-shell .production-exception-grid { grid-template-columns:1fr 1fr!important; }
+
+  /* Inventory — overflow guard + KPI carousel */
+  .owner-role-shell .inventory-list-page { overflow-x: hidden; }
+  .owner-role-shell .inventory-list-kpis { display:flex!important;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px; }
+  .owner-role-shell .inventory-list-kpis::-webkit-scrollbar { display:none; }
+  .owner-role-shell .inventory-list-kpis > article { flex:0 0 auto;min-width:72vw;scroll-snap-align:start;border-radius:14px; }
+
+  /* User Management — overflow guard + KPI carousel */
+  .owner-role-shell .user-management-page { overflow-x: hidden; }
+  .owner-role-shell .staff-kpis { display:flex!important;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px; }
+  .owner-role-shell .staff-kpis::-webkit-scrollbar { display:none; }
+  .owner-role-shell .staff-kpis > article { flex:0 0 auto;min-width:44vw;scroll-snap-align:start;border-radius:14px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NON-OWNER ROLE SHELLS — COMPREHENSIVE MOBILE RESPONSIVENESS
+   All rules scoped to specific role shells. Desktop (≥901px) is untouched.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ACCOUNTS ROLE: table → card transform at 900px
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) { overflow:visible; }
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) > header { display:grid;grid-template-columns:1fr;gap:10px;padding:12px; }
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) > nav { display:flex;overflow-x:auto;gap:8px;padding:10px 12px;scrollbar-width:none; }
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) > nav::-webkit-scrollbar { display:none; }
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) > nav button { flex:0 0 auto;white-space:nowrap; }
+  .accounts-role-shell :is(.accounts-invoice-table,.payments-table,.reconciliation-table) { overflow:visible;border:0;background:transparent; }
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) table { display:block;min-width:0;width:100%;background:transparent; }
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) thead { display:none; }
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) tbody { display:grid;gap:12px; }
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) tr { position:relative;display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #e8e2d9;border-radius:14px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.08);overflow:visible; }
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) td { min-width:0;height:auto!important;display:grid!important;align-content:start;gap:5px;border:0;border-bottom:1px solid #f0ece6;padding:11px 12px!important;font-size:11px;overflow-wrap:anywhere; }
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) td::before { display:block;color:#7b8088;font-size:7px;font-weight:800;letter-spacing:.08em;text-transform:uppercase; }
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) td:nth-last-child(1) { border-bottom:0; }
+  /* Invoice labels */
+  .accounts-role-shell .accounts-invoice-register td:nth-child(1)::before{content:'Invoice'}.accounts-role-shell .accounts-invoice-register td:nth-child(2)::before{content:'Customer'}.accounts-role-shell .accounts-invoice-register td:nth-child(3)::before{content:'Store'}.accounts-role-shell .accounts-invoice-register td:nth-child(4)::before{content:'Amount'}.accounts-role-shell .accounts-invoice-register td:nth-child(5)::before{content:'Payment'}.accounts-role-shell .accounts-invoice-register td:nth-child(6)::before{content:'Status'}.accounts-role-shell .accounts-invoice-register td:nth-child(7)::before{content:'Submitted'}.accounts-role-shell .accounts-invoice-register td:nth-child(8)::before{content:'Actions'}
+  .accounts-role-shell .accounts-invoice-register td:nth-child(1),.accounts-role-shell .accounts-invoice-register td:nth-child(2),.accounts-role-shell .accounts-invoice-register td:nth-child(8){grid-column:1/-1}.accounts-role-shell .accounts-invoice-register td:nth-child(8){display:flex!important;flex-direction:row}
+  /* Payments labels */
+  .accounts-role-shell .payments-register td:nth-child(1)::before{content:'Date'}.accounts-role-shell .payments-register td:nth-child(2)::before{content:'Invoice'}.accounts-role-shell .payments-register td:nth-child(3)::before{content:'Customer'}.accounts-role-shell .payments-register td:nth-child(4)::before{content:'Store'}.accounts-role-shell .payments-register td:nth-child(5)::before{content:'Amount Received'}.accounts-role-shell .payments-register td:nth-child(6)::before{content:'Method'}.accounts-role-shell .payments-register td:nth-child(7)::before{content:'Status'}.accounts-role-shell .payments-register td:nth-child(8)::before{content:'Reference'}.accounts-role-shell .payments-register td:nth-child(9)::before{content:'Actions'}
+  .accounts-role-shell .payments-register td:nth-child(2),.accounts-role-shell .payments-register td:nth-child(3){grid-column:1/-1}.accounts-role-shell .payments-register td:nth-child(9){position:absolute;right:8px;top:8px;padding:0!important;border:0}.accounts-role-shell .payments-register td:nth-child(9)::before{display:none}
+  /* Reconciliation labels */
+  .accounts-role-shell .reconciliation-register td:nth-child(1)::before{content:'Item'}.accounts-role-shell .reconciliation-register td:nth-child(2)::before{content:'Category'}.accounts-role-shell .reconciliation-register td:nth-child(3)::before{content:'Store'}.accounts-role-shell .reconciliation-register td:nth-child(4)::before{content:'Allocated'}.accounts-role-shell .reconciliation-register td:nth-child(5)::before{content:'Deducted'}.accounts-role-shell .reconciliation-register td:nth-child(6)::before{content:'Adjustments'}.accounts-role-shell .reconciliation-register td:nth-child(7)::before{content:'Variance'}.accounts-role-shell .reconciliation-register td:nth-child(8)::before{content:'Status'}.accounts-role-shell .reconciliation-register td:nth-child(9)::before{content:'Reconciled'}.accounts-role-shell .reconciliation-register td:nth-child(10)::before{content:'Actions'}
+  .accounts-role-shell .reconciliation-register td:nth-child(1),.accounts-role-shell .reconciliation-register td:nth-child(3){grid-column:1/-1}.accounts-role-shell .reconciliation-register td:nth-child(10){position:absolute;right:8px;top:8px;padding:0!important;border:0}.accounts-role-shell .reconciliation-register td:nth-child(10)::before{display:none}
+  /* Footers and toolbars */
+  .accounts-role-shell :is(.accounts-invoice-register,.payments-register,.reconciliation-register) > footer { display:flex;align-items:flex-start;flex-direction:column;gap:10px;padding:13px 2px; }
+  .accounts-role-shell :is(.accounts-invoice-heading,.accounts-payments-toolbar,.reconciliation-toolbar) { align-items:stretch;flex-direction:column;gap:10px;margin:0 0 12px; }
+  .accounts-role-shell .accounts-invoice-drawer { inset:calc(8px + env(safe-area-inset-top)) 8px calc(82px + env(safe-area-inset-bottom));width:auto;border-radius:18px;overflow-y:auto; }
+  .accounts-role-shell .payments-summary-side,.accounts-role-shell .reconciliation-side { display:grid;grid-template-columns:1fr; }
+  .accounts-role-shell .report-chart-card { min-height:330px; }.accounts-role-shell .report-donut { position:relative;left:auto;bottom:auto;margin:20px auto; }.accounts-role-shell .report-legend { position:relative;right:auto;bottom:auto;width:100%;padding:0 16px 18px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   STORE MANAGER ROLE: table → card transform at 900px
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .store-role-shell :is(.orders-register,.store-customer-register) { overflow:visible; }
+  .store-role-shell :is(.orders-register,.store-customer-register) > header { display:grid;grid-template-columns:1fr;gap:10px;padding:12px; }
+  .store-role-shell :is(.orders-register,.store-customer-register) > nav { display:flex;overflow-x:auto;gap:8px;padding:10px 12px;scrollbar-width:none; }
+  .store-role-shell :is(.orders-register,.store-customer-register) > nav::-webkit-scrollbar { display:none; }
+  .store-role-shell :is(.orders-register,.store-customer-register) > nav button { flex:0 0 auto;white-space:nowrap; }
+  .store-role-shell :is(.orders-register-table,.store-customer-table-wrap) { overflow:visible;border:0;background:transparent; }
+  .store-role-shell :is(.orders-register,.store-customer-register) table { display:block;min-width:0;width:100%;background:transparent; }
+  .store-role-shell :is(.orders-register,.store-customer-register) thead { display:none; }
+  .store-role-shell :is(.orders-register,.store-customer-register) tbody { display:grid;gap:12px; }
+  .store-role-shell :is(.orders-register,.store-customer-register) tr { position:relative;display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #e8e2d9;border-radius:14px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.08);overflow:visible; }
+  .store-role-shell :is(.orders-register,.store-customer-register) td { min-width:0;height:auto!important;display:grid!important;align-content:start;gap:5px;border:0;border-bottom:1px solid #f0ece6;padding:11px 12px!important;font-size:11px;overflow-wrap:anywhere; }
+  .store-role-shell :is(.orders-register,.store-customer-register) td::before { display:block;color:#7b8088;font-size:7px;font-weight:800;letter-spacing:.08em;text-transform:uppercase; }
+  .store-role-shell :is(.orders-register,.store-customer-register) td:nth-last-child(1) { border-bottom:0; }
+  /* Orders labels */
+  .store-role-shell .orders-register td:nth-child(1)::before{content:'Invoice'}.store-role-shell .orders-register td:nth-child(2)::before{content:'Customer'}.store-role-shell .orders-register td:nth-child(3)::before{content:'Items'}.store-role-shell .orders-register td:nth-child(4)::before{content:'Invoice Total'}.store-role-shell .orders-register td:nth-child(5)::before{content:'Payment'}.store-role-shell .orders-register td:nth-child(6)::before{content:'Delivery'}.store-role-shell .orders-register td:nth-child(7)::before{content:'Production'}.store-role-shell .orders-register td:nth-child(8)::before{content:'Created'}.store-role-shell .orders-register td:nth-child(9)::before{content:'Actions'}
+  .store-role-shell .orders-register td:nth-child(1),.store-role-shell .orders-register td:nth-child(2),.store-role-shell .orders-register td:nth-child(7){grid-column:1/-1}.store-role-shell .orders-register td:nth-child(9){position:absolute;right:8px;top:8px;padding:0!important;border:0}.store-role-shell .orders-register td:nth-child(9)::before{display:none}
+  /* Customers labels */
+  .store-role-shell .store-customer-register td:nth-child(1)::before{content:'Customer'}.store-role-shell .store-customer-register td:nth-child(2)::before{content:'Phone'}.store-role-shell .store-customer-register td:nth-child(3)::before{content:'Email'}.store-role-shell .store-customer-register td:nth-child(4)::before{content:'Status'}.store-role-shell .store-customer-register td:nth-child(5)::before{content:'Last Visit'}.store-role-shell .store-customer-register td:nth-child(6)::before{content:'Measurements'}.store-role-shell .store-customer-register td:nth-child(7)::before{content:'Store'}.store-role-shell .store-customer-register td:nth-child(8)::before{content:'Actions'}
+  .store-role-shell .store-customer-register td:nth-child(1),.store-role-shell .store-customer-register td:nth-child(3){grid-column:1/-1}.store-role-shell .store-customer-register td:nth-child(8){position:absolute;right:8px;top:8px;padding:0!important;border:0}.store-role-shell .store-customer-register td:nth-child(8)::before{display:none}
+  .store-role-shell :is(.orders-register,.store-customer-register) > footer { display:flex;align-items:flex-start;flex-direction:column;gap:10px;padding:13px 2px; }
+  /* Store invoice table → cards */
+  .store-role-shell .store-invoice-table-wrap { overflow:visible;border:0;background:transparent; }
+  .store-role-shell .store-invoice-table { display:block;min-width:0;width:100%;background:transparent; }
+  .store-role-shell .store-invoice-table thead { display:none; }
+  .store-role-shell .store-invoice-table tbody { display:grid;gap:12px; }
+  .store-role-shell .store-invoice-table tr { position:relative;display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #e8e2d9;border-radius:14px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.08);overflow:visible; }
+  .store-role-shell .store-invoice-table td { min-width:0;height:auto!important;display:grid!important;align-content:start;gap:5px;border:0;border-bottom:1px solid #f0ece6;padding:11px 12px!important;font-size:11px;overflow-wrap:anywhere; }
+  .store-role-shell .store-invoice-table td::before { display:block;color:#7b8088;font-size:7px;font-weight:800;letter-spacing:.08em;text-transform:uppercase; }
+  .store-role-shell .store-invoice-table td:nth-last-child(1) { border-bottom:0; }
+  .store-role-shell .store-invoice-table td:nth-child(1)::before{content:'Invoice'}.store-role-shell .store-invoice-table td:nth-child(2)::before{content:'Customer'}.store-role-shell .store-invoice-table td:nth-child(3)::before{content:'Store'}.store-role-shell .store-invoice-table td:nth-child(4)::before{content:'Date'}.store-role-shell .store-invoice-table td:nth-child(5)::before{content:'Total'}.store-role-shell .store-invoice-table td:nth-child(6)::before{content:'Payment'}.store-role-shell .store-invoice-table td:nth-child(7)::before{content:'Accounts'}.store-role-shell .store-invoice-table td:nth-child(8)::before{content:'Order'}.store-role-shell .store-invoice-table td:nth-child(9)::before{content:'Action'}
+  .store-role-shell .store-invoice-table td:nth-child(1),.store-role-shell .store-invoice-table td:nth-child(2){grid-column:1/-1}.store-role-shell .store-invoice-table td:nth-child(9){position:absolute;right:8px;top:8px;padding:0!important;border:0}.store-role-shell .store-invoice-table td:nth-child(9)::before{display:none}
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   STORE MANAGER: mobile order cards at 1180px (mirrors owner-role-shell)
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1180px), (hover: none) and (pointer: coarse) {
+  .store-role-shell .store-orders-table-page { display:grid;gap:12px;grid-template-columns:minmax(0,1fr);overflow-x:hidden; }
+  .store-role-shell .orders-breadcrumb { margin:0 2px 2px;color:#8d929a;font-size:10px; }
+  .store-role-shell .orders-table-kpis { display:flex!important;gap:10px;margin:0 -12px 2px 0;padding-right:12px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none; }
+  .store-role-shell .orders-table-kpis::-webkit-scrollbar { display:none; }
+  .store-role-shell .orders-table-kpis > article { min-width:74vw;min-height:126px;scroll-snap-align:start;border-radius:15px;padding:16px; }
+  .store-role-shell .orders-register { overflow:visible;border:0;border-radius:0;background:transparent;box-shadow:none; }
+  .store-role-shell .orders-register > header { display:grid!important;grid-template-columns:1fr auto!important;gap:9px;border:0;padding:0!important; }
+  .store-role-shell .orders-register > header > label { grid-column:1/-1;min-height:48px;border-radius:12px;background:#fff; }
+  .store-role-shell .orders-register > header .order-date-filter { min-height:44px;overflow:hidden;border-radius:10px;background:#fff;font-size:9px;white-space:nowrap; }
+  .store-role-shell .orders-register > header > button { min-height:44px;border-radius:10px;background:#fff; }
+  .store-role-shell .orders-register > nav { display:flex!important;align-items:center!important;flex-direction:column!important;gap:10px;border:0;padding:2px 0 0!important;overflow:visible; }
+  .store-role-shell .orders-register > nav > div { width:100%;display:flex;gap:7px;overflow-x:auto;padding:2px 1px 6px;scrollbar-width:none; }
+  .store-role-shell .orders-register > nav > div::-webkit-scrollbar { display:none; }
+  .store-role-shell .orders-register > nav button { min-height:38px;flex:0 0 auto;border:1px solid #e5ded4;border-radius:20px;background:#fff;padding:0 14px;white-space:nowrap; }
+  .store-role-shell .orders-register > nav button.active { border-color:#d99300;background:#fff5df;color:#9b6000; }
+  .store-role-shell .orders-register > nav select { width:100%;min-height:44px;border-radius:10px;background:#fff; }
+  .store-role-shell .orders-register-table { display:none!important; }
+  .store-role-shell .owner-mobile-order-list { display:grid;gap:12px; }
+  .store-role-shell .owner-mobile-order-list > article { overflow:hidden;border:1px solid #e9e2d8;border-radius:16px;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.09); }
+  .store-role-shell .owner-mobile-order-list article > header { display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-bottom:1px solid #f0ebe5;padding:15px; }
+  .store-role-shell .owner-mobile-order-list header > div { min-width:0;display:grid;gap:5px; }
+  .store-role-shell .owner-mobile-order-list header small { color:#a26800;font-size:9px;font-weight:800;letter-spacing:.06em; }
+  .store-role-shell .owner-mobile-order-list h3 { margin:0;overflow:hidden;font-size:17px;text-overflow:ellipsis;white-space:nowrap; }
+  .store-role-shell .owner-mobile-order-list header span { color:#747b85;font-size:10px; }
+  .store-role-shell .owner-mobile-order-list article > section { display:grid;grid-template-columns:1fr 1fr; }
+  .store-role-shell .owner-mobile-order-list section > div { min-height:78px;display:grid;align-content:center;gap:6px;border-bottom:1px solid #f0ebe5;padding:12px 15px; }
+  .store-role-shell .owner-mobile-order-list section > div:nth-child(odd) { border-right:1px solid #f0ebe5; }
+  .store-role-shell .owner-mobile-order-list section small { color:#7a8089;font-size:8px;font-weight:700;letter-spacing:.05em;text-transform:uppercase; }
+  .store-role-shell .owner-mobile-order-list section strong { font-size:13px; }
+  .store-role-shell .owner-mobile-order-list section span.late { color:#d52c25;font-size:9px; }
+  .store-role-shell .owner-mobile-order-list article > footer { min-height:58px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 15px; }
+  .store-role-shell .owner-mobile-order-list footer > span { color:#767d87;font-size:9px; }
+  .store-role-shell .owner-mobile-order-list footer button { min-height:40px;border:0;border-radius:9px;background:#d99100;color:#17120a;padding:0 15px;font-weight:800; }
+  .store-role-shell .orders-register > footer { display:none!important; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ALL NON-OWNER ROLES: 780px enhancements
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width: 780px) {
+  /* ── ACCOUNTS ROLE ─────────────────────────────────────────────────────── */
+  .accounts-role-shell .owner-mobile-invoice-list { display:grid;gap:12px; }
+  .accounts-role-shell .accounts-invoice-table { display:none!important; }
+  .accounts-role-shell .accounts-invoice-drawer { display:none!important; }
+  .accounts-role-shell .accounts-invoices-page.drawer-open { padding-right:0; }
+  .accounts-role-shell .accounts-invoices-page.drawer-open .accounts-invoice-main { width:100%; }
+  .accounts-role-shell .accounts-invoice-register > footer { display:none!important; }
+  /* Invoice card styles */
+  .accounts-role-shell .owner-mobile-invoice-list > article { overflow:hidden;border:1px solid #e9e2d8;border-radius:16px;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.09);cursor:pointer; }
+  .accounts-role-shell .owner-mobile-invoice-list article > header { display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-bottom:1px solid #f0ebe5;padding:15px; }
+  .accounts-role-shell .owner-mobile-invoice-list header > div { min-width:0;display:grid;gap:5px; }
+  .accounts-role-shell .owner-mobile-invoice-list header small { color:#a26800;font-size:9px;font-weight:800;letter-spacing:.06em; }
+  .accounts-role-shell .owner-mobile-invoice-list header strong { margin:0;overflow:hidden;font-size:17px;text-overflow:ellipsis;white-space:nowrap; }
+  .accounts-role-shell .owner-mobile-invoice-list header span { color:#747b85;font-size:10px; }
+  .accounts-role-shell .owner-mobile-invoice-list article > section { display:grid;grid-template-columns:1fr 1fr; }
+  .accounts-role-shell .owner-mobile-invoice-list section > div { min-height:68px;display:grid;align-content:center;gap:6px;border-bottom:1px solid #f0ebe5;padding:12px 15px; }
+  .accounts-role-shell .owner-mobile-invoice-list section > div:nth-child(odd) { border-right:1px solid #f0ebe5; }
+  .accounts-role-shell .owner-mobile-invoice-list section small { color:#7a8089;font-size:8px;font-weight:700;letter-spacing:.05em;text-transform:uppercase; }
+  .accounts-role-shell .owner-mobile-invoice-list section strong { font-size:13px; }
+  .accounts-role-shell .owner-mobile-invoice-list section > div > span { font-size:11px; }
+  .accounts-role-shell .owner-mobile-invoice-list article > footer { min-height:55px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 15px; }
+  .accounts-role-shell .owner-mobile-invoice-list footer > span { color:#767d87;font-size:9px; }
+  .accounts-role-shell .owner-mobile-invoice-list footer button { min-height:40px;border:0;border-radius:9px;background:#d99100;color:#17120a;padding:0 15px;font-weight:800;font-size:11px; }
+  /* Accounts page-level overflow guards + KPI carousels */
+  .accounts-role-shell .accounts-invoices-page { min-height:auto; }
+  .accounts-role-shell .accounts-invoice-heading { margin-top:0;padding:0; }
+  .accounts-role-shell .accounts-payments-page { overflow-x:hidden; }
+  .accounts-role-shell .accounts-reconciliation-page { overflow-x:hidden; }
+  .accounts-role-shell .payment-kpis { display:flex!important;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px; }
+  .accounts-role-shell .payment-kpis::-webkit-scrollbar { display:none; }
+  .accounts-role-shell .payment-kpis > article { flex:0 0 auto;min-width:72vw;scroll-snap-align:start;border-radius:14px; }
+  .accounts-role-shell .reconciliation-kpis { display:flex!important;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px; }
+  .accounts-role-shell .reconciliation-kpis::-webkit-scrollbar { display:none; }
+  .accounts-role-shell .reconciliation-kpis > article { flex:0 0 auto;min-width:72vw;scroll-snap-align:start;border-radius:14px; }
+
+  /* ── STORE MANAGER ROLE ────────────────────────────────────────────────── */
+  /* Customers: show cards, hide table */
+  .store-role-shell .owner-mobile-customer-list { display:grid;gap:12px; }
+  .store-role-shell .store-customer-table-wrap { display:none!important; }
+  .store-role-shell .store-customer-register > footer { display:none!important; }
+  /* Customer card styles */
+  .store-role-shell .owner-mobile-customer-list > article { overflow:hidden;border:1px solid #e9e2d8;border-radius:16px;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.09); }
+  .store-role-shell .owner-mobile-customer-list article > header { display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #f0ebe5;padding:15px; }
+  .store-role-shell .owner-mobile-customer-list header > .customer-card-identity { display:flex;align-items:center;gap:12px;min-width:0;flex:1; }
+  .store-role-shell .owner-mobile-customer-list header .customer-card-avatar { width:44px;height:44px;display:grid;place-items:center;flex:0 0 44px;border-radius:50%;background:#fde7ba;color:#875800;font-size:12px;font-style:normal;font-weight:700; }
+  .store-role-shell .owner-mobile-customer-list header .customer-card-info { min-width:0;display:grid;gap:4px; }
+  .store-role-shell .owner-mobile-customer-list header .customer-card-info strong { overflow:hidden;font-size:16px;text-overflow:ellipsis;white-space:nowrap; }
+  .store-role-shell .owner-mobile-customer-list header .customer-card-info small { color:#747b85;font-size:10px; }
+  .store-role-shell .owner-mobile-customer-list header .customer-card-badge { flex:0 0 auto;display:inline-grid;place-items:center;min-width:70px;border-radius:20px;padding:6px 10px;font-size:9px;font-weight:800;text-align:center; }
+  .store-role-shell .owner-mobile-customer-list header .customer-card-badge.returning { background:#e5f4e8;color:#18753c; }
+  .store-role-shell .owner-mobile-customer-list header .customer-card-badge.new { background:#eaf1fb;color:#2459a1; }
+  .store-role-shell .owner-mobile-customer-list article > section { display:grid;grid-template-columns:1fr 1fr; }
+  .store-role-shell .owner-mobile-customer-list section > div { min-height:68px;display:grid;align-content:center;gap:6px;border-bottom:1px solid #f0ebe5;padding:12px 15px; }
+  .store-role-shell .owner-mobile-customer-list section > div:nth-child(odd) { border-right:1px solid #f0ebe5; }
+  .store-role-shell .owner-mobile-customer-list section small { color:#7a8089;font-size:8px;font-weight:700;letter-spacing:.05em;text-transform:uppercase; }
+  .store-role-shell .owner-mobile-customer-list section > div > span { font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+  .store-role-shell .owner-mobile-customer-list article > footer { min-height:55px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 15px; }
+  .store-role-shell .owner-mobile-customer-list footer > span { color:#767d87;font-size:9px; }
+  .store-role-shell .owner-mobile-customer-list footer button { min-height:40px;border:0;border-radius:9px;background:#d99100;color:#17120a;padding:0 15px;font-weight:800;font-size:11px; }
+  /* Store page-level overflow guards + KPI carousels */
+  .store-role-shell .store-customers-page { gap:12px;grid-template-columns:minmax(0,1fr);overflow-x:hidden; }
+  .store-role-shell .store-customer-create { margin-bottom:0; }
+  .store-role-shell .store-customer-register { border-radius:14px;overflow:visible; }
+  .store-role-shell .store-customer-kpis { display:flex!important;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px; }
+  .store-role-shell .store-customer-kpis::-webkit-scrollbar { display:none; }
+  .store-role-shell .store-customer-kpis > article { flex:0 0 auto;min-width:72vw;scroll-snap-align:start;border-radius:14px; }
+  /* Store invoices page */
+  .store-role-shell .store-invoices-dashboard { overflow-x:hidden; }
+  .store-role-shell .store-invoice-kpis { display:flex!important;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px; }
+  .store-role-shell .store-invoice-kpis::-webkit-scrollbar { display:none; }
+  .store-role-shell .store-invoice-kpis > article { flex:0 0 auto;min-width:72vw;scroll-snap-align:start;border-radius:14px; }
+  .store-role-shell .store-invoices-panel { border-radius:14px;overflow:visible; }
+  .store-role-shell .store-invoices-panel > header { align-items:flex-start;flex-direction:column;gap:8px;padding:14px; }
+  .store-role-shell .store-invoice-tools { display:grid;grid-template-columns:1fr auto;gap:9px;padding:12px 14px; }
+  .store-role-shell .store-invoice-tools label { grid-column:1/-1;min-height:44px;border-radius:10px; }
+
+  /* ── PRODUCTION ROLE ───────────────────────────────────────────────────── */
+  .production-role-shell .production-board { overflow-x:hidden; }
+  .production-role-shell .production-kpis { display:flex!important;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px; }
+  .production-role-shell .production-kpis::-webkit-scrollbar { display:none; }
+  .production-role-shell .production-kpis > article { flex:0 0 auto;min-width:72vw;scroll-snap-align:start; }
+  .production-role-shell .production-exception-grid { grid-template-columns:1fr 1fr!important; }
+  .production-role-shell .inventory-list-page { overflow-x:hidden; }
+  .production-role-shell .inventory-list-kpis { display:flex!important;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px; }
+  .production-role-shell .inventory-list-kpis::-webkit-scrollbar { display:none; }
+  .production-role-shell .inventory-list-kpis > article { flex:0 0 auto;min-width:72vw;scroll-snap-align:start;border-radius:14px; }
+
+  /* ── TAILOR ROLE ───────────────────────────────────────────────────────── */
+  .tailor-role-shell .workspace { overflow-x:hidden; }
+  .tailor-role-shell .tailor-weekly-log { grid-template-columns:minmax(0,1fr); }
+  .tailor-role-shell .weekly-completed { min-width:0;overflow-x:hidden; }
+  .tailor-role-shell .weekly-completed .weekly-table-wrap { overflow-x:auto; }
+}
+
+/* ── OWNER PERIOD FILTER ─────────────────────────────────────────── */
+.owner-period-filter { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
+.owner-period-filter > button { min-height:36px; border:1px solid #e8e0d5; border-radius:8px; background:#fff; padding:0 16px; font-size:12px; font-weight:700; color:#5c4d3a; cursor:pointer; transition:all .15s; }
+.owner-period-filter > button.active { border-color:#e7a62d; background:#fef9ed; color:#b87c00; }
+.owner-period-filter > button:hover:not(.active) { border-color:#c9bfb3; background:#faf7f2; }
+.owner-custom-range { display:flex; align-items:center; gap:8px; margin-left:4px; }
+.owner-custom-range input { height:36px; border:1px solid #e8e0d5; border-radius:8px; background:#fff; padding:0 10px; font-size:12px; }
+.owner-custom-range span { color:#9b8f82; font-size:13px; }
+
+/* ── OWNER STORES PAGE ───────────────────────────────────────────── */
+.owner-stores-page { display:grid; gap:24px; }
+.owner-stores-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+.owner-store-kpi { display:flex; gap:14px; align-items:center; border:1px solid #e8e0d5; border-radius:12px; background:#fff; padding:18px 20px; box-shadow:0 4px 12px rgba(0,0,0,.04); }
+.owner-store-kpi i { width:44px; height:44px; display:grid; place-items:center; flex:0 0 auto; border-radius:10px; background:#fef3d8; color:#c58e00; font-size:18px; font-style:normal; }
+.owner-store-kpi.tone-green i { background:#e8f5eb; color:#1a7c3a; }
+.owner-store-kpi.tone-blue i { background:#e8f0fc; color:#2a65c7; }
+.owner-store-kpi.tone-purple i { background:#f2ecfb; color:#7038c8; }
+.owner-store-kpi span { display:grid; gap:4px; }
+.owner-store-kpi small { font-size:10px; color:#7b6f62; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+.owner-store-kpi strong { font-size:22px; font-family:var(--font-display); color:#1a1208; }
+.owner-store-kpi p { font-size:11px; color:#9b8f82; margin:0; }
+.owner-stores-panel { padding:20px 24px; }
+.owner-stores-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+.owner-stores-header h2 { margin:0; font-family:var(--font-display); font-size:19px; }
+.owner-stores-header p { margin:4px 0 0; font-size:12px; color:#7b6f62; }
+.owner-stores-table-wrap { overflow-x:auto; }
+.owner-stores-table { width:100%; border-collapse:collapse; }
+.owner-stores-table th { padding:10px 14px; font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#7b6f62; border-bottom:1px solid #f0ece6; text-align:left; }
+.owner-stores-table td { padding:14px; font-size:13px; border-bottom:1px solid #f7f4f0; }
+.owner-stores-table tr:last-child td { border-bottom:0; }
+.owner-stores-table tr:hover td { background:#faf8f5; }
+.store-actions-cell { display:flex; gap:8px; }
+.danger-action { border:1px solid #f5c6c6; border-radius:8px; background:#fff4f2; color:#c0392b; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; }
+.danger-action:hover { background:#fde8e8; }
+.owner-store-form { background:#fff; border-radius:18px; padding:28px; max-width:440px; width:100%; display:grid; gap:16px; position:relative; }
+.owner-store-form h2 { margin:0; font-family:var(--font-display); font-size:22px; }
+.owner-store-form p { margin:0; font-size:13px; color:#7b6f62; }
+.owner-store-form label { display:grid; gap:6px; font-size:12px; font-weight:700; color:#3a2e22; }
+.owner-store-form input, .owner-store-form select { height:42px; border:1px solid #ddd6cc; border-radius:8px; background:#fff; padding:0 12px; font-size:14px; }
+.owner-store-form footer { display:flex; gap:10px; justify-content:flex-end; margin-top:4px; }
+.modal-close { position:absolute; top:16px; right:16px; width:32px; height:32px; border-radius:50%; border:1px solid #e8e0d5; background:#f7f4f0; font-size:16px; cursor:pointer; display:grid; place-items:center; }
+
+/* ── TAILOR TASK PAGE (REDESIGN) ─────────────────────────────────── */
+.tailor-task-card { border:1px solid #e8e0d5; border-radius:14px; background:#fff; box-shadow:0 4px 14px rgba(0,0,0,.05); overflow:hidden; margin-bottom:12px; }
+.tailor-task-card.task-in_progress { border-left:3px solid #e7a62d; }
+.tailor-task-card.task-ready { border-left:3px solid #1a7c3a; }
+.tailor-task-header { display:flex; align-items:flex-start; justify-content:space-between; padding:16px 18px 12px; gap:12px; }
+.tailor-task-customer { display:flex; align-items:flex-start; gap:12px; flex:1; min-width:0; }
+.task-avatar { width:44px; height:44px; display:grid; place-items:center; flex:0 0 44px; border-radius:50%; background:#fde6b7; color:#7c4a00; font-size:13px; font-weight:900; font-style:normal; }
+.task-customer-info { display:grid; gap:3px; min-width:0; }
+.task-customer-info strong { font-size:15px; font-weight:800; color:#1a1208; }
+.task-customer-info span { font-size:13px; color:#4a3f32; }
+.task-customer-info small { font-size:11px; color:#7b6f62; }
+.task-header-right { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+.task-status-badge { padding:5px 12px; border-radius:20px; font-size:11px; font-weight:800; white-space:nowrap; }
+.task-badge-in_queue { background:#fef3d8; color:#9a6500; }
+.task-badge-in_progress { background:#fff3e0; color:#cc6600; }
+.task-badge-ready { background:#e8f5eb; color:#1a7c3a; }
+.tailor-expand { width:32px; height:32px; border-radius:50%; border:1px solid #e8e0d5; background:#f7f4f0; font-size:14px; cursor:pointer; display:grid; place-items:center; padding:0; box-shadow:none; flex:0 0 32px; }
+.tailor-info-grid { display:flex; gap:0; border-top:1px solid #f0ece6; overflow-x:auto; scrollbar-width:none; }
+.tailor-info-grid::-webkit-scrollbar { display:none; }
+.tailor-info-cell { display:flex; align-items:center; gap:10px; padding:12px 16px; flex:1; min-width:120px; border-right:1px solid #f0ece6; }
+.tailor-info-cell:last-child { border-right:0; }
+.tailor-info-cell i { font-size:16px; font-style:normal; color:#c58e00; flex:0 0 auto; }
+.tailor-info-cell span { display:grid; gap:2px; }
+.tailor-info-cell small { font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#7b6f62; }
+.tailor-info-cell strong { font-size:12px; font-weight:700; color:#1a1208; }
+.tailor-task-details { border-top:1px solid #f0ece6; padding:18px; }
+.tailor-detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:14px; }
+.tailor-detail-section h4 { margin:0 0 8px; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:#7b6f62; }
+.tailor-detail-section ul { margin:0; padding:0 0 0 16px; display:grid; gap:4px; }
+.tailor-detail-section li { font-size:12px; color:#3a2e22; }
+.tailor-detail-section p { font-size:12px; color:#9b8f82; margin:0; }
+.tailor-images-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:6px; }
+.tailor-images-grid img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:6px; border:1px solid #e8e0d5; }
+.tailor-link-btn { border:0; background:transparent; color:#c58e00; font-size:12px; font-weight:700; padding:0; cursor:pointer; text-decoration:underline; min-height:0; }
+.tailor-empty-note { font-size:12px; color:#9b8f82; margin:0; }
+.tailor-add-note-btn { border:1px solid #e8e0d5; border-radius:8px; background:#faf7f2; padding:8px 16px; font-size:12px; font-weight:700; color:#5c4d3a; cursor:pointer; }
+.tailor-task-actions { display:flex; gap:12px; padding:14px 18px; border-top:1px solid #f0ece6; background:#fafaf9; }
+.tailor-start-btn { flex:1; min-height:42px; border-radius:10px; border:0; background:#e7a62d; color:#fff; font-size:13px; font-weight:800; cursor:pointer; }
+.tailor-start-btn.btn-disabled, .tailor-start-btn:disabled { background:#f0ece6; color:#b0a898; cursor:not-allowed; }
+.tailor-ready-btn { flex:1; min-height:42px; border-radius:10px; border:0; background:#1a7c3a; color:#fff; font-size:13px; font-weight:800; cursor:pointer; }
+.tailor-ready-btn.btn-disabled, .tailor-ready-btn:disabled { background:#f0ece6; color:#b0a898; cursor:not-allowed; }
+
+/* Task confirmation modal */
+.task-confirm-backdrop { position:fixed; inset:0; z-index:300; background:rgba(0,0,0,.5); display:grid; place-items:center; padding:20px; }
+.task-confirm-modal { background:#fff; border-radius:18px; padding:28px; max-width:380px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,.25); }
+.task-confirm-modal h3 { margin:0 0 10px; font-family:var(--font-display); font-size:22px; color:#1a1208; }
+.task-confirm-modal p { margin:0 0 22px; font-size:14px; color:#5c4d3a; line-height:1.5; }
+.task-confirm-actions { display:flex; gap:10px; justify-content:flex-end; }
+.mark-ready-confirm { min-height:42px; border-radius:10px; border:0; background:#1a7c3a; color:#fff; padding:0 20px; font-size:13px; font-weight:800; cursor:pointer; }
+
+/* ── MOBILE: Stores + Period filter ─────────────────────────────── */
+@media (max-width: 780px) {
+  .owner-stores-kpis { grid-template-columns:1fr 1fr; gap:10px; }
+  .owner-period-filter { gap:6px; }
+  .owner-period-filter > button { min-height:34px; font-size:11px; padding:0 12px; }
+  .tailor-info-grid { flex-wrap:nowrap; }
+  .tailor-detail-grid { grid-template-columns:1fr; }
+  .task-confirm-modal { padding:22px; }
+}
+@media (max-width: 480px) {
+  .owner-stores-kpis { grid-template-columns:1fr; }
 }
