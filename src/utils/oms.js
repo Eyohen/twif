@@ -29,6 +29,56 @@ export const paymentStatusLabels = {
 export const invoiceApprovalStatus = (invoice) => invoice?.accountApprovalStatus || 'Pending Accounts';
 export const isInvoiceApproved = (invoice) => invoiceApprovalStatus(invoice) === 'Approved';
 
+// The API only ever labels payment as Unpaid / Partial Paid / Fully Paid, but
+// older records were written with looser wording, so both are accepted here.
+const UNPAID_LABELS = ['Unpaid', 'Not Paid', 'Awaiting Payment'];
+export const isAwaitingPayment = (invoice) => UNPAID_LABELS.includes(invoice?.paymentStatus);
+export const isFullyPaid = (invoice) => ['Fully Paid', 'Paid'].includes(invoice?.paymentStatus);
+export const isPartiallyPaid = (invoice) => invoice?.paymentStatus === 'Partial Paid';
+
+const PAYMENT_STATUS_KEYS = { 'Fully Paid': 'fully_paid', Paid: 'fully_paid', Unpaid: 'unpaid', 'Not Paid': 'unpaid', 'Awaiting Payment': 'unpaid' };
+
+// Rebuilds the request body the invoice HTML endpoint expects from a row in the
+// sent-invoice list, so the document can be re-rendered away from the create screen.
+export const invoiceDocumentPayload = (invoice) => ({
+  store: invoice.storeKey || String(invoice.store || 'lekki').toLowerCase(),
+  invoiceNumber: invoice.invoiceNumber,
+  invoiceDate: invoice.invoiceDate || invoice.createdAt,
+  dueDate: invoice.dueDate || invoice.deliveryDate || invoice.invoiceDate,
+  customer: { name: invoice.customer, phone: invoice.phone || '', email: invoice.email || '' },
+  items: invoice.items?.length ? invoice.items : [{ description: invoice.item || 'Custom order', quantity: invoice.pieces || 1, rate: toNumber(invoice.total), amount: toNumber(invoice.total) }],
+  subtotal: invoice.subtotal || toNumber(invoice.total),
+  eliteDiscountAmount: invoice.eliteDiscountAmount || 0,
+  storeCreditApplied: invoice.storeCreditApplied || 0,
+  balanceDue: invoice.balanceDue ?? toNumber(invoice.total),
+  paymentStatus: invoice.paymentStatusKey || PAYMENT_STATUS_KEYS[invoice.paymentStatus] || 'partial_paid',
+  paymentMethod: invoice.paymentMethodKey || String(invoice.paymentMethod || 'transfer').toLowerCase(),
+  trackingToken: invoice.trackingToken,
+  trackingUrl: invoice.trackingUrl,
+  notes: invoice.notes,
+});
+
+// Prints the invoice document on its own. Printing the page directly would
+// capture the surrounding app chrome — nav, buttons and all — inside the PDF.
+export const printInvoiceHtml = (html, invoiceNumber = 'invoice') => {
+  const frame = document.createElement('iframe');
+  frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+  document.body.appendChild(frame);
+
+  const cleanUp = () => frame.remove();
+  frame.onload = () => {
+    const view = frame.contentWindow;
+    view.document.title = invoiceNumber;
+    view.focus();
+    view.print();
+    // Safari fires no afterprint for iframes, so fall back to a timer.
+    view.addEventListener?.('afterprint', cleanUp);
+    window.setTimeout(cleanUp, 60000);
+  };
+  frame.srcdoc = html;
+};
+
 export const canShowJobInProduction = (job, invoices) => {
   if (!job.invoiceNumber) return true;
   const invoice = invoices.find((item) => item.invoiceNumber === job.invoiceNumber);
@@ -48,6 +98,17 @@ export const productionJobFromInvoice = (invoice) => {
     phone: sheet.phone || '',
     store: sheet.store || invoice.store || 'Lekki',
     item: sheet.item || invoice.item || '',
+    // Every garment on the order. Older sheets only carried a single item, so
+    // fall back to synthesising a one-entry list from the top-level fields.
+    items: Array.isArray(sheet.items) && sheet.items.length ? sheet.items : [{
+      item: sheet.item || invoice.item || '',
+      pieces: toNumber(sheet.pieces || invoice.pieces) || 1,
+      delivery: sheet.delivery || dateInputValue(invoice.deliveryDate),
+      fabric: sheet.fabric || '',
+      measurements: sheet.measurements || '',
+      designNotes: sheet.designNotes || '',
+      styleImages: Array.isArray(sheet.styleImages) ? sheet.styleImages : [],
+    }],
     pieces: toNumber(sheet.pieces || invoice.pieces) || 1,
     delivery: sheet.delivery || dateInputValue(invoice.deliveryDate),
     amount: toNumber(sheet.amount),

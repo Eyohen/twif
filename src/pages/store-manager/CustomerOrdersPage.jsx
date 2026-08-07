@@ -3,17 +3,6 @@ import { ArrowLeft, Search, Package, ChevronRight, User, Phone, MapPin, Trending
 import { money } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 
-const sampleOrders = [
-  ['INV30659', 'Green Senator', 'Top & Bottom', 2, 'In Production', '22 Jul 2026', '26 Jul 2026', 85000],
-  ['INV30512', 'White Agbada', '3 Piece', 3, 'Ready for Collection', '10 Jul 2026', '16 Jul 2026', 120000],
-  ['INV30311', 'Black Tuxedo', '2 Piece', 2, 'Completed', '20 Jun 2026', '28 Jun 2026', 95000],
-  ['INV29980', 'Navy Native', 'Top & Bottom', 2, 'Completed', '25 May 2026', '02 Jun 2026', 55000],
-  ['INV29421', 'Grey Kaftan', 'Top & Bottom', 2, 'Completed', '01 May 2026', '08 May 2026', 20000],
-  ['INV28933', 'Casual Wear', 'Shirt', 1, 'Cancelled', '15 Apr 2026', '—', 10000],
-].map(([invoiceNumber, item, description, pieces, status, orderDate, deliveryDate, total], index) => ({
-  invoiceNumber, item, description, pieces, status, orderDate, deliveryDate, total, orderNumber: 1256 - index * 43,
-}));
-
 function normalizeOrder(invoice, index) {
   const status = invoice.orderSheet?.status || invoice.orderStatus || 'In Production';
   return {
@@ -26,11 +15,11 @@ function normalizeOrder(invoice, index) {
   };
 }
 
-export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack }) {
+export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack, onOpenOrder }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All Orders');
   const customerInvoices = sentInvoices.filter((invoice) => invoice.customer === customer.fullName);
-  const orders = (customerInvoices.length ? customerInvoices.map(normalizeOrder) : sampleOrders);
+  const orders = customerInvoices.map(normalizeOrder);
   const filtered = useMemo(() => orders.filter((order) => {
     const matchesSearch = `${order.invoiceNumber} ${order.item} ${order.status}`.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filter === 'All Orders'
@@ -142,7 +131,7 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
               />
             </label>
           </div>
-          <nav style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <nav className="os-filter-pills" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {['All Orders', 'Active', 'In Production', 'Ready for Collection', 'Completed', 'Cancelled'].map((item) => (
               <button
                 key={item}
@@ -161,7 +150,7 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
       </div>
 
       {/* Desktop table */}
-      <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #eee5da', background: '#fff' }}>
+      <div className="os-desktop-table" style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #eee5da', background: '#fff' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#faf7f3' }}>
@@ -222,11 +211,15 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
                 </td>
                 <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700, color: '#1a1611' }}>{money.format(order.total)}</td>
                 <td style={{ padding: '12px 14px' }}>
-                  <button style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    padding: '5px 10px', border: '1px solid #ddd5c8', borderRadius: 6,
-                    fontSize: 12, fontWeight: 600, background: '#fff', color: '#1a1611', cursor: 'pointer',
-                  }}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenOrder?.(order)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      padding: '5px 10px', border: '1px solid #ddd5c8', borderRadius: 6,
+                      fontSize: 12, fontWeight: 600, background: '#fff', color: '#1a1611', cursor: 'pointer',
+                    }}
+                  >
                     View Details
                   </button>
                 </td>
@@ -254,8 +247,9 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
                   <Package size={16} strokeWidth={1.8} style={{ color: '#c97b08' }} />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: '#c97b08' }}>{order.invoiceNumber}</div>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: '#1a1611' }}>{order.item}</div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: '#0f0b06' }}>{order.invoiceNumber}</div>
+                  <div style={{ fontSize: 11, color: '#8a7a6a' }}>Order #{order.orderNumber}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#3d352c', marginTop: 2 }}>{order.item}</div>
                   <div style={{ fontSize: 12, color: '#8a7a6a' }}>{order.description}</div>
                 </div>
               </div>
@@ -272,16 +266,25 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
               </div>
             </div>
             <div style={{ borderTop: '1px solid #f3ede5', padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '7px 14px', border: '1px solid #ddd5c8', borderRadius: 8,
-                fontSize: 13, fontWeight: 600, background: '#fff', color: '#1a1611', cursor: 'pointer',
-              }}>
+              <button
+                type="button"
+                onClick={() => onOpenOrder?.(order)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '7px 14px', border: '1px solid #ddd5c8', borderRadius: 8,
+                  fontSize: 13, fontWeight: 600, background: '#fff', color: '#1a1611', cursor: 'pointer',
+                }}
+              >
                 View Details <ChevronRight size={13} strokeWidth={2} />
               </button>
             </div>
           </div>
         ))}
+        {!filtered.length ? (
+          <div className="os-card" style={{ textAlign: 'center', padding: '32px 20px', color: '#8a7a6a', fontSize: 13 }}>
+            No orders match this view.
+          </div>
+        ) : null}
       </div>
 
       {/* Summary sidebar row */}

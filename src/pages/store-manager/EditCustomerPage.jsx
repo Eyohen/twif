@@ -29,15 +29,32 @@ export default function EditCustomerPage({ customer, onCancel, onSave }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
+  // Customers that only exist as a name on an invoice have no profile row yet,
+  // so the first save has to create one before the details can be stored.
+  const isInvoiceOnly = String(customer.id || '').startsWith('sent-');
+
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true); setMessage('');
     try {
-      const response = await api.patch(`/oms/customers/${customer.id}`, form);
+      let customerId = customer.id;
+
+      if (isInvoiceOnly) {
+        const created = await api.post('/oms/customers', {
+          fullName: form.fullName,
+          phone: form.phone,
+          email: form.email,
+          category: form.customerType,
+        });
+        customerId = created.data?.data?.customer?.id;
+        if (!customerId) throw new Error('Customer profile could not be created.');
+      }
+
+      const response = await api.patch(`/oms/customers/${customerId}`, form);
       const saved = response.data?.data?.customer;
-      onSave({ ...customer, ...form, ...(saved || {}), stores: [form.preferredStore] });
+      onSave({ ...customer, ...form, ...(saved || {}), id: customerId, stores: [form.preferredStore] });
     } catch (error) {
-      setMessage(error.response?.data?.message || 'Unable to save customer changes.');
+      setMessage(error.response?.data?.message || error.message || 'Unable to save customer changes.');
     } finally { setSaving(false); }
   };
 

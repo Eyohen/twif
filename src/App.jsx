@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors } from 'lucide-react';
 import { api } from './lib/api';
 import LoginPage from './pages/auth/LoginPage';
@@ -21,7 +21,8 @@ import {
   money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
   dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
   isInvoiceApproved, canShowJobInProduction, productionJobFromInvoice,
-  mergeJobsByInvoice, classNames,
+  mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid,
+  invoiceDocumentPayload, printInvoiceHtml,
 } from './utils/oms';
 
 const trackingBaseUrl = (
@@ -1353,12 +1354,48 @@ function OrdersView({ sentInvoices }) {
 }
 
 function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'All');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [openMenu, setOpenMenu] = useState(null);
+  const [rowNotice, setRowNotice] = useState('');
   const invoiceKpiRef = useRef(null);
+
+  // A dashboard tile can arrive with ?status= to preset the tab, or ?invoice=
+  // to open one invoice directly. The parameter is consumed so a later manual
+  // tab change is not undone by a re-render.
+  const requestedInvoice = searchParams.get('invoice');
+  useEffect(() => {
+    if (!requestedInvoice) return;
+    const match = sentInvoices.find((item) => item.invoiceNumber === requestedInvoice);
+    if (!match) return;
+    setSelectedInvoice(match);
+    setSearchParams({}, { replace: true });
+  }, [requestedInvoice, sentInvoices, setSearchParams]);
+
+  const downloadInvoicePdf = async (invoice) => {
+    setRowNotice('');
+    try {
+      const response = await api.post('/oms/invoices/html-preview', invoiceDocumentPayload(invoice), { responseType: 'text' });
+      printInvoiceHtml(response.data, invoice.invoiceNumber);
+    } catch (error) {
+      setRowNotice(error.response?.data?.message || 'Could not prepare that invoice PDF.');
+    }
+  };
+
+  const resendInvoiceEmail = async (invoice) => {
+    setRowNotice('');
+    if (!invoice.email) { setRowNotice(`${invoice.invoiceNumber} has no customer email on record.`); return; }
+    try {
+      await api.post('/oms/invoices/send-email', { ...invoiceDocumentPayload(invoice), recipientEmail: invoice.email, createdByName: currentRole?.name });
+      setRowNotice(`${invoice.invoiceNumber} was resent to ${invoice.email}.`);
+    } catch (error) {
+      setRowNotice(error.response?.data?.message || `Could not resend ${invoice.invoiceNumber}.`);
+    }
+  };
+
   const [activeInvoiceKpiDot, setActiveInvoiceKpiDot] = useState(0);
   const INVOICE_KPI_COUNT = 4;
   const handleInvoiceKpiScroll = () => {
@@ -1370,9 +1407,9 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
     const matchesSearch = `${invoice.invoiceNumber} ${invoice.customer} ${invoice.store} ${invoice.paymentStatus}`.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'All'
       || (statusFilter === 'Pending' && invoiceApprovalStatus(invoice) === 'Pending Accounts')
-      || (statusFilter === 'Approved' && isInvoiceApproved(invoice))
+      || (statusFilter === 'FullyPaid' && invoice.paymentStatus === 'Fully Paid')
       || (statusFilter === 'Partial' && invoice.paymentStatus === 'Partial Paid')
-      || (statusFilter === 'AwaitingPayment' && (invoice.paymentStatus === 'Not Paid' || invoice.paymentStatus === 'Awaiting Payment'));
+      || (statusFilter === 'AwaitingPayment' && isAwaitingPayment(invoice));
     return matchesSearch && matchesStatus;
   });
   const total = sentInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
@@ -1425,15 +1462,15 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
     );
   }
 
-  const fullyPaid = sentInvoices.filter((invoice) => invoice.paymentStatus === 'Fully Paid');
-  const awaitingPayment = sentInvoices.filter((invoice) => invoice.paymentStatus === 'Not Paid' || invoice.paymentStatus === 'Awaiting Payment');
+  const fullyPaid = sentInvoices.filter(isFullyPaid);
+  const awaitingPayment = sentInvoices.filter(isAwaitingPayment);
 
   const tabs = [
     { key: 'All', label: 'All', count: sentInvoices.length },
     { key: 'Pending', label: 'Awaiting Approval', count: pending.length },
     { key: 'AwaitingPayment', label: 'Awaiting Payment', count: awaitingPayment.length },
     { key: 'Partial', label: 'Partial Paid', count: partial.length },
-    { key: 'Approved', label: 'Fully Paid', count: fullyPaid.length },
+    { key: 'FullyPaid', label: 'Fully Paid', count: fullyPaid.length },
   ];
 
   return (
@@ -1458,10 +1495,10 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
       </div>
 
       <div className="kpi-carousel-wrap">
-        <section className="store-invoice-kpis" ref={invoiceKpiRef} onScroll={handleInvoiceKpiScroll}>
+        <section className="store-invoice-kpis os-kpi-row" ref={invoiceKpiRef} onScroll={handleInvoiceKpiScroll}>
           {[
             { icon: <FileText size={18} strokeWidth={1.5} />, label: 'Total Sent', value: sentInvoices.length, detail: money.format(total), tone: 'gold' },
-            { icon: <Clock size={18} strokeWidth={1.5} />, label: 'Awaiting Approval', value: pending.length, detail: 'Pending accounts review', tone: 'dark' },
+            { icon: <Clock size={18} strokeWidth={1.5} />, label: 'Awaiting Approval', value: pending.length, detail: 'Pending accounts review', tone: 'gold' },
             { icon: <CreditCard size={18} strokeWidth={1.5} />, label: 'Awaiting Payment', value: awaitingPayment.length, detail: 'Outstanding balances', tone: 'blue' },
             { icon: <CheckCircle size={18} strokeWidth={1.5} />, label: 'Fully Paid', value: fullyPaid.length, detail: 'Cleared invoices', tone: 'green' },
           ].map(({ icon, label, value, detail, tone }) => (
@@ -1473,16 +1510,23 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
             </article>
           ))}
         </section>
-        <div className="kpi-scroll-dots">
+        <div className="kpi-scroll-dots os-kpi-dots">
           {Array.from({ length: INVOICE_KPI_COUNT }, (_, i) => (
             <span key={i} className={activeInvoiceKpiDot === i ? 'dot-active' : ''} />
           ))}
         </div>
       </div>
 
+      {rowNotice ? (
+        <div className="os-row-notice" role="status">
+          <span>{rowNotice}</span>
+          <button type="button" onClick={() => setRowNotice('')} aria-label="Dismiss">×</button>
+        </div>
+      ) : null}
+
       <div className="os-card" style={{ overflow: 'visible' }}>
         <div className="os-card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
-          <nav style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+          <nav className="os-filter-pills" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
             {tabs.map((tab) => (
               <button
                 key={tab.key}
@@ -1541,7 +1585,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
         </div>
 
         <div className="os-card-body" style={{ padding: 0 }}>
-          <div style={{ overflowX: 'auto' }} className="si-table-wrap">
+          <div style={{ overflowX: 'auto' }} className="si-table-wrap os-desktop-table">
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
@@ -1569,7 +1613,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
                     onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
                   >
                     <td style={{ padding: '12px 14px', fontSize: 13 }}>
-                      <span style={{ fontWeight: 700, color: '#1a1611', fontFamily: 'monospace', fontSize: 12 }}>{invoice.invoiceNumber}</span>
+                      <span style={{ fontWeight: 800, color: '#0f0b06', fontSize: 13, letterSpacing: '0.01em' }}>{invoice.invoiceNumber}</span>
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 13 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -1582,7 +1626,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
                           {invoice.customer?.split(' ').map((part) => part[0]).join('').slice(0, 2)}
                         </div>
                         <div>
-                          <div style={{ fontWeight: 600, color: '#1a1611', fontSize: 13 }}>{invoice.customer}</div>
+                          <div style={{ fontWeight: 700, color: '#3d352c', fontSize: 13 }}>{invoice.customer}</div>
                           <div style={{ color: '#8a7a6a', fontSize: 11 }}>{invoice.store} Store</div>
                         </div>
                       </div>
@@ -1629,17 +1673,14 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
                         {openMenu === invoice.invoiceNumber && (
                           <div className="customer-action-menu" style={{ right: 0, left: 'auto' }}>
                             {[
-                              ['View Invoice', <Eye size={12} strokeWidth={2} />],
-                              ['Download PDF', <Download size={12} strokeWidth={2} />],
-                              ['Resend Email', <RefreshCw size={12} strokeWidth={2} />],
-                            ].map(([label, icon]) => (
+                              ['View Invoice', <Eye size={12} strokeWidth={2} />, () => { window.scrollTo(0, 0); setSelectedInvoice(invoice); }],
+                              ['Download PDF', <Download size={12} strokeWidth={2} />, () => downloadInvoicePdf(invoice)],
+                              ['Resend Email', <RefreshCw size={12} strokeWidth={2} />, () => resendInvoiceEmail(invoice)],
+                            ].map(([label, icon, action]) => (
                               <button
                                 key={label}
                                 type="button"
-                                onClick={() => {
-                                  setOpenMenu(null);
-                                  if (label === 'View Invoice') { window.scrollTo(0, 0); setSelectedInvoice(invoice); }
-                                }}
+                                onClick={() => { setOpenMenu(null); action(); }}
                               >
                                 <i style={{ display: 'flex' }}>{icon}</i>
                                 {label}
@@ -1660,7 +1701,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
             )}
           </div>
 
-          <div className="store-invoice-mobile-list">
+          <div className="store-invoice-mobile-list os-customers-mobile-list" style={{ padding: '0 14px 14px' }}>
             {filteredInvoices.map((invoice) => (
               <div
                 key={invoice.invoiceNumber}
@@ -1676,8 +1717,8 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                   <div>
-                    <div style={{ fontSize: 11, color: '#8a7a6a', fontFamily: 'monospace', marginBottom: 2 }}>{invoice.invoiceNumber}</div>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1611' }}>{invoice.customer}</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: '#0f0b06', marginBottom: 2 }}>{invoice.invoiceNumber}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#3d352c' }}>{invoice.customer}</div>
                     <div style={{ fontSize: 12, color: '#8a7a6a' }}>{invoice.store} Store</div>
                   </div>
                   <Status>{invoice.paymentStatus}</Status>
@@ -2463,9 +2504,9 @@ function NewInvoiceView({ currentRole, onInvoiceSent }) {
     return <div className="invoice-preview-page-v2">
       <header><button type="button" onClick={() => setPreviewMode(false)}>← &nbsp; Back to Invoice</button><div><small>INVOICE</small><strong>{form.invoiceNumber}</strong><Status>Not Sent Yet</Status></div></header>
       <section className="invoice-preview-title"><div><h2>{previewTab === 'invoice' ? 'Invoice Preview' : 'Email Preview'}</h2><p>This is how your {previewTab === 'invoice' ? 'invoice' : 'email'} will appear to the customer.</p></div><nav><button className={previewTab === 'invoice' ? 'active' : ''} onClick={() => setPreviewTab('invoice')}>Invoice Preview</button><button className={previewTab === 'email' ? 'active' : ''} onClick={() => setPreviewTab('email')}>Email Preview</button></nav></section>
-      {previewTab === 'invoice' ? <section className="invoice-document-preview"><div className="invoice-preview-tools"><button>−</button><span>100%</span><button>＋</button><button>Fit Width</button><span/><button onClick={() => window.print()}>⇩</button><button onClick={() => window.print()}>▣</button></div><iframe title="Invoice preview" srcDoc={previewHtml}/></section> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], ['Amount Due', money.format(balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div><button>Download Invoice PDF</button><button>Track Your Order</button></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>Balance Due</span><strong>{money.format(balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
+      {previewTab === 'invoice' ? <section className="invoice-document-preview"><div className="invoice-preview-tools"><button>−</button><span>100%</span><button>＋</button><button>Fit Width</button><span/><button onClick={() => printInvoiceHtml(previewHtml, form.invoiceNumber)}>⇩</button><button onClick={() => printInvoiceHtml(previewHtml, form.invoiceNumber)}>▣</button></div><iframe title="Invoice preview" srcDoc={previewHtml}/></section> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], ['Amount Due', money.format(balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div><button>Download Invoice PDF</button><button>Track Your Order</button></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>Balance Due</span><strong>{money.format(balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
       {message ? <div className="invoice-message">{message}</div> : null}
-      <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => window.print()}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
+      <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => printInvoiceHtml(previewHtml, form.invoiceNumber)}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
     </div>;
   }
 
@@ -2955,26 +2996,36 @@ function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
   );
 }
 
+// One invoice can cover several garments, so the per-garment fields live in a
+// list. The invoice, customer and store stay at the top level because they
+// belong to the order as a whole.
+const emptyOrderItem = () => ({
+  key: `item-${Math.random().toString(36).slice(2, 9)}`,
+  item: '',
+  pieces: 1,
+  delivery: todayIso(),
+  fabric: '',
+  fabricId: '',
+  fabricUnit: '',
+  measurements: '',
+  designNotes: '',
+  styleImages: ['', '', '', '', ''],
+});
+
+const emptySheetForm = () => ({
+  invoiceNumber: '',
+  trackingToken: '',
+  trackingUrl: '',
+  customer: '',
+  store: 'Lekki',
+  itemNote: '',
+  items: [emptyOrderItem()],
+});
+
 function OrderSheetView({ sentInvoices = [], onCreateJob }) {
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
-  const [sheetForm, setSheetForm] = useState({
-    invoiceNumber: '',
-    trackingToken: '',
-    trackingUrl: '',
-    customer: '',
-    item: '',
-    pieces: 1,
-    delivery: todayIso(),
-    store: 'Lekki',
-    fabric: '',
-    fabricId: '',
-    fabricUnit: '',
-    measurements: '',
-    designNotes: '',
-    itemNote: '',
-    styleImages: ['', '', '', '', ''],
-  });
+  const [sheetForm, setSheetForm] = useState(emptySheetForm);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -2982,17 +3033,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     api.get('/oms/fabrics')
       .then((response) => {
         if (!active) return;
-        const availableInventory = response.data?.data?.fabrics || [];
-        setInventory(availableInventory);
-        const firstAvailable = availableInventory.find((fabric) => toNumber(fabric.quantity) > 0);
-        if (firstAvailable) {
-          setSheetForm((current) => current.fabricId || current.fabric === 'Client supplied' ? current : ({
-            ...current,
-            fabric: firstAvailable.name,
-            fabricId: firstAvailable.id,
-            fabricUnit: firstAvailable.unit,
-          }));
-        }
+        setInventory(response.data?.data?.fabrics || []);
       })
       .catch(() => setMessage('Unable to load fabrics from inventory.'))
       .finally(() => active && setInventoryLoading(false));
@@ -3003,25 +3044,40 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     setSheetForm((current) => ({ ...current, [field]: value }));
   };
 
-  const updateStyleImage = (index, value) => {
+  const updateItem = (index, changes) => {
     setSheetForm((current) => ({
       ...current,
-      styleImages: current.styleImages.map((image, imageIndex) => (imageIndex === index ? value : image)),
+      items: current.items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...changes } : item)),
     }));
   };
 
-  const selectFabric = (fabricId) => {
+  const addItem = () => setSheetForm((current) => ({ ...current, items: [...current.items, emptyOrderItem()] }));
+
+  const removeItem = (index) => setSheetForm((current) => ({
+    ...current,
+    items: current.items.length > 1 ? current.items.filter((_, itemIndex) => itemIndex !== index) : current.items,
+  }));
+
+  const updateStyleImage = (index, imageIndex, value) => {
+    setSheetForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIdx) => (itemIdx === index
+        ? { ...item, styleImages: item.styleImages.map((image, i) => (i === imageIndex ? value : image)) }
+        : item)),
+    }));
+  };
+
+  const selectFabric = (index, fabricId) => {
     if (fabricId === 'client-supplied') {
-      setSheetForm((current) => ({ ...current, fabric: 'Client supplied', fabricId: '', fabricUnit: '' }));
+      updateItem(index, { fabric: 'Client supplied', fabricId: '', fabricUnit: '' });
       return;
     }
     const selected = inventory.find((fabric) => fabric.id === fabricId);
-    setSheetForm((current) => ({
-      ...current,
+    updateItem(index, {
       fabric: selected?.name || '',
       fabricId: selected?.id || '',
       fabricUnit: selected?.unit || '',
-    }));
+    });
   };
 
   const selectInvoice = (invoiceNumber) => {
@@ -3032,28 +3088,55 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     }
     const resolvedToken = invoice.trackingToken || trackingTokenSeed();
 
+    // Prefill one garment row per line on the invoice, so a five-item invoice
+    // does not have to be re-typed by hand.
+    const invoiceItems = Array.isArray(invoice.items) && invoice.items.length ? invoice.items : null;
+
     setSheetForm((current) => ({
       ...current,
       invoiceNumber,
       trackingToken: resolvedToken,
       trackingUrl: invoice.trackingUrl || trackingUrlForToken(resolvedToken),
       customer: invoice.customer || '',
-      item: invoice.item || current.item,
-      pieces: invoice.pieces || current.pieces,
-      delivery: dateInputValue(invoice.deliveryDate, current.delivery),
       store: invoice.store || current.store,
       itemNote: invoice.itemNote || current.itemNote,
-      designNotes: invoice.itemNote || current.designNotes,
+      items: invoiceItems
+        ? invoiceItems.map((line) => ({
+          ...emptyOrderItem(),
+          item: line.description || line.name || '',
+          pieces: toNumber(line.quantity) || 1,
+          delivery: dateInputValue(invoice.deliveryDate),
+          designNotes: line.note || invoice.itemNote || '',
+        }))
+        : current.items.map((item, index) => (index === 0 ? {
+          ...item,
+          item: invoice.item || item.item,
+          pieces: invoice.pieces || item.pieces,
+          delivery: dateInputValue(invoice.deliveryDate, item.delivery),
+          designNotes: invoice.itemNote || item.designNotes,
+        } : item)),
     }));
   };
 
   const submitOrderSheet = (event) => {
     event.preventDefault();
-    if (!sheetForm.invoiceNumber || !sheetForm.customer.trim() || !sheetForm.item.trim() || !sheetForm.fabric) {
-      setMessage('Select an invoice, confirm the customer and item, and choose a fabric before releasing the order sheet.');
+    const items = sheetForm.items.map((item) => ({ ...item, item: item.item.trim() }));
+
+    if (!sheetForm.invoiceNumber || !sheetForm.customer.trim()) {
+      setMessage('Select an invoice and confirm the customer before releasing the order sheet.');
+      return;
+    }
+    const incomplete = items.findIndex((item) => !item.item || !item.fabric);
+    if (incomplete !== -1) {
+      setMessage(`Item ${incomplete + 1} needs a garment name and a fabric before the order sheet can be released.`);
       return;
     }
 
+    const styleImagesFor = (item) => item.styleImages
+      .map((image, index) => ({ label: `Image ${index + 1}`, name: image }))
+      .filter((image) => image.name);
+
+    const [firstItem] = items;
     const orderSheet = {
       id: `JOB-${Date.now().toString().slice(-6)}`,
       invoiceNumber: sheetForm.invoiceNumber,
@@ -3062,28 +3145,30 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       customer: sheetForm.customer.trim(),
       phone: '',
       store: sheetForm.store,
-      item: sheetForm.item.trim(),
-      pieces: toNumber(sheetForm.pieces) || 1,
-      delivery: sheetForm.delivery,
       amount: 0,
       paid: 0,
       status: 'Order Sheet Confirmed',
       requiresAccountApproval: true,
       payment: 'Fully Paid',
-      fabric: sheetForm.fabric,
-      fabricId: sheetForm.fabricId,
-      fabricUnit: sheetForm.fabricUnit,
       tailor: 'Unassigned',
-      images: sheetForm.styleImages.filter(Boolean).length,
-      styleImages: sheetForm.styleImages.filter(Boolean).map((image, index) => ({
-        label: `Image ${index + 1}`,
-        name: image,
-      })),
-      measurements: sheetForm.measurements,
-      designNotes: sheetForm.designNotes,
-      note: sheetForm.designNotes || sheetForm.itemNote || 'Order sheet released by Store Manager.',
       productionNote: '',
       fabricConfirmed: false,
+      // Every garment on the order, each with its own fabric and measurements.
+      items: items.map(({ key, ...item }) => ({ ...item, styleImages: styleImagesFor(item) })),
+      // The first garment is also mirrored onto the top level so the production
+      // queue, tailor task list and customer tracking page keep working
+      // unchanged for the common single-item order.
+      item: firstItem.item,
+      pieces: toNumber(firstItem.pieces) || 1,
+      delivery: firstItem.delivery,
+      fabric: firstItem.fabric,
+      fabricId: firstItem.fabricId,
+      fabricUnit: firstItem.fabricUnit,
+      measurements: firstItem.measurements,
+      designNotes: firstItem.designNotes,
+      images: styleImagesFor(firstItem).length,
+      styleImages: styleImagesFor(firstItem),
+      note: firstItem.designNotes || sheetForm.itemNote || 'Order sheet released by Store Manager.',
       assignedAt: new Intl.DateTimeFormat('en-GB', {
         day: '2-digit',
         month: 'short',
@@ -3099,24 +3184,8 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       orderSheet,
     }).catch(() => {});
 
-    setMessage('Order sheet saved. It will become visible to Production after Accounts approves the invoice.');
-    setSheetForm({
-      invoiceNumber: '',
-      trackingToken: '',
-      trackingUrl: '',
-      customer: '',
-      item: '',
-      pieces: 1,
-      delivery: todayIso(),
-      store: 'Lekki',
-      fabric: '',
-      fabricId: '',
-      fabricUnit: '',
-      measurements: '',
-      designNotes: '',
-      itemNote: '',
-      styleImages: ['', '', '', '', ''],
-    });
+    setMessage(`Order sheet saved with ${items.length} item${items.length === 1 ? '' : 's'}. It will become visible to Production after Accounts approves the invoice.`);
+    setSheetForm(emptySheetForm());
   };
 
   const linkedInvoice = sentInvoices.find((inv) => inv.invoiceNumber === sheetForm.invoiceNumber);
@@ -3127,8 +3196,8 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
         <div className="os-page-title">
           <ClipboardList size={22} strokeWidth={1.5} />
           <div>
-            <h2>New Order Sheet</h2>
-            <p>Fill in the details and release to Production when ready.</p>
+            <h2>Order Sheet</h2>
+            <p>Create the order sheets here.</p>
           </div>
         </div>
         {sheetForm.invoiceNumber && (
@@ -3176,35 +3245,13 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
           <div className="os-card">
             <div className="os-card-head">
               <span className="os-step-num">2</span>
-              <div><strong>Customer &amp; Item</strong><p>Confirm who this order is for and what&apos;s being made</p></div>
+              <div><strong>Customer &amp; Store</strong><p>Confirm who this order is for</p></div>
               <Users size={16} strokeWidth={1.5} className="os-card-icon" />
             </div>
             <div className="os-card-body os-grid-2">
               <label className="os-field">
                 <span>Customer Name</span>
                 <input value={sheetForm.customer} onChange={(event) => updateSheetForm('customer', event.target.value)} placeholder="Full name" />
-              </label>
-              <label className="os-field">
-                <span>Item / Garment</span>
-                <input value={sheetForm.item} onChange={(event) => updateSheetForm('item', event.target.value)} placeholder="e.g. Three-piece suit" />
-              </label>
-            </div>
-          </div>
-
-          <div className="os-card">
-            <div className="os-card-head">
-              <span className="os-step-num">3</span>
-              <div><strong>Order Details</strong><p>Pieces, delivery date and store location</p></div>
-              <Package size={16} strokeWidth={1.5} className="os-card-icon" />
-            </div>
-            <div className="os-card-body os-grid-3">
-              <label className="os-field">
-                <span>No. of Pieces</span>
-                <input type="number" min="1" value={sheetForm.pieces} onChange={(event) => updateSheetForm('pieces', event.target.value)} />
-              </label>
-              <label className="os-field">
-                <span>Delivery Date</span>
-                <input type="date" value={sheetForm.delivery} onChange={(event) => updateSheetForm('delivery', event.target.value)} />
               </label>
               <label className="os-field">
                 <span>Store</span>
@@ -3216,67 +3263,81 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
             </div>
           </div>
 
-          <div className="os-card">
-            <div className="os-card-head">
-              <span className="os-step-num">4</span>
-              <div><strong>Fabric &amp; Measurements</strong><p>Select fabric from inventory and record customer measurements</p></div>
-              <Activity size={16} strokeWidth={1.5} className="os-card-icon" />
-            </div>
-            <div className="os-card-body os-grid-2">
-              <label className="os-field">
-                <span>Fabric{inventoryLoading ? ' (loading…)' : ''}</span>
-                <select
-                  value={sheetForm.fabric === 'Client supplied' ? 'client-supplied' : sheetForm.fabricId}
-                  onChange={(event) => selectFabric(event.target.value)}
-                  disabled={inventoryLoading}
-                  required
-                >
-                  <option value="">{inventoryLoading ? 'Loading inventory...' : 'Select fabric...'}</option>
-                  <option value="client-supplied">Client supplied</option>
-                  {inventory.map((fabric) => (
-                    <option key={fabric.id} value={fabric.id} disabled={toNumber(fabric.quantity) <= 0}>
-                      {fabric.name} ({toNumber(fabric.quantity)} {fabric.unit}){toNumber(fabric.quantity) <= 0 ? ' · Out of stock' : ''}
-                    </option>
-                  ))}
-                </select>
-                {sheetForm.fabric && (
-                  <span className="os-fabric-hint">
-                    <Package size={11} />{sheetForm.fabric === 'Client supplied' ? 'Customer will provide their own fabric' : `From inventory · ${sheetForm.fabricUnit || 'rolls'}`}
-                  </span>
-                )}
-              </label>
-              <label className="os-field os-field-full">
-                <span>Measurements</span>
-                <textarea value={sheetForm.measurements} onChange={(event) => updateSheetForm('measurements', event.target.value)} placeholder="Chest, waist, inseam, sleeve, shoulder, neck…" rows={3} />
-              </label>
-            </div>
-          </div>
+          {sheetForm.items.map((orderItem, index) => (
+            <div className="os-card os-item-card" key={orderItem.key}>
+              <div className="os-card-head">
+                <span className="os-step-num">{index + 1}</span>
+                <div>
+                  <strong>Item {index + 1}</strong>
+                  <p>Garment, fabric, measurements and design notes for this piece</p>
+                </div>
+                {sheetForm.items.length > 1 ? (
+                  <button type="button" className="os-item-remove" onClick={() => removeItem(index)}>
+                    <Trash2 size={13} strokeWidth={1.8} /> Remove
+                  </button>
+                ) : <Package size={16} strokeWidth={1.5} className="os-card-icon" />}
+              </div>
 
-          <div className="os-card">
-            <div className="os-card-head">
-              <span className="os-step-num">5</span>
-              <div><strong>Design Notes &amp; Style Images</strong><p>Internal notes for Production and optional reference images</p></div>
-              <Edit2 size={16} strokeWidth={1.5} className="os-card-icon" />
-            </div>
-            <div className="os-card-body">
-              <label className="os-field os-field-full">
-                <span>Design Notes</span>
-                <textarea value={sheetForm.designNotes} onChange={(event) => updateSheetForm('designNotes', event.target.value)} placeholder="Internal notes for the Production team — style, finishing, special instructions…" rows={3} />
-              </label>
-              <div className="os-field os-field-full">
-                <span className="os-field-label">Style Images <em>(optional — filenames or reference notes)</em></span>
-                <div className="os-image-grid">
-                  {sheetForm.styleImages.map((image, index) => (
-                    <label key={`style-image-${index}`} className={`os-image-slot ${image ? 'os-image-slot-filled' : ''}`}>
-                      <Plus size={16} strokeWidth={1.5} />
-                      <span>Image {index + 1}</span>
-                      <input value={image} onChange={(event) => updateStyleImage(index, event.target.value)} placeholder="Filename or note" />
-                    </label>
-                  ))}
+              <div className="os-card-body os-grid-3">
+                <label className="os-field">
+                  <span>Item / Garment</span>
+                  <input value={orderItem.item} onChange={(event) => updateItem(index, { item: event.target.value })} placeholder="e.g. Three-piece suit" />
+                </label>
+                <label className="os-field">
+                  <span>No. of Pieces</span>
+                  <input type="number" min="1" value={orderItem.pieces} onChange={(event) => updateItem(index, { pieces: event.target.value })} />
+                </label>
+                <label className="os-field">
+                  <span>Delivery Date</span>
+                  <input type="date" value={orderItem.delivery} onChange={(event) => updateItem(index, { delivery: event.target.value })} />
+                </label>
+              </div>
+
+              <div className="os-card-body os-grid-2" style={{ paddingTop: 0 }}>
+                <label className="os-field">
+                  <span>Fabric{inventoryLoading ? ' (loading…)' : ''}</span>
+                  <select
+                    value={orderItem.fabric === 'Client supplied' ? 'client-supplied' : orderItem.fabricId}
+                    onChange={(event) => selectFabric(index, event.target.value)}
+                    disabled={inventoryLoading}
+                  >
+                    <option value="">{inventoryLoading ? 'Loading inventory...' : 'Select fabric...'}</option>
+                    <option value="client-supplied">Client supplied</option>
+                    {inventory.map((fabric) => (
+                      <option key={fabric.id} value={fabric.id} disabled={toNumber(fabric.quantity) <= 0}>
+                        {fabric.name} ({toNumber(fabric.quantity)} {fabric.unit}){toNumber(fabric.quantity) <= 0 ? ' · Out of stock' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {orderItem.fabric && (
+                    <span className="os-fabric-hint">
+                      <Package size={11} />{orderItem.fabric === 'Client supplied' ? 'Customer will provide their own fabric' : `From inventory · ${orderItem.fabricUnit || 'rolls'}`}
+                    </span>
+                  )}
+                </label>
+                <label className="os-field os-field-full">
+                  <span>Measurements</span>
+                  <textarea value={orderItem.measurements} onChange={(event) => updateItem(index, { measurements: event.target.value })} placeholder="Chest, waist, inseam, sleeve, shoulder, neck…" rows={3} />
+                </label>
+                <label className="os-field os-field-full">
+                  <span>Design Notes</span>
+                  <textarea value={orderItem.designNotes} onChange={(event) => updateItem(index, { designNotes: event.target.value })} placeholder="Internal notes for the Production team — style, finishing, special instructions…" rows={3} />
+                </label>
+                <div className="os-field os-field-full">
+                  <span className="os-field-label">Style Images <em>(optional — filenames or reference notes)</em></span>
+                  <div className="os-image-grid">
+                    {orderItem.styleImages.map((image, imageIndex) => (
+                      <label key={`style-image-${index}-${imageIndex}`} className={`os-image-slot ${image ? 'os-image-slot-filled' : ''}`}>
+                        <Plus size={16} strokeWidth={1.5} />
+                        <span>Image {imageIndex + 1}</span>
+                        <input value={image} onChange={(event) => updateStyleImage(index, imageIndex, event.target.value)} placeholder="Filename or note" />
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          ))}
 
           {message ? (
             <div className={`os-message ${message.startsWith('Order sheet saved') ? 'os-msg-success' : 'os-msg-error'}`}>
@@ -3284,6 +3345,11 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
               <span>{message}</span>
             </div>
           ) : null}
+
+          <button className="os-add-item-btn" type="button" onClick={addItem}>
+            <Plus size={16} strokeWidth={2} />
+            Add more items
+          </button>
 
           <button className="os-release-btn" type="submit">
             <CheckCircle size={17} strokeWidth={2} />
@@ -3302,17 +3368,21 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
               <dd>{sheetForm.invoiceNumber || <span className="os-empty">Not linked</span>}</dd>
               <dt>Customer</dt>
               <dd>{sheetForm.customer || <span className="os-empty">—</span>}</dd>
-              <dt>Item</dt>
-              <dd>{sheetForm.item || <span className="os-empty">—</span>}</dd>
-              <dt>Pieces</dt>
-              <dd>{sheetForm.pieces}</dd>
-              <dt>Delivery</dt>
-              <dd>{sheetForm.delivery || <span className="os-empty">—</span>}</dd>
               <dt>Store</dt>
               <dd>{sheetForm.store}</dd>
-              <dt>Fabric</dt>
-              <dd>{sheetForm.fabric || <span className="os-empty">Not selected</span>}</dd>
+              <dt>Items</dt>
+              <dd>{sheetForm.items.length}</dd>
+              <dt>Total pieces</dt>
+              <dd>{sheetForm.items.reduce((sum, item) => sum + (toNumber(item.pieces) || 1), 0)}</dd>
             </dl>
+            <ol className="os-summary-items">
+              {sheetForm.items.map((item, index) => (
+                <li key={item.key}>
+                  <strong>{item.item || <span className="os-empty">Item {index + 1} not named</span>}</strong>
+                  <small>{(toNumber(item.pieces) || 1)} pc · {item.fabric || 'fabric not selected'} · {item.delivery || 'no date'}</small>
+                </li>
+              ))}
+            </ol>
           </div>
           <div className="os-sidebar-note">
             <AlertTriangle size={13} strokeWidth={1.5} />
@@ -3739,6 +3809,28 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                   </div>
                 ))}
               </div>
+
+              {/* An invoice can cover several garments; list them all so nothing
+                  beyond the first item is missed on the floor. */}
+              {jobModal.items?.length > 1 ? (
+                <div className="job-item-list">
+                  <div className="job-item-list-label">{jobModal.items.length} items on this order</div>
+                  {jobModal.items.map((line, index) => (
+                    <div key={`${line.item}-${index}`} className="job-item-row">
+                      <span className="job-item-index">{index + 1}</span>
+                      <div>
+                        <strong>{line.item || 'Unnamed item'}</strong>
+                        <small>
+                          {toNumber(line.pieces) || 1} {(toNumber(line.pieces) || 1) === 1 ? 'piece' : 'pieces'}
+                          {line.fabric ? ` · ${line.fabric}` : ''}
+                          {line.delivery ? ` · due ${new Date(`${line.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}` : ''}
+                        </small>
+                        {line.designNotes ? <small className="job-item-note">{line.designNotes}</small> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
               {/* Production note display */}
               {(jobModal.designNotes || jobModal.productionNote || jobModal.note) ? (
@@ -5284,12 +5376,47 @@ function ReportsView({ role }) {
   );
 }
 
-function NotificationPanel({ role, currentRole }) {
+// Where each notification takes you when tapped. The metadata written by the
+// API carries the event name and, where relevant, the invoice it refers to.
+const notificationDestination = (item, role) => {
+  const { event, invoiceNumber } = item?.metadata || {};
+  const invoiceParams = invoiceNumber ? { invoice: invoiceNumber } : undefined;
+
+  switch (event) {
+    case 'invoice_created':
+    case 'account_approval':
+      return { view: 'Invoices', params: invoiceParams };
+    case 'order_sheet_created':
+    case 'order_sheet_released':
+    case 'production_ready':
+      return { view: role === 'store_manager' ? 'Orders' : 'Production' };
+    case 'tailor_assigned':
+      return { view: role === 'tailor' ? 'My Tasks' : 'Production' };
+    case 'order_ready':
+      return { view: role === 'store_manager' ? 'Orders' : 'Production' };
+    case 'inventory_created':
+    case 'inventory_edit_requested':
+    case 'inventory_edit_approved':
+    case 'inventory_edit_rejected':
+    case 'fabric_allocated':
+    case 'low_stock':
+      return { view: 'Inventory' };
+    case 'customer_updated':
+    case 'customer_archived':
+      return { view: 'Customers' };
+    default:
+      return invoiceNumber ? { view: 'Invoices', params: invoiceParams } : null;
+  }
+};
+
+function NotificationPanel({ role, currentRole, onNavigate }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState('All');
   const [sortOrder, setSortOrder] = useState('Newest first');
+  const [error, setError] = useState('');
   const displayName = currentRole?.name?.split(' (')[0] || '';
+  const visibleNavForRole = navByRole[role] || [];
 
   useEffect(() => {
     api.get('/oms/notifications', { params: { role, name: displayName } })
@@ -5299,9 +5426,26 @@ function NotificationPanel({ role, currentRole }) {
   }, [role, displayName]);
 
   const markAllRead = async () => {
-    await api.patch('/oms/notifications/read-all', { role, name: displayName });
-    setItems((current) => current.map((item) => ({ ...item, isRead: true })));
-    window.dispatchEvent(new Event('oms-notifications-read'));
+    setError('');
+    try {
+      await api.patch('/oms/notifications/read-all', { role, name: displayName });
+      setItems((current) => current.map((item) => ({ ...item, isRead: true })));
+      window.dispatchEvent(new Event('oms-notifications-read'));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Could not mark these as read. Try again.');
+    }
+  };
+
+  const openNotification = (item) => {
+    const destination = notificationDestination(item, role);
+    // Only navigate somewhere this role can actually reach.
+    if (!destination || !visibleNavForRole.includes(destination.view)) return;
+    onNavigate?.(destination.view, destination.params);
+  };
+
+  const isActionable = (item) => {
+    const destination = notificationDestination(item, role);
+    return Boolean(destination && visibleNavForRole.includes(destination.view));
   };
 
   if (role === 'store_manager' || role === 'accounts') {
@@ -5329,6 +5473,7 @@ function NotificationPanel({ role, currentRole }) {
     return (
       <section className="store-notifications">
         <header><div><span>Inbox</span><h2>You have {counts.Unread} unread notifications</h2></div><button type="button" onClick={markAllRead}>✓ &nbsp; Mark all as read</button></header>
+        {error ? <div className="os-row-notice" role="status"><span>{error}</span></div> : null}
         <div className="store-notification-filters">
           <nav>{categories.map((name) => <button type="button" className={category === name ? 'active' : ''} onClick={() => setCategory(name)} key={name}>{name} <span>{counts[name]}</span></button>)}</nav>
           <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}><option>Newest first</option><option>Oldest first</option></select>
@@ -5336,7 +5481,15 @@ function NotificationPanel({ role, currentRole }) {
         <div className="store-notification-list">
           {loading ? <div className="invoice-preview-empty">Loading notifications...</div> : visibleItems.length ? visibleItems.map((item) => {
             const itemCategory = notificationCategory(item);
-            return <article className={item.isRead ? 'read' : 'unread'} key={item.id}>
+            const actionable = isActionable(item);
+            return <article
+              className={classNames(item.isRead ? 'read' : 'unread', actionable && 'notification-actionable')}
+              key={item.id}
+              role={actionable ? 'button' : undefined}
+              tabIndex={actionable ? 0 : undefined}
+              onClick={actionable ? () => openNotification(item) : undefined}
+              onKeyDown={actionable ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openNotification(item); } } : undefined}
+            >
               <i className="unread-dot"/><span className={`notification-type-icon type-${itemCategory.toLowerCase()}`}>{iconFor(itemCategory)}</span>
               <div><strong>{item.title || item.subject || item.message?.split(/[.!]/)[0] || 'Notification'}</strong><p>{item.message}</p></div>
               <b className={`notification-category type-${itemCategory.toLowerCase()}`}>{itemCategory === 'Orders' ? 'Order' : itemCategory === 'Payments' ? 'Payment' : itemCategory === 'Invoices' ? 'Invoice' : itemCategory}</b>
@@ -5353,14 +5506,25 @@ function NotificationPanel({ role, currentRole }) {
       <SectionHeader eyebrow="Inbox" title="Notifications">
         {items.some((item) => !item.isRead) ? <button type="button" onClick={markAllRead}>Mark all read</button> : null}
       </SectionHeader>
+      {error ? <div className="os-row-notice" role="status"><span>{error}</span></div> : null}
       <div className="notification-list">
-        {loading ? <div className="invoice-preview-empty">Loading notifications...</div> : items.length ? items.map((item) => (
-          <article className={item.isRead ? 'notification-read' : 'notification-unread'} key={item.id}>
-            <span>{item.channel}</span>
-            <p>{item.message}</p>
-            <small>{new Date(item.createdAt).toLocaleString('en-GB')}</small>
-          </article>
-        )) : <div className="invoice-preview-empty">No notifications for this account yet.</div>}
+        {loading ? <div className="invoice-preview-empty">Loading notifications...</div> : items.length ? items.map((item) => {
+          const actionable = isActionable(item);
+          return (
+            <article
+              className={classNames(item.isRead ? 'notification-read' : 'notification-unread', actionable && 'notification-actionable')}
+              key={item.id}
+              role={actionable ? 'button' : undefined}
+              tabIndex={actionable ? 0 : undefined}
+              onClick={actionable ? () => openNotification(item) : undefined}
+              onKeyDown={actionable ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openNotification(item); } } : undefined}
+            >
+              <span>{item.channel}</span>
+              <p>{item.message}</p>
+              <small>{new Date(item.createdAt).toLocaleString('en-GB')}</small>
+            </article>
+          );
+        }) : <div className="invoice-preview-empty">No notifications for this account yet.</div>}
       </div>
     </section>
   );
@@ -5725,7 +5889,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Reports') return <ReportsView role={role} />;
   if (activeView === 'My Tasks') return <MyTasksPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
   if (activeView === 'Weekly Log') return <WeeklyLogPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} />;
-  if (activeView === 'Notifications') return <NotificationPanel role={role} currentRole={viewProps.currentRole} />;
+  if (activeView === 'Notifications') return <NotificationPanel role={role} currentRole={viewProps.currentRole} onNavigate={viewProps.onNavigate} />;
   return <Overview role={role} />;
 }
 
@@ -5790,6 +5954,16 @@ function App() {
       })
       .catch(() => {});
   }, [signedIn, signedInAccount]);
+
+  // React Router keeps the previous scroll offset when the view changes, which
+  // lands you part-way down — or at the bottom of — the page you just opened.
+  // The rAF re-run covers the browser restoring its own offset after paint.
+  useEffect(() => {
+    const toTop = () => window.scrollTo(0, 0);
+    toTop();
+    const frame = window.requestAnimationFrame(toTop);
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!signedIn || location.pathname.startsWith('/c/')) return;
@@ -5882,9 +6056,12 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [userMenuOpen]);
 
-  const openView = (view) => {
+  // `params` lets a dashboard tile land on a view with a filter already applied
+  // — e.g. Awaiting Payment opens Invoices already narrowed to unpaid ones.
+  const openView = (view, params) => {
     setMobileMenuOpen(false);
-    navigate(`/${roleSlug(role)}/${viewSlug(view)}`);
+    const query = params ? `?${new URLSearchParams(params).toString()}` : '';
+    navigate(`/${roleSlug(role)}/${viewSlug(view)}${query}`);
   };
 
   const profileMatch = window.location.pathname.match(/^\/c\/([^/?#]+)\/profile\/?$/);
@@ -5979,7 +6156,7 @@ function App() {
             {role === 'owner' && activeView === 'Overview' ? <p className="topbar-subtitle">Real-time summary of your business performance and activity.</p> : null}
             {role === 'tailor' && activeView === 'My Tasks' ? <p className="topbar-subtitle">Jobs assigned to you. Start work and mark ready when done.</p> : null}
             {role === 'tailor' && activeView === 'Weekly Log' ? <p className="topbar-subtitle">Track your completed work and view your weekly performance.</p> : null}
-            {role === 'store_manager' && activeView === 'Overview' ? <p className="topbar-subtitle">Good morning, {currentRole?.name?.split(' (')[0] || 'Store Manager'}! Here’s what’s happening in your store today.</p> : null}
+            {role === 'store_manager' && activeView === 'Overview' ? <p className="topbar-subtitle">Good morning, {currentRole?.name?.split(' (')[0] || 'Store Manager'}. Welcome to the store!</p> : null}
             {role === 'store_manager' && activeView === 'Customers' ? <p className="topbar-subtitle">Manage customer profiles and create new orders.</p> : null}
           </div>
           <div className="topbar-actions">

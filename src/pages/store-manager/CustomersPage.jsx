@@ -1,22 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Users, UserCheck, Ruler, Calendar, Search, Plus, ChevronRight, User, FileText, Package, Edit2, Trash2, Eye } from 'lucide-react';
 import { api } from '../../lib/api';
 import CustomerProfilePage from './CustomerProfilePage';
 import EditCustomerPage from './EditCustomerPage';
 import MeasurementsPage from './MeasurementsPage';
 import CustomerOrdersPage from './CustomerOrdersPage';
+import OrderDetailsPage from './OrderDetailsPage';
 
 const KPI_COUNT = 4;
 
+const SORT_OPTIONS = ['Name (A–Z)', 'Name (Z–A)', 'Newest first', 'Oldest first'];
+
 export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [customers, setCustomers] = useState([]);
   const [search, setSearch] = useState('');
-  const [segment, setSegment] = useState('All Customers');
+  const [segment, setSegment] = useState(searchParams.get('filter') || 'All Customers');
+  const [sortOrder, setSortOrder] = useState('Name (A–Z)');
   const [openMenuId, setOpenMenuId] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [measurementCustomer, setMeasurementCustomer] = useState(null);
   const [ordersCustomer, setOrdersCustomer] = useState(null);
+  const [openOrder, setOpenOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [creating, setCreating] = useState(false);
@@ -68,6 +75,15 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const byName = (customer) => String(customer.fullName || '').trim().toLowerCase();
+    const byDate = (customer) => new Date(customer.createdAt || 0).getTime();
+    const comparators = {
+      'Name (A–Z)': (a, b) => byName(a).localeCompare(byName(b)),
+      'Name (Z–A)': (a, b) => byName(b).localeCompare(byName(a)),
+      'Newest first': (a, b) => byDate(b) - byDate(a),
+      'Oldest first': (a, b) => byDate(a) - byDate(b),
+    };
+
     return customers.filter((customer) => {
       const matchesSearch = !query || [customer.fullName, customer.phone, customer.email, ...(customer.stores || [])].some((value) => String(value || '').toLowerCase().includes(query));
       const matchesSegment = segment === 'All Customers'
@@ -76,8 +92,8 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
         || (segment === 'Measurements Saved' && customer.measurementsAdded)
         || (segment === 'No Measurements' && !customer.measurementsAdded);
       return matchesSearch && matchesSegment;
-    });
-  }, [customers, search, segment]);
+    }).sort(comparators[sortOrder] || comparators['Name (A–Z)']);
+  }, [customers, search, segment, sortOrder]);
 
   if (editingCustomer) {
     return <EditCustomerPage customer={editingCustomer} onCancel={() => setEditingCustomer(null)} onSave={(updated) => {
@@ -92,11 +108,24 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
   }
 
   if (ordersCustomer) {
-    return <CustomerOrdersPage customer={ordersCustomer} sentInvoices={sentInvoices} onBack={() => setOrdersCustomer(null)} />;
+    return <CustomerOrdersPage customer={ordersCustomer} sentInvoices={sentInvoices} onBack={() => setOrdersCustomer(null)} onOpenOrder={(order) => setOpenOrder(order)} />;
+  }
+
+  if (openOrder) {
+    return <OrderDetailsPage order={{ ...openOrder, job: openOrder.orderSheet || {} }} onBack={() => setOpenOrder(null)} />;
   }
 
   if (selectedCustomer) {
-    return <CustomerProfilePage customer={selectedCustomer} sentInvoices={sentInvoices} onBack={() => setSelectedCustomer(null)} onEdit={() => setEditingCustomer(selectedCustomer)} onViewOrders={() => setOrdersCustomer(selectedCustomer)} />;
+    return (
+      <CustomerProfilePage
+        customer={selectedCustomer}
+        sentInvoices={sentInvoices}
+        onBack={() => setSelectedCustomer(null)}
+        onEdit={() => setEditingCustomer(selectedCustomer)}
+        onViewOrders={() => setOrdersCustomer(selectedCustomer)}
+        onOpenOrder={(invoice) => setOpenOrder(invoice)}
+      />
+    );
   }
 
   const actionMenuItems = [
@@ -175,10 +204,15 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
                 ))}
               </select>
             </label>
+            <label className="os-field" style={{ minWidth: 170 }}>
+              <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} aria-label="Sort customers">
+                {SORT_OPTIONS.map((item) => <option key={item} value={item}>{`Sort: ${item}`}</option>)}
+              </select>
+            </label>
           </div>
 
           {/* Tab pills */}
-          <nav style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <nav className="os-filter-pills" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {['All Customers', 'Returning', 'New', 'Measurements Saved', 'No Measurements'].map((item) => (
               <button
                 key={item}
@@ -207,7 +241,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
       ) : (
         <>
           {/* Desktop table */}
-          <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #eee5da', background: '#fff', display: 'none' }} className="os-customers-table-wrap">
+          <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #eee5da', background: '#fff' }} className="os-customers-table-wrap os-desktop-table">
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#faf7f3' }}>
@@ -229,12 +263,12 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
                       <td style={{ padding: '12px 14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{
-                            width: 34, height: 34, borderRadius: '50%', background: '#1a1611',
+                            width: 34, height: 34, borderRadius: '50%', background: '#0f0b06',
                             color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 12, fontWeight: 700, flexShrink: 0,
+                            fontSize: 12, fontWeight: 800, flexShrink: 0,
                           }}>{initials}</div>
                           <div>
-                            <div style={{ fontWeight: 600, fontSize: 13, color: '#1a1611' }}>{customer.fullName}</div>
+                            <div style={{ fontWeight: 800, fontSize: 14, color: '#0f0b06' }}>{customer.fullName}</div>
                             <div style={{ fontSize: 11, color: '#8a7a6a' }}>
                               Since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : '2026'}
                             </div>
@@ -303,12 +337,12 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
                   <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{
-                        width: 42, height: 42, borderRadius: '50%', background: '#1a1611',
+                        width: 42, height: 42, borderRadius: '50%', background: '#0f0b06',
                         color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 14, fontWeight: 700, flexShrink: 0,
+                        fontSize: 15, fontWeight: 800, flexShrink: 0,
                       }}>{initials}</div>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1611' }}>{customer.fullName}</div>
+                        <div style={{ fontWeight: 800, fontSize: 15, color: '#0f0b06' }}>{customer.fullName}</div>
                         <div style={{ fontSize: 12, color: '#8a7a6a', marginTop: 2 }}>{customer.phone || customer.email || 'No contact info'}</div>
                       </div>
                     </div>

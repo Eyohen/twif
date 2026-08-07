@@ -2,8 +2,9 @@ import { useRef, useState } from 'react';
 import { ArrowLeft, Edit2, Plus, User, Ruler, ShoppingBag, FileText, Clock, StickyNote, Save, X, MapPin, Phone, Star, ChevronRight } from 'lucide-react';
 import { money, invoiceApprovalStatus } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
+import { api } from '../../lib/api';
 
-export default function CustomerProfilePage({ customer, sentInvoices = [], onBack, onEdit, onViewOrders }) {
+export default function CustomerProfilePage({ customer, sentInvoices = [], onBack, onEdit, onViewOrders, onOpenOrder }) {
   const invoices = sentInvoices.filter((invoice) => invoice.customer === customer.fullName);
   const measurements = customer.measurements || {};
   const measurementRows = [
@@ -13,9 +14,37 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
     ['Neck', measurements.neck || '16 in'], ['Trouser', measurements.trouser || '31 in'],
   ];
   const [editingNotes, setEditingNotes] = useState(false);
-  const [notes, setNotes] = useState(customer.notes || 'Likes slim fit and minimal designs\nPrefers dark colors\nUsually needs outfits before weekends\nSensitive to wool fabrics');
-  const [notesDraft, setNotesDraft] = useState(notes);
+  const [notes, setNotes] = useState(customer.notes || '');
+  const [notesDraft, setNotesDraft] = useState(customer.notes || '');
+  const [notesStatus, setNotesStatus] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
   const [activeTab, setActiveTab] = useState('Overview');
+
+  // Notes live on the customer profile, so they have to round-trip to the API —
+  // keeping them in component state alone loses them on the next navigation.
+  const saveNotes = async () => {
+    if (String(customer.id || '').startsWith('sent-')) {
+      setNotesStatus('Save this customer with Edit Customer first, then notes can be stored.');
+      return;
+    }
+    setSavingNotes(true);
+    setNotesStatus('');
+    try {
+      await api.patch(`/oms/customers/${customer.id}`, {
+        fullName: customer.fullName,
+        phone: customer.phone,
+        email: customer.email,
+        notes: notesDraft,
+      });
+      setNotes(notesDraft);
+      setEditingNotes(false);
+      setNotesStatus('Notes saved.');
+    } catch (error) {
+      setNotesStatus(error.response?.data?.message || 'Could not save these notes.');
+    } finally {
+      setSavingNotes(false);
+    }
+  };
 
   const overviewRef = useRef(null);
   const measurementsRef = useRef(null);
@@ -237,14 +266,17 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
               {invoices.slice(0, 4).map((invoice) => (
                 <div
                   key={invoice.invoiceNumber}
-                  onClick={onViewOrders}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => (onOpenOrder ? onOpenOrder(invoice) : onViewOrders?.())}
+                  onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); (onOpenOrder ? onOpenOrder(invoice) : onViewOrders?.()); } }}
                   style={{
                     border: '1px solid #f3ede5', borderRadius: 10, padding: '12px 14px',
                     cursor: 'pointer', background: '#faf7f3', transition: 'border-color 0.15s',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#c97b08' }}>{invoice.invoiceNumber}</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0f0b06' }}>{invoice.invoiceNumber}</span>
                     <Status>{invoice.orderSheet?.status || invoice.orderStatus}</Status>
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1611' }}>{invoice.item}</div>
@@ -340,10 +372,11 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setNotes(notesDraft); setEditingNotes(false); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', border: '1px solid #c97b08', borderRadius: 6, fontSize: 11, fontWeight: 600, background: '#c97b08', color: '#fff', cursor: 'pointer' }}
+                    onClick={saveNotes}
+                    disabled={savingNotes}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', border: '1px solid #c97b08', borderRadius: 6, fontSize: 11, fontWeight: 600, background: '#c97b08', color: '#fff', cursor: savingNotes ? 'wait' : 'pointer' }}
                   >
-                    <Save size={11} strokeWidth={2} /> Save
+                    <Save size={11} strokeWidth={2} /> {savingNotes ? 'Saving…' : 'Save'}
                   </button>
                 </div>
               ) : (
@@ -363,17 +396,22 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
                     value={notesDraft}
                     onChange={(e) => setNotesDraft(e.target.value)}
                     rows={6}
-                    placeholder="Add notes about this customer..."
+                    placeholder="Add notes about this customer — one per line."
                     style={{ minHeight: 120 }}
                   />
                 </label>
-              ) : (
+              ) : notes.trim() ? (
                 <ul style={{ margin: 0, padding: '0 0 0 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {notes.split('\n').filter(Boolean).map((note) => (
-                    <li key={note} style={{ fontSize: 13, color: '#5a4e42', lineHeight: 1.5 }}>{note}</li>
+                  {notes.split('\n').filter((note) => note.trim()).map((note, index) => (
+                    <li key={`${note}-${index}`} style={{ fontSize: 13, color: '#5a4e42', lineHeight: 1.5 }}>{note}</li>
                   ))}
                 </ul>
+              ) : (
+                <p style={{ margin: 0, fontSize: 13, color: '#8a7a6a' }}>No notes yet. Use Edit to add one.</p>
               )}
+              {notesStatus ? (
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: notesStatus === 'Notes saved.' ? '#2a7d4f' : '#8a3520' }}>{notesStatus}</p>
+              ) : null}
             </div>
           </div>
 
@@ -382,11 +420,6 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
             <div className="os-card-head">
               <Clock size={15} strokeWidth={1.8} style={{ color: '#c97b08' }} />
               <div><strong>Activity Timeline</strong></div>
-              {invoices.length > 4 ? (
-                <button style={{ marginLeft: 'auto', fontSize: 11, background: 'none', border: '1px solid #ddd5c8', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', color: '#5a4e42' }}>
-                  View all
-                </button>
-              ) : null}
             </div>
             <div className="os-card-body" style={{ gap: 0 }}>
               {invoices.slice(0, 4).map((invoice, index) => (

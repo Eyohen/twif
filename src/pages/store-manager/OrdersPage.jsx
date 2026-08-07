@@ -68,7 +68,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
       </div>
 
       {/* KPI stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }} ref={kpiScrollRef} onScroll={handleKpiScroll}>
+      <div className="os-kpi-row" ref={kpiScrollRef} onScroll={handleKpiScroll}>
         {kpis.map(({ Icon, label, count, total, tone, iconColor, textColor }) => (
           <div key={label} className="os-card" style={{ background: tone, borderColor: '#eee5da' }}>
             <div style={{ padding: '16px 18px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -90,7 +90,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
       </div>
 
       {/* Scroll dots for mobile */}
-      <div className="kpi-scroll-dots" style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
+      <div className="os-kpi-dots" style={{ gap: 5, justifyContent: 'center' }}>
         {Array.from({ length: KPI_COUNT }, (_, i) => (
           <span key={i} style={{
             width: 6, height: 6, borderRadius: '50%',
@@ -123,7 +123,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
             </label>
           </div>
           {/* Tab pills */}
-          <nav style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <nav className="os-filter-pills" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {filterTabs.map((item) => (
               <button
                 key={item}
@@ -142,7 +142,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
       </div>
 
       {/* Desktop table */}
-      <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #eee5da', background: '#fff' }}>
+      <div className="os-desktop-table" style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #eee5da', background: '#fff' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#faf7f3' }}>
@@ -169,18 +169,18 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
                   onClick={() => setSelectedOrder(order)}
                 >
                   <td style={{ padding: '12px 14px' }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#c97b08' }}>{order.invoiceNumber}</div>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: '#0f0b06' }}>{order.invoiceNumber}</div>
                     <div style={{ fontSize: 11, color: '#8a7a6a' }}>Order #{1256 - index * 15}</div>
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{
-                        width: 30, height: 30, borderRadius: '50%', background: '#1a1611',
+                        width: 30, height: 30, borderRadius: '50%', background: '#0f0b06',
                         color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 11, fontWeight: 700, flexShrink: 0,
+                        fontSize: 11, fontWeight: 800, flexShrink: 0,
                       }}>{custInitials}</div>
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: '#1a1611' }}>{order.customer}</div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#3d352c' }}>{order.customer}</div>
                         <div style={{ fontSize: 11, color: '#8a7a6a' }}>{order.phone || order.job.phone || '—'}</div>
                       </div>
                     </div>
@@ -271,13 +271,13 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
               <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{
-                    width: 38, height: 38, borderRadius: '50%', background: '#1a1611',
+                    width: 38, height: 38, borderRadius: '50%', background: '#0f0b06',
                     color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 13, fontWeight: 700, flexShrink: 0,
+                    fontSize: 13, fontWeight: 800, flexShrink: 0,
                   }}>{custInitials}</div>
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#c97b08' }}>{order.invoiceNumber}</div>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1611' }}>{order.customer}</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: '#0f0b06' }}>{order.invoiceNumber}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#3d352c' }}>{order.customer}</div>
                     <div style={{ fontSize: 12, color: '#8a7a6a' }}>{order.phone || order.job.phone || 'No phone'}</div>
                   </div>
                 </div>

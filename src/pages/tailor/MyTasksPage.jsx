@@ -169,6 +169,27 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
               {/* Expanded Details */}
               {isExpanded && (
                 <div style={{ padding: '16px 18px' }}>
+                  {/* Orders that cover several garments list each one, so the
+                      tailor sees the whole job rather than only the first item. */}
+                  {order.items?.length > 1 ? (
+                    <div className="job-item-list" style={{ marginBottom: 16 }}>
+                      <div className="job-item-list-label">{order.items.length} items on this order</div>
+                      {order.items.map((line, lineIndex) => (
+                        <div key={`${line.item}-${lineIndex}`} className="job-item-row">
+                          <span className="job-item-index">{lineIndex + 1}</span>
+                          <div>
+                            <strong>{line.item || 'Unnamed item'}</strong>
+                            <small>
+                              {Number(line.pieces) || 1} {(Number(line.pieces) || 1) === 1 ? 'piece' : 'pieces'}
+                              {line.fabric ? ` · ${line.fabric}` : ''}
+                            </small>
+                            {line.measurements ? <small className="job-item-note">Measurements: {line.measurements}</small> : null}
+                            {line.designNotes ? <small className="job-item-note">{line.designNotes}</small> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
                     <section>
                       <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Product Details</h4>
