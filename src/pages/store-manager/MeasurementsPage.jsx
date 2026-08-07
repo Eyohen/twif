@@ -1,3 +1,5 @@
+import { ArrowLeft, Printer, Edit2, Plus, Ruler, ChevronRight, User, Phone, Mail, Clock } from 'lucide-react';
+
 const defaultMeasurements = [
   ['Neck', '16', 'Comfort fit'], ['Shoulder', '18', '–'], ['Chest', '42', '–'],
   ['Waist', '34', '–'], ['Hip / Seat', '41', '–'], ['Sleeve Length', '24', '–'],
@@ -7,27 +9,285 @@ const defaultMeasurements = [
 ];
 
 function BodyFigure({ back = false }) {
-  return <svg className="measurement-body" viewBox="0 0 180 410" aria-label={back ? 'Back body measurement diagram' : 'Front body measurement diagram'}>
-    <g fill="none" stroke="#8a8f95" strokeWidth="1.3">
-      <ellipse cx="90" cy="39" rx="22" ry="29"/><path d="M70 60 48 76 34 147 25 221M110 60l22 16 14 71 9 74M54 75l7 117-8 79-4 109M126 75l-7 117 8 79 4 109M61 192l29 8 29-8M90 200v176M49 380l-12 8m94-8 12 8M25 221l-8 38m138-38 8 38"/>
-    </g>
-    <g stroke="#d88b00" strokeWidth="1.2" strokeDasharray="3 2" fill="none">
-      <path d="M67 68h46"/><path d="M54 91h72"/><path d="M58 126h64"/><path d="M59 163h62"/><path d="M52 198h76"/><path d="M47 79l-13 144"/><path d="M126 80v105"/><path d="M90 200v174"/>
-    </g>
-    {[1,2,3,4,5,6,7,8].map((number,index)=><g key={number}><circle cx={[65,54,90,58,90,127,34,119][index]} cy={[68,91,126,163,198,83,145,163][index]} r="7" fill="#d88b00"/><text x={[65,54,90,58,90,127,34,119][index]} y={[71,94,129,166,201,86,148,166][index]} fill="#fff" textAnchor="middle" fontSize="7">{number}</text></g>)}
-  </svg>;
+  return (
+    <svg className="measurement-body" viewBox="0 0 180 410" aria-label={back ? 'Back body measurement diagram' : 'Front body measurement diagram'}>
+      <g fill="none" stroke="#8a8f95" strokeWidth="1.3">
+        <ellipse cx="90" cy="39" rx="22" ry="29" />
+        <path d="M70 60 48 76 34 147 25 221M110 60l22 16 14 71 9 74M54 75l7 117-8 79-4 109M126 75l-7 117 8 79 4 109M61 192l29 8 29-8M90 200v176M49 380l-12 8m94-8 12 8M25 221l-8 38m138-38 8 38" />
+      </g>
+      <g stroke="#d88b00" strokeWidth="1.2" strokeDasharray="3 2" fill="none">
+        <path d="M67 68h46" /><path d="M54 91h72" /><path d="M58 126h64" />
+        <path d="M59 163h62" /><path d="M52 198h76" /><path d="M47 79l-13 144" />
+        <path d="M126 80v105" /><path d="M90 200v174" />
+      </g>
+      {[1, 2, 3, 4, 5, 6, 7, 8].map((number, index) => (
+        <g key={number}>
+          <circle
+            cx={[65, 54, 90, 58, 90, 127, 34, 119][index]}
+            cy={[68, 91, 126, 163, 198, 83, 145, 163][index]}
+            r="7" fill="#d88b00"
+          />
+          <text
+            x={[65, 54, 90, 58, 90, 127, 34, 119][index]}
+            y={[71, 94, 129, 166, 201, 86, 148, 166][index]}
+            fill="#fff" textAnchor="middle" fontSize="7"
+          >{number}</text>
+        </g>
+      ))}
+    </svg>
+  );
 }
 
 export default function MeasurementsPage({ customer, onBack }) {
   const stored = customer.measurements || {};
-  const rows = defaultMeasurements.map(([label, fallback, note]) => [label, stored[label.toLowerCase().replaceAll(' ', '')] || fallback, note]);
-  return <div className="measurements-page">
-    <header><div><p><button onClick={onBack}>Customers</button> &nbsp;›&nbsp; {customer.fullName} &nbsp;›&nbsp; <strong>Measurements</strong></p><h2>Measurements</h2><span>View and manage customer body measurements.</span></div><div><button>▣ &nbsp; Print / PDF</button><button>⌕ &nbsp; Edit Measurements</button><button className="use-order">＋ &nbsp; Use for New Order</button></div></header>
-    <section className="measurement-customer-hero"><div><i>{customer.fullName.split(' ').map((part)=>part[0]).join('').slice(0,2)}</i><span><div><h3>{customer.fullName}</h3><b>{Number(customer.totalOrders)>1?'Returning Customer':'New Customer'}</b></div><p>⌕ &nbsp; {customer.phone||'—'} &nbsp;&nbsp;&nbsp; ▣ &nbsp; {customer.email||'—'} &nbsp;&nbsp;&nbsp; ◉ &nbsp; {customer.stores?.[0]||'Lekki'} Store</p><small>Last updated: {customer.updatedAt?new Date(customer.updatedAt).toLocaleDateString('en-GB'):'Recently'} by Bola</small></span></div><dl><div><dt>Measurement Set</dt><dd>#3</dd></div><div><dt>Created On</dt><dd>{customer.createdAt?new Date(customer.createdAt).toLocaleDateString('en-GB'):'—'}</dd></div><div><dt>Last Updated</dt><dd>{customer.updatedAt?new Date(customer.updatedAt).toLocaleDateString('en-GB'):'—'}</dd></div><div><dt>Total Orders Using</dt><dd>{customer.totalOrders||0} orders</dd></div></dl></section>
-    <nav className="measurement-tabs"><button className="active">Measurements</button><button>Measurement History</button><button>Notes</button></nav>
-    <section className="measurement-content">
-      <article className="body-measurement-table"><h3>Body Measurements</h3><table><thead><tr><th/><th>Measurement</th><th>Value</th><th>Units</th><th>Fit Note</th></tr></thead><tbody>{rows.map(([label,value,note],index)=><tr key={label}><td>{index+1}</td><td><strong>{label}</strong></td><td>{value}</td><td>in</td><td>{note}</td></tr>)}</tbody></table><footer>ⓘ &nbsp; All measurements are in inches. Ensure the customer stands straight and relaxed during measurement.</footer></article>
-      <aside><article className="measurement-diagram"><header><h3>Measurement Diagram</h3><div><button className="active">Inches</button><button>cm</button></div></header><div><BodyFigure/><BodyFigure back/><ol>{defaultMeasurements.map(([label],index)=><li key={label}><i>{index+1}</i>{label.replace(' (Outseam)','')}</li>)}</ol></div></article><article className="measurement-additional"><h3>Additional Information</h3><dl><dt>Posture</dt><dd>Normal</dd><dt>Body Build</dt><dd>Average</dd><dt>Preferred Fit</dt><dd>{customer.preferredFit||'Regular Fit'}</dd><dt>Remarks</dt><dd>{customer.notes||'Prefers slim fit for pants. Likes comfortable chest fit.'}</dd></dl></article></aside>
-    </section>
-  </div>;
+  const rows = defaultMeasurements.map(([label, fallback, note]) => [
+    label,
+    stored[label.toLowerCase().replaceAll(' ', '')] || fallback,
+    note,
+  ]);
+
+  const initials = customer.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2);
+  const isReturning = Number(customer.totalOrders) > 1;
+
+  return (
+    <div className="os-page">
+
+      {/* Breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#8a7a6a' }}>
+        <button
+          type="button"
+          onClick={onBack}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
+            color: '#5a4e42', cursor: 'pointer', fontSize: 13, padding: 0, fontWeight: 500,
+          }}
+        >
+          <ArrowLeft size={14} /> Customers
+        </button>
+        <ChevronRight size={12} />
+        <span>{customer.fullName}</span>
+        <ChevronRight size={12} />
+        <span>Measurements</span>
+      </div>
+
+      {/* Page Header */}
+      <div className="os-page-header">
+        <div className="os-page-title">
+          <Ruler size={22} strokeWidth={1.5} style={{ color: '#c97b08' }} />
+          <div>
+            <h2>Measurements</h2>
+            <p>View and manage customer body measurements</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+            border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
+            fontSize: 13, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
+          }}>
+            <Printer size={13} /> Print / PDF
+          </button>
+          <button style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+            border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
+            fontSize: 13, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
+          }}>
+            <Edit2 size={13} /> Edit Measurements
+          </button>
+          <button style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px',
+            border: 'none', borderRadius: 8, background: '#1a1611',
+            fontSize: 13, color: '#fff', cursor: 'pointer', fontWeight: 700,
+          }}>
+            <Plus size={14} /> Use for New Order
+          </button>
+        </div>
+      </div>
+
+      {/* Customer Hero Card */}
+      <div className="os-card">
+        <div style={{ padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+          <span style={{
+            width: 52, height: 52, borderRadius: '50%', background: '#e8f0fc', color: '#2a65c7',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 18, fontWeight: 700, flexShrink: 0,
+          }}>{initials}</span>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <h3 style={{ margin: 0, fontSize: 16, color: '#1a1611' }}>{customer.fullName}</h3>
+              <span style={{
+                padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                background: isReturning ? '#eaf7ee' : '#fffbf0',
+                color: isReturning ? '#168647' : '#7a6030',
+              }}>
+                {isReturning ? 'Returning Customer' : 'New Customer'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#8a7a6a' }}>
+                <Phone size={11} /> {customer.phone || '—'}
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#8a7a6a' }}>
+                <Mail size={11} /> {customer.email || '—'}
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#8a7a6a' }}>
+                <User size={11} /> {customer.stores?.[0] || 'Lekki'} Store
+              </span>
+            </div>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#b0a090', marginTop: 4 }}>
+              <Clock size={10} />
+              Last updated: {customer.updatedAt ? new Date(customer.updatedAt).toLocaleDateString('en-GB') : 'Recently'} by Bola
+            </span>
+          </div>
+
+          {/* Meta Chips */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {[
+              ['Measurement Set', '#3'],
+              ['Created On', customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB') : '—'],
+              ['Last Updated', customer.updatedAt ? new Date(customer.updatedAt).toLocaleDateString('en-GB') : '—'],
+              ['Total Orders Using', `${customer.totalOrders || 0} orders`],
+            ].map(([label, value]) => (
+              <div key={label} style={{
+                background: '#faf7f3', border: '1px solid #eee5da', borderRadius: 8,
+                padding: '8px 12px', minWidth: 90,
+              }}>
+                <small style={{ display: 'block', fontSize: 10, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</small>
+                <strong style={{ fontSize: 13, color: '#1a1611' }}>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 4, padding: '0 22px', borderTop: '1px solid #eee5da' }}>
+          {['Measurements', 'Measurement History', 'Notes'].map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              style={{
+                padding: '10px 14px', border: 'none',
+                borderBottom: tab === 'Measurements' ? '2px solid #c97b08' : '2px solid transparent',
+                background: 'none', cursor: 'pointer', fontSize: 13,
+                color: tab === 'Measurements' ? '#1a1611' : '#8a7a6a',
+                fontWeight: tab === 'Measurements' ? 700 : 400,
+                marginBottom: -1,
+              }}
+            >{tab}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content: Table + Diagram */}
+      <div className="os-layout">
+
+        {/* Measurement Table */}
+        <div className="os-card">
+          <div className="os-card-head">
+            <Ruler size={16} strokeWidth={1.5} style={{ color: '#c97b08' }} />
+            <div><strong>Body Measurements</strong><p>All values in inches</p></div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {['#', 'Measurement', 'Value', 'Units', 'Fit Note'].map((h) => (
+                    <th key={h} style={{
+                      textAlign: 'left', padding: '11px 14px', fontSize: 10,
+                      color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.08em',
+                      background: '#faf7f3', borderBottom: '1px solid #eee5da',
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(([label, value, note], index) => (
+                  <tr
+                    key={label}
+                    style={{ borderBottom: '1px solid #f3ede5' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#faf7f3'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}
+                  >
+                    <td style={{ padding: '11px 14px', fontSize: 12, color: '#b0a090', width: 40 }}>{index + 1}</td>
+                    <td style={{ padding: '11px 14px' }}>
+                      <strong style={{ fontSize: 13, color: '#1a1611' }}>{label}</strong>
+                    </td>
+                    <td style={{ padding: '11px 14px' }}>
+                      <span style={{
+                        display: 'inline-block', padding: '3px 10px', borderRadius: 20,
+                        background: '#fff0df', color: '#c06a00', fontSize: 13, fontWeight: 700,
+                      }}>{value}</span>
+                    </td>
+                    <td style={{ padding: '11px 14px', fontSize: 12, color: '#8a7a6a' }}>in</td>
+                    <td style={{ padding: '11px 14px', fontSize: 12, color: '#5a4e42' }}>{note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{
+            padding: '12px 18px', borderTop: '1px solid #eee5da',
+            fontSize: 12, color: '#8a7a6a', background: '#faf7f3',
+          }}>
+            All measurements are in inches. Ensure the customer stands straight and relaxed during measurement.
+          </div>
+        </div>
+
+        {/* Sidebar: Diagram + Additional Info */}
+        <aside className="os-sidebar">
+
+          <div className="os-card">
+            <div className="os-card-head">
+              <div>
+                <strong>Measurement Diagram</strong>
+                <p>Front and back reference points</p>
+              </div>
+              <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+                {['Inches', 'cm'].map((unit) => (
+                  <button
+                    key={unit}
+                    type="button"
+                    style={{
+                      padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                      border: '1px solid #ddd5c8', cursor: 'pointer',
+                      background: unit === 'Inches' ? '#1a1611' : '#fff',
+                      color: unit === 'Inches' ? '#fff' : '#5a4e42',
+                    }}
+                  >{unit}</button>
+                ))}
+              </div>
+            </div>
+            <div className="os-card-body">
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+                <BodyFigure />
+                <BodyFigure back />
+              </div>
+              <ol style={{ margin: 0, padding: '0 0 0 18px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {defaultMeasurements.map(([label], index) => (
+                  <li key={label} style={{ fontSize: 11, color: '#5a4e42' }}>
+                    <strong style={{ color: '#c97b08', marginRight: 4 }}>{index + 1}</strong>
+                    {label.replace(' (Outseam)', '')}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+
+          <div className="os-summary-card">
+            <header>
+              <User size={14} strokeWidth={1.5} />
+              <h3>Additional Information</h3>
+            </header>
+            <dl>
+              <dt>Posture</dt><dd>Normal</dd>
+              <dt>Body Build</dt><dd>Average</dd>
+              <dt>Preferred Fit</dt><dd>{customer.preferredFit || 'Regular Fit'}</dd>
+              <dt>Remarks</dt><dd style={{ fontSize: 12, lineHeight: 1.5 }}>{customer.notes || 'Prefers slim fit for pants. Likes comfortable chest fit.'}</dd>
+            </dl>
+          </div>
+
+        </aside>
+      </div>
+    </div>
+  );
 }

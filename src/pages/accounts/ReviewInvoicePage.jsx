@@ -1,7 +1,11 @@
+import { useState } from 'react';
+import { ArrowLeft, CheckCircle, Flag, XCircle, HelpCircle, MoreHorizontal, Download, Maximize2, User, Calendar, MapPin, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
 import { money, invoiceApprovalStatus } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
+import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 
 export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
+  const [pendingAction, setPendingAction] = useState(null);
   const total = Number(invoice.total || 0);
   const discount = total * .05;
   const payable = total - discount;
@@ -14,23 +18,389 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
     ['Embroidery (Gold)', 1, Math.max(0, total - 35000)],
   ];
 
-  return <div className="accounts-review-page">
-    <header className="accounts-review-heading"><div><p>Accounts &nbsp;›&nbsp; Invoices &nbsp;›&nbsp; <strong>Review Invoice</strong></p><h2>Review Invoice {invoice.invoiceNumber} <Status>{status}</Status></h2><span>Review payment evidence and invoice details before approving.</span></div><div><button onClick={onBack}>‹ &nbsp; Back to Invoices</button><button>⋮</button></div></header>
-    <section className="accounts-review-grid">
-      <div className="accounts-review-left">
-        <article className="review-card invoice-order-summary"><h3>Invoice &amp; Order Summary</h3><section className="review-invoice-facts"><i>▤</i><dl><dt>Invoice Number</dt><dd>{invoice.invoiceNumber}</dd></dl><dl><dt>Invoice Date</dt><dd>22 Jul 2026</dd></dl><dl><dt>Store</dt><dd>{invoice.store || 'Lekki'}</dd></dl></section><section className="review-customer-facts"><i>♙</i><dl><dt>Customer</dt><dd>{invoice.customer}</dd><small>ELITE CUSTOMER</small></dl><dl><dt>Phone</dt><dd>{invoice.phone || '0803 123 4567'}</dd></dl><dl><dt>Email</dt><dd>{invoice.customerEmail || 'jimmy.aki@gmail.com'}</dd></dl></section><h4>Order Summary</h4><table><thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>{items.map(([name, quantity, price]) => <tr key={name}><td>{name}</td><td>{quantity}</td><td>{money.format(price)}</td><td>{money.format(price * quantity)}</td></tr>)}</tbody></table><dl className="review-totals"><dt>Subtotal</dt><dd>{money.format(total)}</dd><dt>Elite Discount (5%)</dt><dd className="positive">- {money.format(discount)}</dd><dt>Store Credit Used</dt><dd className="positive">- ₦0</dd><dt>Total Amount</dt><dd>{money.format(payable)}</dd><dt>Amount Payable</dt><dd>{money.format(payable)}</dd></dl></article>
-        <article className="review-card payment-history-card"><h3>Payment &amp; History</h3><div><dl><dt>Payment Status</dt><dd><Status>{invoice.paymentStatus}</Status></dd><dt>Amount Received</dt><dd>{money.format(paid)}</dd><dt>Balance Outstanding</dt><dd>{money.format(balance)}</dd><dt>Payment Method</dt><dd>Bank Transfer</dd><dt>Reference</dt><dd>GTBank – 0123045678</dd><dt>Submitted By</dt><dd>{invoice.createdBy || 'Bola'} (Store Manager)</dd><dt>Submitted On</dt><dd>22 Jul 2026, 10:32 AM</dd></dl><section><h4>Payment History</h4><div><i/><span><small>22 Jul 2026, 10:32 AM</small><p>Payment evidence submitted<br/>by Bola (Store Manager)</p></span><b>{money.format(paid)}</b></div><div><i/><span><small>—</small><p>Pending<br/>Balance outstanding</p></span><b>{money.format(balance)}</b></div></section></div></article>
+  return (
+    <div className="os-page" style={{ maxWidth: 1200 }}>
+      {/* Page Header */}
+      <div className="os-page-header">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button
+            onClick={onBack}
+            type="button"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: '4px 0', color: '#8a7a6a', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            <ArrowLeft size={14} />
+            Back to Invoices
+          </button>
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8a7a6a' }}>
+            <span>Accounts</span>
+            <span>›</span>
+            <span>Invoices</span>
+            <span>›</span>
+            <strong style={{ color: '#1a1611' }}>Review Invoice</strong>
+          </nav>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 2 }}>
+            <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 22, color: '#1a1611' }}>
+              Review Invoice {invoice.invoiceNumber}
+            </h2>
+            <Status>{status}</Status>
+          </div>
+          <p style={{ margin: 0, fontSize: 13, color: '#8a7a6a' }}>Review payment evidence and invoice details before approving.</p>
+        </div>
+        <button type="button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#5a4e42', flexShrink: 0 }}>
+          <MoreHorizontal size={16} />
+        </button>
       </div>
-      <div className="accounts-review-middle">
-        <article className="review-card payment-evidence-card"><header><h3>Payment Evidence</h3><span>✓ Evidence Uploaded</span></header><h4>Uploaded Receipt</h4><section className="receipt-preview"><header><strong>▰ &nbsp; GTBank</strong><b>Successful</b></header><h3>Transfer Receipt</h3><dl><dt>Reference Number</dt><dd>0123045678</dd><dt>Transaction Date</dt><dd>22 Jul 2026, 10:28 AM</dd><dt>Payer Name</dt><dd>{invoice.customer}</dd><dt>Payer Account</dt><dd>0123456789</dd><dt>Beneficiary</dt><dd>TWIF Collections</dd><dt>Beneficiary Account</dt><dd>GTB 0234567890</dd><dt>Amount</dt><dd>{money.format(paid)}</dd><dt>Narration</dt><dd>Payment for {invoice.invoiceNumber}</dd></dl><footer>Thank you for banking with us</footer><button>⛶</button></section><button className="download-receipt">⇩ &nbsp; Download Receipt</button></article>
-        <article className="review-card review-notes"><h3>Additional Notes (from Store Manager)</h3><p>Customer paid part amount. Balance will be settled before production.</p></article>
+
+      {/* Action Bar */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={() => setPendingAction('Approved')}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#f0faf4', border: '1px solid #b8e4cb', borderRadius: 8, color: '#2a7d4f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          <CheckCircle size={15} /> Approve
+        </button>
+        <button
+          type="button"
+          onClick={() => setPendingAction('Flagged')}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#fffbf0', border: '1px solid #f0ddb0', borderRadius: 8, color: '#7a6030', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          <Flag size={15} /> Flag
+        </button>
+        <button
+          type="button"
+          onClick={() => setPendingAction('Rejected')}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, color: '#8a3520', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          <XCircle size={15} /> Reject
+        </button>
+        <button
+          type="button"
+          onClick={() => setPendingAction('Partial')}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#f5f0e8', border: '1px solid #ddd5c8', borderRadius: 8, color: '#5a4e42', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          <HelpCircle size={15} /> Request Clarification
+        </button>
       </div>
-      <aside className="accounts-review-right">
-        <article className="review-card review-actions-card"><h3>Review Actions</h3><button className="approve" onClick={() => onReview(invoice, 'Approved')}>✓<span><strong>Approve Invoice</strong><small>Mark as paid and release to production</small></span></button><button className="partial">⚑<span><strong>Partial Payment</strong><small>Record partial payment</small></span></button><button className="reject" onClick={() => onReview(invoice, 'Rejected')}>×<span><strong>Reject Invoice</strong><small>Reject and send back to store</small></span></button><button onClick={() => onReview(invoice, 'Flagged')}>⌕<span><strong>Flag for Clarification</strong><small>Request more info from store</small></span></button></article>
-        <article className="review-card review-information"><h3>Review Information</h3><dl><dt>Submitted By</dt><dd>{invoice.createdBy || 'Bola'} (Store Manager)</dd><dt>Submitted On</dt><dd>22 Jul 2026, 10:32 AM</dd><dt>Store</dt><dd>{invoice.store || 'Lekki'}</dd><dt>Order Sheet</dt><dd className="positive">✓ Attached</dd><dt>Production Status</dt><dd>● Not Released</dd><dt>Days Since Submission</dt><dd>0 day</dd></dl></article>
-        <article className="review-card review-activity"><h3>Activity Log</h3>{[['22 Jul 2026, 10:32 AM', 'Invoice submitted', `by ${invoice.createdBy || 'Bola'} (Store Manager)`], ['—', 'Under review', 'Pending action'], ['—', 'Awaiting approval', 'Will be sent to production']].map(([date, title, note], index) => <section key={title}><i className={`dot-${index}`}/><span><small>{date}</small><strong>{title}</strong><p>{note}</p></span></section>)}</article>
-      </aside>
-    </section>
-    <footer className="review-waiting-note">ⓘ &nbsp; This invoice is currently awaiting your review. Once approved, it will be automatically sent to Production.</footer>
-  </div>;
+
+      {/* Main 3-column Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 260px', gap: 16, alignItems: 'start' }}>
+
+        {/* Column 1: Invoice & Order Summary */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="os-card">
+            <div className="os-card-head">
+              <FileText size={16} style={{ color: '#c0a87a' }} />
+              <div>
+                <strong>Invoice &amp; Order Summary</strong>
+                <p>Invoice details and customer info</p>
+              </div>
+            </div>
+            <div className="os-card-body">
+              {/* Invoice facts */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {[
+                  ['Invoice Number', invoice.invoiceNumber],
+                  ['Invoice Date', '22 Jul 2026'],
+                  ['Store', invoice.store || 'Lekki'],
+                ].map(([label, val]) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611' }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Divider */}
+              <div style={{ borderTop: '1px solid #f3ede5' }} />
+              {/* Customer facts */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f3ede5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <User size={18} style={{ color: '#8a7a6a' }} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#1a1611', fontSize: 14 }}>{invoice.customer}</div>
+                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', color: '#c97b08', background: '#fff8ee', padding: '1px 5px', borderRadius: 4, border: '1px solid #f0ddb0' }}>ELITE CUSTOMER</span>
+                </div>
+              </div>
+              <div className="os-grid-2" style={{ gap: 10 }}>
+                {[
+                  ['Phone', invoice.phone || '0803 123 4567'],
+                  ['Email', invoice.customerEmail || 'jimmy.aki@gmail.com'],
+                ].map(([label, val]) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 12, color: '#1a1611' }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Divider */}
+              <div style={{ borderTop: '1px solid #f3ede5' }} />
+              {/* Order summary table */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Order Summary</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      {['Item', 'Qty', 'Unit Price', 'Total'].map((col) => (
+                        <th key={col} style={{ textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '6px 0', borderBottom: '1px solid #f3ede5' }}>{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map(([name, quantity, price]) => (
+                      <tr key={name}>
+                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#1a1611' }}>{name}</td>
+                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#5a4e42' }}>{quantity}</td>
+                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#5a4e42' }}>{money.format(price)}</td>
+                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', fontWeight: 600, color: '#1a1611' }}>{money.format(price * quantity)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Totals */}
+              <div style={{ background: '#faf7f3', borderRadius: 8, padding: '12px 14px' }}>
+                {[
+                  ['Subtotal', money.format(total), false],
+                  ['Elite Discount (5%)', `− ${money.format(discount)}`, true],
+                  ['Store Credit Used', '− ₦0', true],
+                  ['Total Amount', money.format(payable), false],
+                ].map(([label, val, isGreen]) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #eee5da', fontSize: 13 }}>
+                    <span style={{ color: '#5a4e42' }}>{label}</span>
+                    <span style={{ fontWeight: 700, color: isGreen ? '#2a7d4f' : '#1a1611' }}>{val}</span>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0 0', fontSize: 14 }}>
+                  <span style={{ fontWeight: 700, color: '#1a1611' }}>Amount Payable</span>
+                  <span style={{ fontWeight: 800, color: '#1a1611', fontSize: 16 }}>{money.format(payable)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment History */}
+          <div className="os-card">
+            <div className="os-card-head">
+              <CreditCard size={16} style={{ color: '#c0a87a' }} />
+              <div>
+                <strong>Payment &amp; History</strong>
+                <p>Payment status and timeline</p>
+              </div>
+            </div>
+            <div className="os-card-body">
+              <div className="os-grid-2" style={{ gap: 10 }}>
+                {[
+                  ['Payment Status', <Status>{invoice.paymentStatus}</Status>],
+                  ['Amount Received', <span style={{ fontWeight: 700, color: '#2a7d4f' }}>{money.format(paid)}</span>],
+                  ['Balance Outstanding', <span style={{ fontWeight: 700, color: '#8a3520' }}>{money.format(balance)}</span>],
+                  ['Payment Method', 'Bank Transfer'],
+                  ['Reference', 'GTBank – 0123045678'],
+                  ['Submitted By', `${invoice.createdBy || 'Bola'} (Store Manager)`],
+                ].map(([label, val]) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 13, color: '#1a1611' }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ borderTop: '1px solid #f3ede5' }} />
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Payment History</div>
+              {[
+                ['22 Jul 2026, 10:32 AM', 'Payment evidence submitted', `by ${invoice.createdBy || 'Bola'} (Store Manager)`, money.format(paid), '#2a7d4f'],
+                ['—', 'Pending', 'Balance outstanding', money.format(balance), '#8a3520'],
+              ].map(([date, title, note, amount, color]) => (
+                <div key={title} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid #f3ede5' }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, marginTop: 4, flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: '#8a7a6a' }}>{date}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 2 }}>{title}</div>
+                    <div style={{ fontSize: 12, color: '#5a4e42' }}>{note}</div>
+                  </div>
+                  <div style={{ fontWeight: 700, color, fontSize: 13 }}>{amount}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Column 2: Payment Evidence */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="os-card">
+            <div className="os-card-head">
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#2a7d4f', flexShrink: 0 }} />
+              <div>
+                <strong>Payment Evidence</strong>
+                <p style={{ color: '#2a7d4f' }}>Evidence Uploaded</p>
+              </div>
+            </div>
+            <div className="os-card-body">
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Uploaded Receipt</div>
+              {/* Receipt preview */}
+              <div style={{ border: '1px solid #eee5da', borderRadius: 10, overflow: 'hidden', position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#faf7f3', borderBottom: '1px solid #eee5da' }}>
+                  <strong style={{ fontSize: 13, color: '#1a1611' }}>GTBank</strong>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#2a7d4f', background: '#f0faf4', padding: '2px 8px', borderRadius: 10, border: '1px solid #b8e4cb' }}>Successful</span>
+                </div>
+                <div style={{ padding: '14px' }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1611', marginBottom: 12, textAlign: 'center' }}>Transfer Receipt</div>
+                  {[
+                    ['Reference Number', '0123045678'],
+                    ['Transaction Date', '22 Jul 2026, 10:28 AM'],
+                    ['Payer Name', invoice.customer],
+                    ['Payer Account', '0123456789'],
+                    ['Beneficiary', 'TWIF Collections'],
+                    ['Beneficiary Account', 'GTB 0234567890'],
+                    ['Amount', money.format(paid)],
+                    ['Narration', `Payment for ${invoice.invoiceNumber}`],
+                  ].map(([label, val]) => (
+                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '6px 0', borderBottom: '1px solid #f3ede5', fontSize: 12 }}>
+                      <span style={{ color: '#8a7a6a', minWidth: 120 }}>{label}</span>
+                      <span style={{ fontWeight: 600, color: '#1a1611', textAlign: 'right', wordBreak: 'break-all' }}>{val}</span>
+                    </div>
+                  ))}
+                  <div style={{ textAlign: 'center', fontSize: 11, color: '#8a7a6a', marginTop: 12 }}>Thank you for banking with us</div>
+                </div>
+                <button type="button" aria-label="Expand receipt" style={{ position: 'absolute', top: 10, right: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, border: '1px solid #ddd5c8', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#8a7a6a' }}>
+                  <Maximize2 size={12} />
+                </button>
+              </div>
+              <button type="button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', padding: '10px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#faf7f3', color: '#5a4e42', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                <Download size={14} /> Download Receipt
+              </button>
+            </div>
+          </div>
+
+          {/* Additional Notes */}
+          <div className="os-card">
+            <div className="os-card-head">
+              <FileText size={15} style={{ color: '#c0a87a' }} />
+              <div>
+                <strong>Additional Notes</strong>
+                <p>From Store Manager</p>
+              </div>
+            </div>
+            <div className="os-card-body">
+              <p style={{ margin: 0, fontSize: 13, color: '#5a4e42', lineHeight: 1.6, background: '#faf7f3', padding: '10px 12px', borderRadius: 8, border: '1px solid #eee5da' }}>
+                Customer paid part amount. Balance will be settled before production.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Column 3: Sidebar */}
+        <aside className="os-sidebar">
+          {/* Review Actions */}
+          <div className="os-card">
+            <div className="os-card-head">
+              <div>
+                <strong>Review Actions</strong>
+                <p>Choose a decision below</p>
+              </div>
+            </div>
+            <div className="os-card-body" style={{ gap: 8, padding: '12px' }}>
+              {[
+                [<CheckCircle size={15} />, 'Approve Invoice', 'Mark as paid and release to production', 'Approved', '#2a7d4f', '#f0faf4', '#b8e4cb'],
+                [<Flag size={15} />, 'Partial Payment', 'Record partial payment', 'Partial', '#7a6030', '#fffbf0', '#f0ddb0'],
+                [<XCircle size={15} />, 'Reject Invoice', 'Reject and send back to store', 'Rejected', '#8a3520', '#fff5f0', '#f0c8b8'],
+                [<HelpCircle size={15} />, 'Flag for Clarification', 'Request more info from store', 'Flagged', '#5a4e42', '#f5f0e8', '#ddd5c8'],
+              ].map(([icon, title, detail, action, color, bg, border]) => (
+                <button
+                  key={title}
+                  type="button"
+                  onClick={() => setPendingAction(action)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: bg, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', width: '100%', textAlign: 'left', fontFamily: 'inherit', transition: 'opacity 0.15s', color }}
+                >
+                  <span style={{ flexShrink: 0 }}>{icon}</span>
+                  <span>
+                    <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{title}</span>
+                    <span style={{ display: 'block', fontSize: 11, marginTop: 2, opacity: 0.8 }}>{detail}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Review Information */}
+          <div className="os-summary-card">
+            <header>
+              <AlertCircle size={15} />
+              <h3>Review Information</h3>
+            </header>
+            <dl>
+              <dt>Submitted By</dt>
+              <dd>{invoice.createdBy || 'Bola'} (Store Mgr)</dd>
+              <dt>Submitted On</dt>
+              <dd>22 Jul 2026, 10:32 AM</dd>
+              <dt>Store</dt>
+              <dd>{invoice.store || 'Lekki'}</dd>
+              <dt>Order Sheet</dt>
+              <dd style={{ color: '#2a7d4f' }}>Attached</dd>
+              <dt>Production Status</dt>
+              <dd style={{ color: '#8a3520' }}>Not Released</dd>
+              <dt>Days Since Submitted</dt>
+              <dd>0 days</dd>
+            </dl>
+          </div>
+
+          {/* Activity Log */}
+          <div className="os-card">
+            <div className="os-card-head">
+              <Clock size={15} style={{ color: '#c0a87a' }} />
+              <div>
+                <strong>Activity Log</strong>
+              </div>
+            </div>
+            <div className="os-card-body" style={{ gap: 0, padding: '14px' }}>
+              {[
+                ['22 Jul 2026, 10:32 AM', 'Invoice submitted', `by ${invoice.createdBy || 'Bola'} (Store Manager)`, '#2a7d4f'],
+                ['—', 'Under review', 'Pending action', '#c97b08'],
+                ['—', 'Awaiting approval', 'Will be sent to production', '#8a7a6a'],
+              ].map(([date, title, note, color], index) => (
+                <div key={title} style={{ display: 'flex', gap: 10, paddingBottom: index < 2 ? 14 : 0, position: 'relative' }}>
+                  {index < 2 && (
+                    <div style={{ position: 'absolute', left: 5, top: 16, width: 1, height: 'calc(100% - 8px)', background: '#f3ede5' }} />
+                  )}
+                  <div style={{ width: 12, height: 12, borderRadius: '50%', background: color, marginTop: 3, flexShrink: 0, position: 'relative', zIndex: 1 }} />
+                  <div>
+                    <div style={{ fontSize: 11, color: '#8a7a6a' }}>{date}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 2 }}>{title}</div>
+                    <div style={{ fontSize: 11, color: '#5a4e42', marginTop: 1 }}>{note}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      {/* Footer Note */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 14px', background: '#fffbf0', border: '1px solid #f0ddb0', borderRadius: 10, color: '#7a6030' }}>
+        <AlertCircle size={14} style={{ color: '#c97b08', flexShrink: 0, marginTop: 1 }} />
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>
+          This invoice is currently awaiting your review. Once approved, it will be automatically sent to Production.
+        </p>
+      </div>
+
+      {pendingAction && (
+        <InvoiceActionConfirmModal
+          invoice={invoice}
+          status={pendingAction}
+          onCancel={() => setPendingAction(null)}
+          onConfirm={() => {
+            if (pendingAction !== 'Partial') onReview(invoice, pendingAction);
+            setPendingAction(null);
+          }}
+        />
+      )}
+
+      <style>{`
+        @media (max-width: 860px) {
+          .os-page > div[style*="grid-template-columns: 1fr 1fr 260px"] {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
 }

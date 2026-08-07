@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ArrowLeft, Search, Package, ChevronRight, User, Phone, MapPin, TrendingUp, Calendar, CreditCard, BarChart2 } from 'lucide-react';
 import { money } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 
@@ -42,26 +43,271 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
   const totalSpent = orders.filter((order) => order.status !== 'Cancelled').reduce((sum, order) => sum + Number(order.total || 0), 0);
   const initials = customer.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2);
 
-  return <div className="customer-orders-page">
-    <header className="customer-orders-heading">
-      <p><button type="button" onClick={onBack}>Customers</button> &nbsp;›&nbsp; {customer.fullName} &nbsp;›&nbsp; <strong>Orders</strong></p>
-      <h2>Orders</h2><span>View all orders placed by {customer.fullName}.</span>
-    </header>
-    <section className="customer-orders-hero">
-      <div className="customer-orders-person"><i>{initials}</i><span><div><h3>{customer.fullName}</h3><b>{Number(customer.totalOrders) > 1 ? 'Returning Customer' : 'New Customer'}</b></div><p>⌕ &nbsp; {customer.phone || '—'} &nbsp;&nbsp;&nbsp; ▣ &nbsp; {customer.email || '—'} &nbsp;&nbsp;&nbsp; ◉ &nbsp; {customer.stores?.[0] || 'Lekki'} Store</p><small>Customer since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Jan 2025'}</small></span></div>
-      <dl><div><dt>Total Orders</dt><dd>{orders.length}</dd><small>View all orders</small></div><div><dt>Active Orders</dt><dd>{active}</dd><small>View active</small></div><div><dt>Completed Orders</dt><dd>{completed}</dd></div><div><dt>Total Spent</dt><dd>{money.format(totalSpent)}</dd><small>View summary</small></div></dl>
-    </section>
-    <section className="customer-orders-register">
-      <header><label>⌕<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by invoice number, item, status..." /></label><div>▣ &nbsp; From date &nbsp;&nbsp; → &nbsp;&nbsp; To date &nbsp; ▣</div><button>▽ &nbsp; Filters &nbsp;⌄</button></header>
-      <nav><div>{['All Orders', 'Active', 'In Production', 'Ready for Collection', 'Completed', 'Cancelled'].map((item) => <button className={filter === item ? 'active' : ''} onClick={() => setFilter(item)} key={item}>{item}</button>)}</div><select><option>Sort by: Newest First</option><option>Oldest First</option></select></nav>
-      <div className="customer-orders-layout">
-        <div className="customer-orders-table"><table><thead><tr><th>Invoice No.</th><th>Item / Description</th><th>Pieces</th><th>Status</th><th>Order Date</th><th>Delivery Date</th><th>Total</th><th>Actions</th></tr></thead><tbody>{filtered.map((order, index) => <tr key={order.invoiceNumber}><td><div className={`order-garment garment-${index % 5}`}>♟</div><span><strong>{order.invoiceNumber}</strong><small>Order #{order.orderNumber}</small></span></td><td><strong>{order.item || 'Custom Outfit'}</strong><small>{order.description}</small></td><td>{order.pieces || 1}</td><td><Status>{order.status}</Status><small>{order.status === 'In Production' ? 'With Production' : order.status === 'Ready for Collection' ? 'Ready' : order.status === 'Completed' ? 'Collected' : 'Cancelled'}</small></td><td>{order.orderDate}</td><td>{order.deliveryDate}<small className={order.status === 'In Production' ? 'late' : ''}>{order.status === 'In Production' ? '4 days left' : order.status === 'Completed' ? 'Collected' : ''}</small></td><td>{money.format(order.total)}</td><td><button>View Details</button><button className="dots">⋮</button></td></tr>)}</tbody></table>{!filtered.length && <div className="accounts-empty">No orders match this view.</div>}</div>
-        <aside className="customer-order-summary">
-          <article><h3>Order Summary</h3><div className="order-summary-chart"><i><b>{orders.length}</b></i><ul><li><em className="green"/>In Production <b>{active}</b></li><li><em className="blue"/>Ready for Collection <b>{orders.filter((o) => o.status === 'Ready for Collection').length}</b></li><li><em className="mint"/>Completed <b>{completed}</b></li><li><em/>Cancelled <b>{orders.filter((o) => o.status === 'Cancelled').length}</b></li></ul></div><dl><dt>Total Orders</dt><dd>{orders.length}</dd><dt>Total Spent</dt><dd>{money.format(totalSpent)}</dd><dt>Average Order Value</dt><dd>{money.format(orders.length ? totalSpent / orders.length : 0)}</dd></dl></article>
-          <article><h3>Most Ordered Items</h3><ol>{orders.slice(0, 5).map((order, index) => <li key={order.invoiceNumber}><i>{index + 1}</i><strong>{order.item}</strong><span>{index ? '1 order' : `${Math.max(1, orders.length - 3)} orders`}</span></li>)}</ol><button>View All Items</button></article>
+  return (
+    <div className="os-page">
+      {/* Header */}
+      <div className="os-page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7, background: 'none',
+              border: '1px solid #ddd5c8', borderRadius: 8, padding: '8px 14px',
+              fontSize: 13, fontWeight: 600, color: '#5a4e42', cursor: 'pointer',
+            }}
+          >
+            <ArrowLeft size={14} strokeWidth={2} />
+            Back
+          </button>
+          <div className="os-page-title">
+            <Package size={22} strokeWidth={1.8} />
+            <div>
+              <h2>{customer.fullName} — Orders</h2>
+              <p>View all orders placed by this customer</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Customer banner */}
+      <div className="os-card">
+        <div className="os-card-head">
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%', background: '#1a1611',
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16, fontWeight: 700, flexShrink: 0,
+          }}>{initials}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: 16, fontFamily: 'var(--font-display)' }}>{customer.fullName}</strong>
+              <span style={{
+                padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                background: Number(customer.totalOrders) > 1 ? '#f0faf4' : '#fffbf0',
+                color: Number(customer.totalOrders) > 1 ? '#2a7d4f' : '#7a6030',
+              }}>
+                {Number(customer.totalOrders) > 1 ? 'Returning' : 'New'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 5 }}>
+              {customer.phone && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#5a4e42' }}>
+                  <Phone size={11} strokeWidth={1.8} style={{ color: '#c97b08' }} />
+                  {customer.phone}
+                </span>
+              )}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#5a4e42' }}>
+                <MapPin size={11} strokeWidth={1.8} style={{ color: '#c97b08' }} />
+                {customer.stores?.[0] || 'Lekki'} Store
+              </span>
+              <span style={{ fontSize: 12, color: '#8a7a6a' }}>
+                Since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Jan 2025'}
+              </span>
+            </div>
+          </div>
+        </div>
+        {/* KPI row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderTop: '1px solid #f3ede5' }}>
+          {[
+            { Icon: Package, label: 'Total Orders', value: orders.length },
+            { Icon: TrendingUp, label: 'Active Orders', value: active },
+            { Icon: Calendar, label: 'Completed', value: completed },
+            { Icon: CreditCard, label: 'Total Spent', value: money.format(totalSpent) },
+          ].map(({ Icon, label, value }, i) => (
+            <div key={label} style={{
+              padding: '12px 16px', borderRight: i < 3 ? '1px solid #f3ede5' : 'none', textAlign: 'center',
+            }}>
+              <Icon size={14} strokeWidth={1.8} style={{ color: '#c97b08', margin: '0 auto 4px' }} />
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#1a1611' }}>{value}</div>
+              <div style={{ fontSize: 11, color: '#8a7a6a', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="os-card">
+        <div className="os-card-body" style={{ gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{
+              flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 8,
+              padding: '9px 12px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
+            }}>
+              <Search size={15} strokeWidth={1.8} style={{ color: '#b0a090', flexShrink: 0 }} />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by invoice number, item, status..."
+                style={{ border: 'none', outline: 'none', fontSize: 14, color: '#1a1611', background: 'transparent', flex: 1 }}
+              />
+            </label>
+          </div>
+          <nav style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {['All Orders', 'Active', 'In Production', 'Ready for Collection', 'Completed', 'Cancelled'].map((item) => (
+              <button
+                key={item}
+                onClick={() => setFilter(item)}
+                style={{
+                  padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                  border: filter === item ? 'none' : '1px solid #ddd5c8',
+                  background: filter === item ? '#1a1611' : 'transparent',
+                  color: filter === item ? '#fff' : '#5a4e42',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >{item}</button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      {/* Desktop table */}
+      <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #eee5da', background: '#fff' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#faf7f3' }}>
+              {['Invoice No.', 'Item / Description', 'Pieces', 'Status', 'Order Date', 'Delivery Date', 'Total', 'Actions'].map((col) => (
+                <th key={col} style={{
+                  padding: '11px 14px', textAlign: 'left', fontSize: 10,
+                  fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase',
+                  letterSpacing: '0.08em', whiteSpace: 'nowrap',
+                }}>{col}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((order) => (
+              <tr
+                key={order.invoiceNumber}
+                style={{ borderBottom: '1px solid #f3ede5' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#faf7f3'}
+                onMouseLeave={(e) => e.currentTarget.style.background = ''}
+              >
+                <td style={{ padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: 8, background: '#f3ede5',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      <Package size={14} strokeWidth={1.8} style={{ color: '#c97b08' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#1a1611' }}>{order.invoiceNumber}</div>
+                      <div style={{ fontSize: 11, color: '#8a7a6a' }}>Order #{order.orderNumber}</div>
+                    </div>
+                  </div>
+                </td>
+                <td style={{ padding: '12px 14px' }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: '#1a1611' }}>{order.item || 'Custom Outfit'}</div>
+                  <div style={{ fontSize: 11, color: '#8a7a6a' }}>{order.description}</div>
+                </td>
+                <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{order.pieces || 1}</td>
+                <td style={{ padding: '12px 14px' }}>
+                  <Status>{order.status}</Status>
+                  <div style={{ fontSize: 11, color: '#8a7a6a', marginTop: 3 }}>
+                    {order.status === 'In Production' ? 'With Production'
+                      : order.status === 'Ready for Collection' ? 'Ready'
+                      : order.status === 'Completed' ? 'Collected'
+                      : 'Cancelled'}
+                  </div>
+                </td>
+                <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{order.orderDate}</td>
+                <td style={{ padding: '12px 14px' }}>
+                  <div style={{ fontSize: 13, color: '#5a4e42' }}>{order.deliveryDate}</div>
+                  {order.status === 'In Production' && (
+                    <div style={{ fontSize: 11, color: '#8a3520', fontWeight: 600, marginTop: 2 }}>4 days left</div>
+                  )}
+                  {order.status === 'Completed' && (
+                    <div style={{ fontSize: 11, color: '#2a7d4f', fontWeight: 600, marginTop: 2 }}>Collected</div>
+                  )}
+                </td>
+                <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700, color: '#1a1611' }}>{money.format(order.total)}</td>
+                <td style={{ padding: '12px 14px' }}>
+                  <button style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '5px 10px', border: '1px solid #ddd5c8', borderRadius: 6,
+                    fontSize: 12, fontWeight: 600, background: '#fff', color: '#1a1611', cursor: 'pointer',
+                  }}>
+                    View Details
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!filtered.length && (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#8a7a6a', fontSize: 13 }}>
+            No orders match this view.
+          </div>
+        )}
+      </div>
+
+      {/* Mobile card list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} className="os-customers-mobile-list">
+        {filtered.map((order) => (
+          <div key={`m-${order.invoiceNumber}`} className="os-card">
+            <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 9, background: '#f3ede5',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <Package size={16} strokeWidth={1.8} style={{ color: '#c97b08' }} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#c97b08' }}>{order.invoiceNumber}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: '#1a1611' }}>{order.item}</div>
+                  <div style={{ fontSize: 12, color: '#8a7a6a' }}>{order.description}</div>
+                </div>
+              </div>
+              <Status>{order.status}</Status>
+            </div>
+            <div style={{ borderTop: '1px solid #f3ede5', display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 16px', gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1611', marginTop: 2 }}>{money.format(order.total)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Delivery</div>
+                <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>{order.deliveryDate}</div>
+              </div>
+            </div>
+            <div style={{ borderTop: '1px solid #f3ede5', padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '7px 14px', border: '1px solid #ddd5c8', borderRadius: 8,
+                fontSize: 13, fontWeight: 600, background: '#fff', color: '#1a1611', cursor: 'pointer',
+              }}>
+                View Details <ChevronRight size={13} strokeWidth={2} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Summary sidebar row */}
+      <div className="os-layout">
+        <div />
+        <aside className="os-sidebar">
+          <div className="os-summary-card">
+            <header>
+              <BarChart2 size={15} strokeWidth={1.8} />
+              <h3>Order Summary</h3>
+            </header>
+            <dl>
+              <dt>Total Orders</dt><dd>{orders.length}</dd>
+              <dt>Total Spent</dt><dd>{money.format(totalSpent)}</dd>
+              <dt>Average Order Value</dt><dd>{money.format(orders.length ? totalSpent / orders.length : 0)}</dd>
+              <dt>In Production</dt><dd>{active}</dd>
+              <dt>Completed</dt><dd>{completed}</dd>
+              <dt>Cancelled</dt><dd>{orders.filter((o) => o.status === 'Cancelled').length}</dd>
+            </dl>
+          </div>
         </aside>
       </div>
-      <footer>Showing {filtered.length ? 1 : 0} to {filtered.length} of {orders.length} orders</footer>
-    </section>
-  </div>;
+
+      <div style={{ padding: '4px 0', fontSize: 13, color: '#8a7a6a' }}>
+        Showing {filtered.length ? 1 : 0}–{filtered.length} of {orders.length} orders
+      </div>
+    </div>
+  );
 }

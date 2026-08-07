@@ -26,7 +26,7 @@ export const inventoryCategories = [
 export const navByRole = {
   owner: ['Overview', 'Orders', 'Customers', 'Invoices', 'Payments', 'Production', 'Inventory', 'User Management', 'Stores', 'Memberships', 'Reports', 'Settings'],
   admin: ['Overview', 'Orders', 'Customers', 'Payments', 'Production', 'Inventory', 'Staff', 'Reports', 'Notifications'],
-  store_manager: ['Overview', 'Invoices', 'Orders', 'Customers', 'Order Sheet', 'Notifications'],
+  store_manager: ['Overview', 'Customers', 'Orders', 'Invoices', 'Order Sheet', 'Notifications'],
   accounts: ['Overview', 'Invoices', 'Payments', 'Reports', 'Inventory', 'Notifications'],
   production_manager: ['Overview', 'Production', 'Inventory', 'Notifications'],
   inventory_manager: ['Overview', 'Inventory', 'Notifications'],
@@ -41,4 +41,25 @@ export const accountTypeByRole = {
   production_manager: { label: 'Production Account', short: 'Production', icon: 'PR' },
   inventory_manager: { label: 'Inventory Manager Account', short: 'Inventory Manager', icon: 'IM' },
   tailor: { label: 'Tailor Account', short: 'Tailor', icon: 'TA' },
+};
+
+export const navIcons = {
+  Overview: 'LayoutDashboard',
+  Orders: 'Package',
+  Customers: 'Users',
+  Invoices: 'FileText',
+  Payments: 'CreditCard',
+  Production: 'Factory',
+  Inventory: 'Boxes',
+  Notifications: 'Bell',
+  Reports: 'BarChart2',
+  Settings: 'Settings',
+  'Order Sheet': 'ClipboardList',
+  'My Tasks': 'CheckSquare',
+  'Weekly Log': 'Calendar',
+  Staff: 'Users2',
+  'Tailors & Staff': 'Users2',
+  'User Management': 'UserCog',
+  Stores: 'Building2',
+  Memberships: 'Star',
 };
