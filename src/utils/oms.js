@@ -123,6 +123,46 @@ export const invoiceDocumentPayload = (invoice) => ({
   notes: invoice.notes,
 });
 
+// A tab has to be opened inside the click itself. Opened after an await — once
+// the invoice HTML has come back from the server — the browser treats it as an
+// unrequested popup and blocks it, so nothing happens at all.
+export const openDocumentTab = () => {
+  try {
+    return window.open('', '_blank');
+  } catch {
+    return null;
+  }
+};
+
+// Shows the invoice as a document the reader can then print or save.
+//
+// This used to go straight to a hidden iframe and call print() on it. On a
+// phone that frequently does nothing whatsoever, and because the iframe is
+// invisible there is no way to tell a silent failure from a dead button — which
+// is how it was reported. Opening the document in a tab always shows something;
+// on a desktop the print dialog still follows automatically.
+export const presentInvoiceDocument = (html, invoiceNumber = 'invoice', tab = null) => {
+  if (tab && !tab.closed) {
+    tab.document.open();
+    tab.document.write(html);
+    tab.document.close();
+    try { tab.document.title = invoiceNumber; } catch { /* cross-origin guard */ }
+
+    const isTouch = typeof window !== 'undefined'
+      && window.matchMedia?.('(hover: none) and (pointer: coarse)').matches;
+    if (!isTouch) {
+      // The document has to have laid out before it can be printed.
+      tab.addEventListener?.('load', () => tab.print?.());
+      window.setTimeout(() => { try { tab.print?.(); } catch { /* dismissed */ } }, 400);
+    }
+    return 'tab';
+  }
+
+  // Popup blocked: fall back to the hidden frame rather than doing nothing.
+  printInvoiceHtml(html, invoiceNumber);
+  return 'print';
+};
+
 // Prints the invoice document on its own. Printing the page directly would
 // capture the surrounding app chrome — nav, buttons and all — inside the PDF.
 export const printInvoiceHtml = (html, invoiceNumber = 'invoice') => {

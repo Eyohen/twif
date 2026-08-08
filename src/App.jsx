@@ -26,8 +26,9 @@ import {
   dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
   isInvoiceApproved, canShowJobInProduction, productionJobFromInvoice,
   mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid,
-  invoiceDocumentPayload, printInvoiceHtml, PERIOD_OPTIONS, filterByPeriod, periodTrend,
+  invoiceDocumentPayload, PERIOD_OPTIONS, filterByPeriod, periodTrend,
   amountReceived, invoicePayable, formatMoment, CUSTOMER_TRACKING_STEPS,
+  openDocumentTab, presentInvoiceDocument,
 } from './utils/oms';
 
 const trackingBaseUrl = (
@@ -1468,10 +1469,13 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
 
   const downloadInvoicePdf = async (invoice) => {
     setRowNotice('');
+    // Opened before awaiting the server, or the browser blocks it as a popup.
+    const tab = openDocumentTab();
     try {
       const response = await api.post('/oms/invoices/html-preview', invoiceDocumentPayload(invoice), { responseType: 'text' });
-      printInvoiceHtml(response.data, invoice.invoiceNumber);
+      presentInvoiceDocument(response.data, invoice.invoiceNumber, tab);
     } catch (error) {
+      tab?.close();
       setRowNotice(error.response?.data?.message || 'Could not prepare that invoice PDF.');
     }
   };
@@ -1555,7 +1559,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
                 invoice can be produced on demand; an order sheet only exists
                 once production has raised one. */}
             <section className="store-detail-panel detail-documents"><h3>Documents</h3>
-              <article role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => downloadInvoicePdf(invoice)} onKeyDown={(event) => { if (event.key === 'Enter') downloadInvoicePdf(invoice); }}><i>▤</i><span><strong>Invoice PDF</strong><small>Download</small></span></article>
+              <article role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => downloadInvoicePdf(invoice)} onKeyDown={(event) => { if (event.key === 'Enter') downloadInvoicePdf(invoice); }}><i>▤</i><span><strong>Invoice PDF</strong><small>Open to print or save</small></span></article>
               {invoice.orderSheet ? <article><i>▤</i><span><strong>Order Sheet</strong><small>Attached to this invoice</small></span></article> : <article><i>▤</i><span><strong>Order Sheet</strong><small>Not raised yet</small></span></article>}
             </section>
           </aside>
@@ -1877,353 +1881,6 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
   );
 }
 
-function StoreOrdersView({ sentInvoices = [] }) {
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('All Orders');
-  const [sort, setSort] = useState('Newest first');
-  const ordersKpiRef = useRef(null);
-  const [activeOrdersKpiDot, setActiveOrdersKpiDot] = useState(0);
-  const ORDERS_KPI_COUNT = 4;
-  const handleOrdersKpiScroll = () => {
-    if (!ordersKpiRef.current) return;
-    const { scrollLeft, scrollWidth } = ordersKpiRef.current;
-    setActiveOrdersKpiDot(Math.round(scrollLeft / (scrollWidth / ORDERS_KPI_COUNT)));
-  };
-  const orders = sentInvoices.map((invoice) => ({
-    ...invoice,
-    job: productionJobFromInvoice(invoice),
-    displayStatus: invoice.orderSheet?.status || invoice.orderStatus || invoiceApprovalStatus(invoice),
-  }));
-  const counts = {
-    'All Orders': orders.length,
-    'Pending Approval': orders.filter((order) => invoiceApprovalStatus(order) === 'Pending Accounts').length,
-    'In Progress': orders.filter((order) => ['Assigned', 'In Progress'].includes(order.displayStatus)).length,
-    'Ready for Collection': orders.filter((order) => ['Ready', 'Ready for Collection'].includes(order.displayStatus)).length,
-    Unassigned: orders.filter((order) => !order.job?.tailor || order.job?.tailor === 'Unassigned').length,
-  };
-  const visibleOrders = orders
-    .filter((order) => filter === 'All Orders'
-      || (filter === 'Pending Approval' && invoiceApprovalStatus(order) === 'Pending Accounts')
-      || (filter === 'In Progress' && ['Assigned', 'In Progress'].includes(order.displayStatus))
-      || (filter === 'Ready for Collection' && ['Ready', 'Ready for Collection'].includes(order.displayStatus))
-      || (filter === 'Unassigned' && (!order.job?.tailor || order.job?.tailor === 'Unassigned')))
-    .filter((order) => `${order.invoiceNumber} ${order.customer} ${order.item}`.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => sort === 'Oldest first'
-      ? new Date(a.createdAt || 0) - new Date(b.createdAt || 0)
-      : new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-
-  if (selectedInvoice) {
-    const invoice = selectedInvoice;
-    const job = invoice.job || {};
-    const paidAmount = toNumber(invoice.paid || invoice.amountPaid || (invoice.paymentStatus === 'Fully Paid' ? invoice.total : invoice.paymentStatus === 'Partial Paid' ? toNumber(invoice.total) / 2 : 0));
-    const balance = Math.max(0, toNumber(invoice.total) - paidAmount);
-    return (
-      <div className="store-order-detail">
-        <div className="store-detail-toolbar"><button type="button" onClick={() => setSelectedInvoice(null)}>← &nbsp; Back to Orders</button><div><button>▣ &nbsp; Print</button><button>More &nbsp; •••</button></div></div>
-        <section className="store-order-hero">
-          <div><span>{invoice.invoiceNumber}</span><h2>{invoice.customer}</h2><p>{invoice.item} · {invoice.pieces || job.pieces || 1} pieces · {invoice.store}</p></div>
-          <Status>{invoice.paymentStatus}</Status>
-          <dl><div><dt>▣ &nbsp; Invoice Date</dt><dd>{invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</dd></div><div><dt>▣ &nbsp; Due Date</dt><dd>{job.delivery ? new Date(`${job.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</dd></div><div><dt>▱ &nbsp; Store</dt><dd>{invoice.store} Store</dd></div></dl>
-        </section>
-        <nav className="store-detail-tabs">{['Order Details', 'Items & Pricing', 'Payments', 'Communications', 'Notes & History'].map((tab, index) => <button className={index === 0 ? 'active' : ''} key={tab}>{tab}</button>)}</nav>
-        <div className="store-detail-grid">
-          <div className="store-detail-main">
-            <section className="store-detail-panel order-information"><h3>Order Information</h3><dl>
-              <div><dt>Payment Status</dt><dd><Status>{invoice.paymentStatus}</Status></dd><dt>Payment Method</dt><dd>{invoice.paymentMethod || 'Bank Transfer'}</dd><dt>Store</dt><dd>{invoice.store} Store</dd><dt>Customer Phone</dt><dd>{invoice.phone || job.phone || '—'}</dd></div>
-              <div><dt>Invoice Number</dt><dd>{invoice.invoiceNumber}</dd><dt>Sales Person</dt><dd>{invoice.createdBy || 'Bola'}</dd><dt>Customer Email</dt><dd>{invoice.email || '—'}</dd></div>
-            </dl></section>
-            <section className="store-detail-panel production-details"><h3>Production Details</h3><dl><div><dt>♙ &nbsp; Tailor</dt><dd>{job.tailor || 'Unassigned'}</dd></div><div><dt>▦ &nbsp; Fabric</dt><dd>{job.fabric || 'Not selected'}</dd></div><div><dt>▧ &nbsp; Style Images</dt><dd>{job.images || 0}</dd></div><div><dt>▤ &nbsp; Special Instructions</dt><dd>{job.productionNote || job.designNotes || invoice.itemNote || 'No special instructions'}</dd></div></dl></section>
-            <section className="store-detail-panel order-timeline"><h3>Timeline</h3><div><article className="done"><i>✓</i><span><strong>Invoice Created</strong><small>by {invoice.createdBy || 'Bola'}</small></span><time>{invoice.createdAt || 'Recently'}</time></article><article className="paid"><i>●</i><span><strong>Payment Made ({invoice.paymentStatus})</strong><small>{money.format(paidAmount)} received via {invoice.paymentMethod || 'Bank Transfer'}</small></span><time>Recently</time></article><article><i>○</i><span><strong>{invoiceApprovalStatus(invoice) === 'Approved' ? 'Accounts Approved' : 'Awaiting Approval'}</strong><small>{invoiceApprovalStatus(invoice) === 'Approved' ? 'Invoice approved by accounts' : 'Waiting for accounts approval'}</small></span><time>Recently</time></article></div></section>
-          </div>
-          <aside className="store-detail-rail">
-            <section className="store-detail-panel order-summary"><h3>Order Summary</h3><dl><div><dt>Invoice Total</dt><dd>{money.format(invoice.total)}</dd></div><div><dt>Amount Paid</dt><dd className="green">{money.format(paidAmount)}</dd></div><div><dt>Balance Due</dt><dd className="red">{money.format(balance)}</dd></div></dl><div><span>Balance Due</span><strong>{money.format(balance)}</strong></div></section>
-
-            <section className="store-detail-panel detail-documents"><h3>Documents</h3>{[['▤', 'Invoice PDF', 'Download'], ['▤', 'Order Sheet', 'Download'], ['▧', `Style Images (${job.images || 0})`, 'View']].map(([icon, label, action]) => <article key={label}><i>{icon}</i><span><strong>{label}</strong><small>{action}</small></span></article>)}</section>
-          </aside>
-        </div>
-      </div>
-    );
-  }
-
-  const orderStatusBorderColor = (status) => {
-    if (['Assigned', 'In Progress'].includes(status)) return '#3b82f6';
-    if (['Ready', 'Ready for Collection'].includes(status)) return '#2a7d4f';
-    if (['Pending Accounts', 'Pending Approval'].includes(status)) return '#c97b08';
-    return '#ddd5c8';
-  };
-
-  const orderTabs = [
-    { key: 'All Orders', label: 'All' },
-    { key: 'Pending Approval', label: 'Pending' },
-    { key: 'In Progress', label: 'In Progress' },
-    { key: 'Ready for Collection', label: 'Ready' },
-    { key: 'Unassigned', label: 'Unassigned' },
-  ];
-
-  return (
-    <div className="os-page">
-      <div className="os-page-header">
-        <div className="os-page-title">
-          <Package size={22} strokeWidth={1.5} style={{ color: '#c97b08', flexShrink: 0 }} />
-          <div>
-            <h2>Order Tracking</h2>
-            <p>Track production progress for your orders</p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <select
-            value={sort}
-            onChange={(event) => setSort(event.target.value)}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #ddd5c8',
-              borderRadius: 8,
-              fontSize: 13,
-              color: '#5a4e42',
-              background: '#fff',
-              cursor: 'pointer',
-            }}
-          >
-            <option>Newest first</option>
-            <option>Oldest first</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="kpi-carousel-wrap">
-        <section className="store-order-kpis" ref={ordersKpiRef} onScroll={handleOrdersKpiScroll}>
-          {[
-            { icon: <FileText size={18} strokeWidth={1.5} />, label: 'Invoices Sent', value: orders.length, detail: 'Live customer invoices', tone: 'gold' },
-            { icon: <Clock size={18} strokeWidth={1.5} />, label: 'Pending Approval', value: counts['Pending Approval'], detail: 'Waiting for accounts', tone: 'dark' },
-            { icon: <Activity size={18} strokeWidth={1.5} />, label: 'Active Orders', value: counts['In Progress'], detail: 'Currently in production', tone: 'green' },
-            { icon: <CheckCircle size={18} strokeWidth={1.5} />, label: 'Ready Orders', value: counts['Ready for Collection'], detail: 'Ready for customer handoff', tone: 'blue' },
-          ].map(({ icon, label, value, detail, tone }) => (
-            <article className={`store-order-kpi ${tone}`} key={label}>
-              <i style={{ display: 'flex', alignItems: 'center' }}>{icon}</i>
-              <span>{label}</span>
-              <strong>{value}</strong>
-              <small>{detail}</small>
-            </article>
-          ))}
-        </section>
-      </div>
-
-      <div className="os-card" style={{ overflow: 'visible' }}>
-        <div className="os-card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
-          <nav style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
-            {orderTabs.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setFilter(tab.key)}
-                style={{
-                  padding: '7px 14px',
-                  borderRadius: 20,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  background: filter === tab.key ? '#1a1611' : 'transparent',
-                  color: filter === tab.key ? '#ffffff' : '#5a4e42',
-                  transition: 'all 0.15s',
-                }}
-              >
-                {tab.label}
-                <span style={{
-                  background: filter === tab.key ? 'rgba(255,255,255,0.2)' : '#eee5da',
-                  color: filter === tab.key ? '#fff' : '#8a7a6a',
-                  borderRadius: 10,
-                  padding: '1px 7px',
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}>
-                  {counts[tab.key]}
-                </span>
-              </button>
-            ))}
-          </nav>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <Search size={14} strokeWidth={2} style={{ position: 'absolute', left: 10, color: '#b0a090', pointerEvents: 'none' }} />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by invoice, customer..."
-              style={{
-                paddingLeft: 32,
-                paddingRight: 12,
-                paddingTop: 8,
-                paddingBottom: 8,
-                border: '1px solid #ddd5c8',
-                borderRadius: 8,
-                fontSize: 13,
-                color: '#1a1611',
-                background: '#fff',
-                outline: 'none',
-                width: 220,
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="os-card-body" style={{ padding: 18 }}>
-          {visibleOrders.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#8a7a6a', fontSize: 13 }}>
-              No orders match this view.
-            </div>
-          ) : (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-              gap: 14,
-            }}>
-              {visibleOrders.map((invoice) => {
-                const job = invoice.job || {};
-                const borderColor = orderStatusBorderColor(invoice.displayStatus);
-                return (
-                  <div
-                    key={invoice.invoiceNumber}
-                    onClick={() => setSelectedInvoice(invoice)}
-                    style={{
-                      background: '#fff',
-                      border: '1px solid #eee5da',
-                      borderLeft: `4px solid ${borderColor}`,
-                      borderRadius: 10,
-                      padding: 16,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 10,
-                      transition: 'box-shadow 0.15s',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.07)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = ''; }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <span style={{
-                        fontSize: 11, fontFamily: 'monospace',
-                        color: '#8a7a6a', letterSpacing: '0.04em',
-                      }}>
-                        {invoice.invoiceNumber}
-                      </span>
-                      <Status>{invoice.displayStatus}</Status>
-                    </div>
-
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 15, color: '#1a1611', marginBottom: 2 }}>
-                        {invoice.customer}
-                      </div>
-                      <div style={{ fontSize: 12, color: '#8a7a6a', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Store size={11} strokeWidth={2} />
-                        {invoice.store} Store
-                        {invoice.item && (
-                          <>
-                            <span style={{ color: '#ddd5c8' }}>·</span>
-                            {invoice.item}
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: 8,
-                      paddingTop: 10,
-                      borderTop: '1px solid #f3ede5',
-                    }}>
-                      <div>
-                        <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
-                          Delivery
-                        </div>
-                        <div style={{ fontSize: 12, color: '#5a4e42', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Calendar size={11} strokeWidth={2} style={{ color: '#c97b08' }} />
-                          {job.delivery
-                            ? new Date(`${job.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                            : 'Not set'}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
-                          Total
-                        </div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1611' }}>
-                          {money.format(invoice.total)}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
-                          Fabric
-                        </div>
-                        <div style={{ fontSize: 12, color: '#5a4e42', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Scissors size={11} strokeWidth={2} style={{ color: '#8a7a6a' }} />
-                          {job.fabric || 'Not selected'}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
-                          Payment
-                        </div>
-                        <Status>{invoice.paymentStatus}</Status>
-                      </div>
-                    </div>
-
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      paddingTop: 8,
-                      borderTop: '1px solid #f3ede5',
-                    }}>
-                      <span style={{ fontSize: 11, color: '#8a7a6a', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Users size={11} strokeWidth={2} />
-                        {job.tailor || 'Unassigned'}
-                      </span>
-                      <span style={{
-                        fontSize: 12, color: '#c97b08', fontWeight: 600,
-                        display: 'flex', alignItems: 'center', gap: 3,
-                      }}>
-                        View <ChevronRight size={12} strokeWidth={2.5} />
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div style={{
-          padding: '12px 18px',
-          borderTop: '1px solid #eee5da',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          background: '#faf7f3',
-        }}>
-          <span style={{ fontSize: 12, color: '#8a7a6a' }}>
-            Showing {visibleOrders.length} of {orders.length} orders
-          </span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {['‹', '1', '›'].map((label, i) => (
-              <button key={i} type="button" style={{
-                border: '1px solid #ddd5c8', borderRadius: 6,
-                padding: '4px 10px', fontSize: 12, cursor: 'pointer',
-                background: label === '1' ? '#1a1611' : '#fff',
-                color: label === '1' ? '#fff' : '#5a4e42',
-                fontWeight: label === '1' ? 700 : 400,
-              }}>{label}</button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function CustomersView() {
   const [customers, setCustomers] = useState([]);
   const [search, setSearch] = useState('');
@@ -2428,7 +2085,13 @@ function InvoiceDocumentPreview({ html, invoiceNumber }) {
         <button type="button" onClick={() => setZoom(null)}>Fit Width</button>
         <span />
         {/* There were two icon buttons here that did exactly the same thing. */}
-        <button type="button" onClick={() => printInvoiceHtml(html, invoiceNumber)}>⇩ Download</button>
+        <button
+          type="button"
+          onClick={() => {
+            const tab = openDocumentTab();
+            presentInvoiceDocument(html, invoiceNumber, tab);
+          }}
+        >⇩ Download</button>
       </div>
       <div className="invoice-document-frame" ref={frameRef} style={{ height: INVOICE_PREVIEW_HEIGHT }}>
         <iframe
@@ -2654,7 +2317,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
       <section className="invoice-preview-title"><div><h2>{previewTab === 'invoice' ? 'Invoice Preview' : 'Email Preview'}</h2><p>This is how your {previewTab === 'invoice' ? 'invoice' : 'email'} will appear to the customer.</p></div><nav><button className={previewTab === 'invoice' ? 'active' : ''} onClick={() => setPreviewTab('invoice')}>Invoice Preview</button><button className={previewTab === 'email' ? 'active' : ''} onClick={() => setPreviewTab('email')}>Email Preview</button></nav></section>
       {previewTab === 'invoice' ? <InvoiceDocumentPreview html={previewHtml} invoiceNumber={form.invoiceNumber} /> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], ['Amount Due', money.format(balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div><button>Download Invoice PDF</button><button>Track Your Order</button></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>Balance Due</span><strong>{money.format(balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
       {message ? <div className="invoice-message">{message}</div> : null}
-      <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => printInvoiceHtml(previewHtml, form.invoiceNumber)}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
+      <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => { const tab = openDocumentTab(); presentInvoiceDocument(previewHtml, form.invoiceNumber, tab); }}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
     </div>;
   }
 
