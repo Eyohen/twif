@@ -8876,3 +8876,13 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 .notification-actionable { cursor: pointer; transition: background .15s, box-shadow .15s; }
 .notification-actionable:hover { background: #fffdf7; }
 .notification-actionable:focus-visible { outline: 2px solid #c97b08; outline-offset: 2px; }
+
+/* Four-across stat strip inside a card; two-up on phones so the numbers
+   stay readable instead of being squeezed into slivers. */
+.os-stat-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 720px) {
+  .os-stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .os-stat-strip > div { border-right: none !important; border-bottom: 1px solid #f3ede5; }
+  .os-stat-strip > div:nth-child(odd) { border-right: 1px solid #f3ede5 !important; }
+  .os-stat-strip > div:nth-last-child(-n+2) { border-bottom: none; }
+}

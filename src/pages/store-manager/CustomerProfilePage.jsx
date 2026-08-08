@@ -151,7 +151,7 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
           </div>
         </div>
         {/* Quick stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderTop: '1px solid #f3ede5' }}>
+        <div className="os-stat-strip" style={{ borderTop: '1px solid #f3ede5' }}>
           {[
             { label: 'Total Orders', value: customer.totalOrders || invoices.length, action: 'View all orders', onClick: onViewOrders },
             { label: 'Last Visit', value: customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—', action: 'Recently' },

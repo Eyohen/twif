@@ -20,11 +20,20 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
   const [filter, setFilter] = useState('All Orders');
   const customerInvoices = sentInvoices.filter((invoice) => invoice.customer === customer.fullName);
   const orders = customerInvoices.map(normalizeOrder);
+  // The pill labels are the store's language; the underlying order sheet uses
+  // its own status names, so each pill maps to the statuses it covers.
+  const STATUSES_BY_FILTER = {
+    'In Production': ['Assigned', 'In Progress', 'Order Sheet Confirmed'],
+    'Ready for Collection': ['Ready', 'Ready for Collection'],
+    Completed: ['Completed', 'Collected'],
+    Cancelled: ['Cancelled'],
+  };
+
   const filtered = useMemo(() => orders.filter((order) => {
     const matchesSearch = `${order.invoiceNumber} ${order.item} ${order.status}`.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filter === 'All Orders'
-      || (filter === 'Active' && !['Completed', 'Cancelled'].includes(order.status))
-      || order.status === filter;
+      || (filter === 'Active' && !['Completed', 'Collected', 'Cancelled'].includes(order.status))
+      || (STATUSES_BY_FILTER[filter] || []).includes(order.status);
     return matchesSearch && matchesFilter;
   }), [orders, search, filter]);
   const completed = orders.filter((order) => order.status === 'Completed').length;
@@ -96,7 +105,7 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
           </div>
         </div>
         {/* KPI row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderTop: '1px solid #f3ede5' }}>
+        <div className="os-stat-strip" style={{ borderTop: '1px solid #f3ede5' }}>
           {[
             { Icon: Package, label: 'Total Orders', value: orders.length },
             { Icon: TrendingUp, label: 'Active Orders', value: active },
