@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, AlertTriangle, XCircle, Package, LayoutGrid, PlusCircle, List, Boxes, TrendingUp, ChevronRight, Eye } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money, formatMoment, isInvoiceApproved } from '../../utils/oms';
-import { stockStatus, itemImageUrl } from './item';
+import { stockStatus, itemImage } from './item';
 import ItemDetailsPage from './ItemDetailsPage';
 
 const TONE_COLORS = {
@@ -143,9 +143,7 @@ export default function InventoryOverviewPage({ onNavigate }) {
                       >
                         <td style={{ ...td, fontWeight: 600, color: '#1a1611' }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {itemImageUrl(item)
-                              ? <img src={itemImageUrl(item)} alt="" style={{ width: 26, height: 26, borderRadius: 5, objectFit: 'cover', border: '1px solid #eee5da' }} />
-                              : null}
+                            <img src={itemImage(item).src} alt="" style={{ width: 26, height: 26, borderRadius: 5, objectFit: 'cover', border: '1px solid #eee5da' }} />
                             {item.name}
                           </span>
                         </td>

@@ -10278,3 +10278,11 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   .os-card .os-filter-pills,
   .os-card .os-scroll-x { --scroll-shadow-bg: #fffdf9; }
 }
+
+/* A stock picture standing in for an un-photographed item is labelled, so it is
+   never taken for a photograph of the roll or box on the shelf. */
+.item-detail-photo-wrap { margin: 0; display: grid; gap: 6px; justify-items: center; }
+.item-detail-photo-wrap figcaption {
+  font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  color: #a3998c; text-align: center;
+}

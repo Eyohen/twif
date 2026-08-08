@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Edit3, Box, Tag, Sliders, TrendingUp, Building2, Activity, AlignLeft, MapPin, ImageOff } from 'lucide-react';
+import { ArrowLeft, Edit3, Box, Tag, Sliders, TrendingUp, Building2, Activity, AlignLeft, MapPin } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money, formatMoment } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
-import { stockStatus, itemImageUrl, colourSwatch } from './item';
+import { stockStatus, itemImage, colourSwatch } from './item';
 
 export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, approvalRequest }) {
   // The list row is shown immediately so the page never opens blank, then the
@@ -31,7 +31,7 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
   const threshold = Number(item.lowStockThreshold || 0);
   const cost = Number(item.cost || 0);
   const status = stockStatus(item);
-  const image = itemImageUrl(item);
+  const image = itemImage(item);
   const unit = item.unit || 'units';
   const totalAllocated = allocations.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
 
@@ -72,14 +72,12 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
       )}
 
       <section className="item-detail-hero">
-        {image
-          ? <img className="item-detail-photo" src={image} alt={item.name} />
-          : (
-            <span className="item-detail-photo item-detail-photo-empty">
-              <ImageOff size={20} />
-              <small>No photo</small>
-            </span>
-          )}
+        {/* A stock picture of the material stands in until someone photographs
+            the item itself, and is labelled so the two are never confused. */}
+        <figure className="item-detail-photo-wrap">
+          <img className="item-detail-photo" src={image.src} alt={image.isPhoto ? item.name : `${item.type} (stock picture)`} />
+          {image.isPhoto ? null : <figcaption>Stock picture · no photo yet</figcaption>}
+        </figure>
         <div className="item-detail-identity">
           <h2>{item.name}</h2>
           <b>{item.sku || 'No SKU recorded'}</b>

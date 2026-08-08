@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Tag, Sliders, MessageSquare, Users, Bell, List, ImagePlus, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money } from '../../utils/oms';
-import { itemImageUrl } from './item';
+import { itemPhotoUrl } from './item';
 
 const DETAIL_FIELDS = ['sku', 'name', 'type', 'colour', 'cost', 'location', 'supplier', 'lowStockThreshold'];
 
@@ -30,7 +30,7 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
   const detailsChanged = DETAIL_FIELDS.some((field) => String(form[field] ?? '') !== String(item[field] ?? ''))
     || Boolean(image.dataUrl) || image.removed;
 
-  const currentImage = image.removed ? '' : (image.dataUrl || itemImageUrl(item));
+  const currentImage = image.removed ? '' : (image.dataUrl || itemPhotoUrl(item));
 
   const readImage = (file) => {
     if (!file) return;

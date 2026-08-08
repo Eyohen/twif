@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, AlertTriangle, XCircle, Layers, Search, RefreshCw, Download, PlusCircle, Boxes, Eye, Edit2, ChevronRight, ImagePlus, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money } from '../../utils/oms';
-import { stockStatus, itemImageUrl, colourSwatch } from './item';
+import { stockStatus, itemImage, colourSwatch } from './item';
 import { Status } from '../../components/oms/Common';
 import ItemDetailsPage from './ItemDetailsPage';
 import EditItemPage from './EditItemPage';
@@ -314,7 +314,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false }) {
               </tr>
             ) : visible.map((item) => {
               const itemStatus = stockStatus(item);
-              const image = itemImageUrl(item);
+              const image = itemImage(item);
               return (
                 <tr
                   key={item.id}
@@ -327,13 +327,12 @@ export default function InventoryListPage({ currentRole, ownerMode = false }) {
                 >
                   <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      {image ? (
-                        <img src={image} alt="" style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', flexShrink: 0, border: '1px solid #eee5da' }} />
-                      ) : (
-                        <span style={{ width: 34, height: 34, borderRadius: 6, flexShrink: 0, background: '#faf7f3', border: '1px solid #eee5da', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c7bcae' }}>
-                          <Box size={15} />
-                        </span>
-                      )}
+                      <img
+                        src={image.src}
+                        alt=""
+                        title={image.isPhoto ? undefined : `Stock picture of ${item.type} — no photo of this item yet`}
+                        style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', flexShrink: 0, border: '1px solid #eee5da', opacity: image.isPhoto ? 1 : 0.85 }}
+                      />
                       <span>
                         <div style={{ fontWeight: 600, color: '#1a1611' }}>{item.name}</div>
                         <div style={{ fontSize: 11, color: '#8a7a6a', fontFamily: 'monospace', marginTop: 2 }}>{item.sku || 'No SKU'}</div>
@@ -421,7 +420,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false }) {
       <div className="inventory-mobile-cards" style={{ display: 'none', flexDirection: 'column', gap: 10 }}>
         {visible.map((item) => {
           const itemStatus = stockStatus(item);
-          const image = itemImageUrl(item);
+          const image = itemImage(item);
           return (
             <div
               key={item.id}
@@ -433,13 +432,11 @@ export default function InventoryListPage({ currentRole, ownerMode = false }) {
               style={{ cursor: 'pointer' }}
             >
               <div className="os-card-head">
-                {image ? (
-                  <img src={image} alt="" style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', flexShrink: 0, border: '1px solid #eee5da' }} />
-                ) : (
-                  <span style={{ width: 34, height: 34, borderRadius: 6, flexShrink: 0, background: '#faf7f3', border: '1px solid #eee5da', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c7bcae' }}>
-                    <Box size={15} />
-                  </span>
-                )}
+                <img
+                  src={image.src}
+                  alt=""
+                  style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', flexShrink: 0, border: '1px solid #eee5da', opacity: image.isPhoto ? 1 : 0.85 }}
+                />
                 <div>
                   <strong>{item.name}</strong>
                   <p>{item.sku || 'No SKU'} · {item.type}</p>
