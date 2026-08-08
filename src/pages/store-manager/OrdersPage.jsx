@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock, Package, CheckCircle, AlertCircle, Search, ChevronRight, Eye } from 'lucide-react';
-import { money, invoiceApprovalStatus, amountReceived, formatMoment, daysUntilDue, dueDateLabel } from '../../utils/oms';
+import { money, invoiceApprovalStatus, amountReceived, formatMoment, daysUntilDue, dueDateLabel, toNumber } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import OrderDetailsPage from './OrderDetailsPage';
 
@@ -150,6 +150,12 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
               const delivery = order.job.delivery || order.deliveryDate;
               const status = productionStatus(order);
               const custInitials = order.customer?.split(' ').map((part) => part[0]).join('').slice(0, 2);
+              const received = amountReceived(order);
+              // Older invoices stored the entered amount as the invoice total
+              // without a separate `paid` property. The Store Orders register
+              // should still report that real recorded amount instead of
+              // claiming that no amount exists.
+              const paymentAmount = received ?? toNumber(order.balanceDue ?? order.total);
               return (
                 <tr
                   key={order.invoiceNumber}
@@ -187,7 +193,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
                     <div style={{ fontSize: 11, color: '#8a7a6a', marginTop: 3 }}>
                       {order.paymentStatus === 'Fully Paid'
                         ? 'Paid in Full'
-                        : amountReceived(order) === null ? 'Amount not recorded' : `${money.format(amountReceived(order))} paid`}
+                        : `${money.format(paymentAmount)} paid`}
                     </div>
                   </td>
                   <td style={{ padding: '12px 14px' }}>

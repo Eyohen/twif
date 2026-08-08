@@ -5359,10 +5359,16 @@ function NotificationPanel({ role, currentRole, onNavigate }) {
     return Boolean(destination && visibleNavForRole.includes(destination.view));
   };
 
-  if (role === 'store_manager' || role === 'accounts') {
+  if (role === 'store_manager' || role === 'accounts' || role === 'production_manager') {
     const notificationCategory = (item) => {
       const text = `${item.channel || ''} ${item.metadata?.title || ''} ${item.message || ''}`.toLowerCase();
       if (role === 'accounts' && (text.includes('inventory') || text.includes('stock') || text.includes('reconcil'))) return 'Inventory';
+      if (role === 'production_manager') {
+        if (text.includes('inventory') || text.includes('stock') || text.includes('fabric') || text.includes('allocation')) return 'Inventory';
+        if (text.includes('tailor') || text.includes('assigned')) return 'Tailors';
+        if (text.includes('system') || text.includes('maintenance')) return 'System';
+        return 'Production';
+      }
       if (text.includes('invoice')) return 'Invoices';
       if (text.includes('payment') || text.includes('paid')) return 'Payments';
       if (text.includes('system') || text.includes('customer') || text.includes('maintenance')) return 'System';
@@ -5370,7 +5376,9 @@ function NotificationPanel({ role, currentRole, onNavigate }) {
     };
     const categories = role === 'accounts'
       ? ['All', 'Unread', 'Invoices', 'Payments', 'Inventory', 'System']
-      : ['All', 'Unread', 'Orders', 'Invoices', 'Payments', 'System'];
+      : role === 'production_manager'
+        ? ['All', 'Unread', 'Production', 'Inventory', 'Tailors', 'System']
+        : ['All', 'Unread', 'Orders', 'Invoices', 'Payments', 'System'];
     const counts = Object.fromEntries(categories.map((name) => [name, name === 'All'
       ? items.length
       : name === 'Unread'
@@ -5379,7 +5387,7 @@ function NotificationPanel({ role, currentRole, onNavigate }) {
     const visibleItems = items
       .filter((item) => category === 'All' || (category === 'Unread' ? !item.isRead : notificationCategory(item) === category))
       .sort((a, b) => sortOrder === 'Newest first' ? new Date(b.createdAt) - new Date(a.createdAt) : new Date(a.createdAt) - new Date(b.createdAt));
-    const iconFor = (name) => ({ Orders: '✓', Invoices: '▤', Payments: '▣', Inventory: '◇', System: '⚙' }[name] || '♧');
+    const iconFor = (name) => ({ Orders: '✓', Invoices: '▤', Payments: '▣', Production: '▧', Inventory: '◇', Tailors: '♙', System: '⚙' }[name] || '♧');
 
     return (
       <section className="store-notifications">

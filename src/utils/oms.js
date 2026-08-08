@@ -90,7 +90,17 @@ export const invoicePayable = (invoice) => Math.max(
 // so a part payment's amount is genuinely unknown — null says so rather than
 // letting the screens fill the gap with a number nobody recorded.
 export const amountReceived = (invoice) => {
-  if (invoice?.paid !== undefined && invoice?.paid !== null && invoice.paid !== '') return toNumber(invoice.paid);
+  const recordedAmount = [
+    invoice?.paid,
+    invoice?.amountPaid,
+    invoice?.amountReceived,
+    invoice?.paymentAmount,
+    invoice?.payload?.paid,
+    invoice?.payload?.amountPaid,
+    invoice?.payload?.amountReceived,
+    invoice?.payload?.paymentAmount,
+  ].find((value) => value !== undefined && value !== null && value !== '');
+  if (recordedAmount !== undefined) return toNumber(recordedAmount);
   if (isFullyPaid(invoice)) return invoicePayable(invoice);
   if (isAwaitingPayment(invoice)) return 0;
   return null;
