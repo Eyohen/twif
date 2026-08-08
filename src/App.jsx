@@ -12,6 +12,8 @@ import AccountsInvoicesPage from './pages/accounts/InvoicesPage';
 import AccountsPaymentsPage from './pages/accounts/PaymentsPage';
 import AccountsInventoryReconciliationPage from './pages/accounts/InventoryReconciliationPage';
 import UserManagementPage from './pages/owner/UserManagementPage';
+import MembershipsPage from './pages/owner/MembershipsPage';
+import SettingsPage from './pages/owner/SettingsPage';
 import InventoryManagerOverviewPage from './pages/inventory/OverviewPage';
 import InventoryListPage from './pages/inventory/InventoryListPage';
 import { roles, demoCredentials, inventoryCategories, navByRole, accountTypeByRole } from './config/oms';
@@ -6092,6 +6094,8 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Tailors & Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
   if (activeView === 'User Management') return <UserManagementPage currentRole={viewProps.currentRole} />;
   if (activeView === 'Stores') return <OwnerStoresPage sentInvoices={viewProps.sentInvoices} />;
+  if (activeView === 'Memberships') return <MembershipsPage />;
+  if (activeView === 'Settings') return <SettingsPage />;
   if (activeView === 'Reports') return <ReportsView role={role} />;
   if (activeView === 'My Tasks') return <MyTasksPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
   if (activeView === 'Weekly Log') return <WeeklyLogPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} />;
