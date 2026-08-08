@@ -2920,9 +2920,10 @@ dd {
   .portal-invoice-head { align-items: flex-start; }
 }
 
+/* Three steps now: Order Received, In Progress, Ready for Collection. */
 .tracking-steps {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   margin: 10px 0 24px;
 }
@@ -2987,6 +2988,59 @@ dd {
   background: var(--gold);
   color: #111111;
   box-shadow: 0 0 0 7px rgba(231, 162, 45, 0.16);
+}
+
+/* A step already passed is filled in and ticked, so the customer can see how
+   far along the order is rather than only where it is now. */
+.tracking-step.done {
+  color: #4a443c;
+}
+
+.tracking-step.done span {
+  border-color: #2a7d4f;
+  background: #2a7d4f;
+  color: #ffffff;
+}
+
+.tracking-step.done::before {
+  background: #2a7d4f;
+}
+
+/* The link out to the customer's own profile is the one action on this page, so
+   it reads as a button rather than as a pair of look-alike outlines. */
+.tracking-actions {
+  grid-template-columns: 1fr;
+}
+
+.tracking-profile-button {
+  min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #edaa3c, #e0921c);
+  color: #17100a;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  box-shadow: 0 10px 22px rgba(169, 109, 19, 0.24);
+  transition: transform 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+
+.tracking-profile-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px rgba(169, 109, 19, 0.3);
+}
+
+.tracking-profile-button span {
+  transition: transform 140ms var(--ease);
+}
+
+.tracking-profile-button:hover span {
+  transform: translateX(3px);
 }
 
 .tracking-details {

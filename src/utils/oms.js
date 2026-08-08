@@ -15,10 +15,17 @@ export const dateInputValue = (value, fallback = todayIso()) => {
   return String(value).slice(0, 10);
 };
 
+// What the customer is shown on their tracking page. Anything that was not
+// Ready used to read as In Progress, so an order sat there claiming to be on a
+// tailor's table from the moment the invoice was sent. Work is only in progress
+// once a tailor has started it.
 export const customerStatus = (status) => {
   if (status === 'Ready' || status === 'Ready for Collection') return 'Ready for Collection';
-  return 'In Progress';
+  if (status === 'In Progress') return 'In Progress';
+  return 'Order Received';
 };
+
+export const CUSTOMER_TRACKING_STEPS = ['Order Received', 'In Progress', 'Ready for Collection'];
 
 export const paymentStatusLabels = {
   unpaid: 'Unpaid',

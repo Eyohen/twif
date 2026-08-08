@@ -27,7 +27,7 @@ import {
   isInvoiceApproved, canShowJobInProduction, productionJobFromInvoice,
   mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid,
   invoiceDocumentPayload, printInvoiceHtml, PERIOD_OPTIONS, filterByPeriod, periodTrend,
-  amountReceived, invoicePayable, formatMoment,
+  amountReceived, invoicePayable, formatMoment, CUSTOMER_TRACKING_STEPS,
 } from './utils/oms';
 
 const trackingBaseUrl = (
@@ -5931,7 +5931,8 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
               item: invoice.item,
               pieces: invoice.pieces,
               deliveryDate: invoice.deliveryDate,
-              status: 'In Progress',
+              // No order sheet means production has not picked it up yet.
+              status: 'Order Received',
               styleImagesCount: 0,
             } : null);
           }
@@ -5951,15 +5952,8 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
   }, [token, productionJobs, sentInvoices]);
 
   const normalizedStatus = customerStatus(tracking?.status);
-  const steps = ['In Progress', 'Ready for Collection'];
+  const steps = CUSTOMER_TRACKING_STEPS;
   const currentStep = Math.max(0, steps.indexOf(normalizedStatus));
-  const closeTrackingPage = () => {
-    if (window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-    window.close();
-  };
 
   if (loading) {
     return (
@@ -6006,15 +6000,18 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
 
         <div className="tracking-steps">
           {steps.map((step, index) => (
-            <div className={classNames('tracking-step', index === currentStep && 'active')} key={step}>
-              <span>{index + 1}</span>
+            <div
+              className={classNames('tracking-step', index === currentStep && 'active', index < currentStep && 'done')}
+              key={step}
+            >
+              <span>{index < currentStep ? '✓' : index + 1}</span>
               <strong>{step}</strong>
             </div>
           ))}
         </div>
 
         <dl className="tracking-details">
-          <div><dt>Delivery date</dt><dd>{tracking.deliveryDate || 'To be confirmed'}</dd></div>
+          <div><dt>Delivery date</dt><dd>{tracking.deliveryDate ? formatMoment(tracking.deliveryDate) : 'To be confirmed'}</dd></div>
           <div><dt>Pieces</dt><dd>{tracking.pieces || 1}</dd></div>
           <div><dt>Fabric</dt><dd>{tracking.fabric || 'To be confirmed'}</dd></div>
           <div><dt>Style images</dt><dd>{tracking.styleImagesCount || 0} uploaded</dd></div>
@@ -6024,9 +6021,12 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
           This page updates from the order sheet and production status managed by TWIF staff.
         </p>
 
+        {/* "Back to tracking" sat on the tracking page itself and went nowhere. */}
         <div className="tracking-actions">
-          <a className="tracking-close tracking-action-link" href={`/c/${encodeURIComponent(token)}/profile`}>Go to my profile</a>
-          <button type="button" className="tracking-profile-link" onClick={closeTrackingPage}>Back to tracking</button>
+          <a className="tracking-profile-button" href={`/c/${encodeURIComponent(token)}/profile`}>
+            Go to my profile
+            <span aria-hidden="true">→</span>
+          </a>
         </div>
       </section>
     </main>
