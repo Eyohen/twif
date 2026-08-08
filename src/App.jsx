@@ -113,7 +113,7 @@ function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], o
     return <TailorOverview currentRole={currentRole} productionJobs={productionJobs} onUpdateJob={onUpdateJob} />;
   }
 
-  if (role === 'inventory_manager') return <InventoryManagerOverviewPage />;
+  if (role === 'inventory_manager') return <InventoryManagerOverviewPage onNavigate={onNavigate} />;
 
   if (role === 'production_manager') {
     return <ProductionOverview productionJobs={productionJobs} />;

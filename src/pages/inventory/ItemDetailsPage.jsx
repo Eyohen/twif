@@ -1,36 +1,64 @@
-import { ArrowLeft, Edit3, Box, Tag, Sliders, TrendingUp, Building2, Phone, Mail, MapPin, Activity, AlignLeft } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Edit3, Box, Tag, Sliders, TrendingUp, Building2, Activity, AlignLeft, MapPin, ImageOff } from 'lucide-react';
+import { api } from '../../lib/api';
+import { money, formatMoment } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
+import { stockStatus, itemImageUrl, colourSwatch } from './item';
 
-export default function ItemDetailsPage({ item, onBack, onEdit, approvalRequest }) {
+export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, approvalRequest }) {
+  // The list row is shown immediately so the page never opens blank, then the
+  // full record and its movements replace it.
+  const [item, setItem] = useState(fallbackItem || null);
+  const [allocations, setAllocations] = useState([]);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let live = true;
+    api.get(`/oms/fabrics/${itemId}`)
+      .then((response) => {
+        if (!live) return;
+        setItem(response.data?.data?.fabric || fallbackItem);
+        setAllocations(response.data?.data?.allocations || []);
+        setLoadError('');
+      })
+      .catch(() => { if (live) setLoadError('The latest details for this item could not be loaded.'); });
+    return () => { live = false; };
+  }, [itemId, fallbackItem]);
+
+  if (!item) return <div className="os-page"><p style={{ color: '#8a7a6a' }}>Loading item…</p></div>;
+
   const quantity = Number(item.quantity || 0);
-  const threshold = Number(item.lowStockThreshold || 5);
-  const code = item.code || item.sku || 'FAB-001';
-  const status = quantity <= 0 ? 'Out of Stock' : quantity <= threshold ? 'Low Stock' : 'In Stock';
-  const movements = [
-    ['22 Jul 2026, 09:42 AM', 'Allocation', 'ALLOC-8231', 'Allocated to Production', 'INV30659', 'OUT', '6.0 m', `${quantity.toFixed(1)} m`],
-    ['21 Jul 2026, 04:15 PM', 'Adjustment', 'ADJ-00122', 'Stock adjustment', '(Correction)', 'IN', '1.5 m', '24.5 m'],
-    ['19 Jul 2026, 10:30 AM', 'Allocation', 'ALLOC-8120', 'Allocated to Production', 'INV29871', 'OUT', '4.0 m', '23.0 m'],
-    ['18 Jul 2026, 02:20 PM', 'Receipt', 'RCPT-7741', 'Received from supplier', 'SUP-004', 'IN', '25.0 m', '27.0 m'],
-    ['15 Jul 2026, 11:05 AM', 'Adjustment', 'ADJ-00098', 'Damaged fabric removed', '', 'OUT', '2.0 m', '2.0 m'],
-  ];
+  const threshold = Number(item.lowStockThreshold || 0);
+  const cost = Number(item.cost || 0);
+  const status = stockStatus(item);
+  const image = itemImageUrl(item);
+  const unit = item.unit || 'units';
+  const totalAllocated = allocations.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
 
   return (
     <div className="inventory-item-details">
       <header className="item-detail-heading">
         <div>
           <p>
-            <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <button type="button" onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <ArrowLeft size={12} />Inventory
             </button>
-            {' '}&nbsp;›&nbsp;{' '}Inventory List &nbsp;›&nbsp; <strong>Item Details</strong>
+            {' '}&nbsp;›&nbsp;{' '}<strong>{item.name}</strong>
           </p>
-          <h2>Item Details</h2>
-          <span>View full information, stock levels and movement history for this item.</span>
+          <h2>{item.name}</h2>
+          <span>Everything recorded about this item, and where its stock has gone.</span>
         </div>
-        <button onClick={onEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+        <button type="button" onClick={onEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
           <Edit3 size={13} />Edit Item
         </button>
       </header>
+
+      {loadError && (
+        <div className="pending-edit-banner" style={{ background: '#fff5f0', borderColor: '#f0c8b8', color: '#8a3520' }}>
+          <Activity size={18} />
+          <span><strong>{loadError}</strong><small>What is shown below came from the inventory list.</small></span>
+        </div>
+      )}
 
       {approvalRequest && (
         <div className="pending-edit-banner">
@@ -44,33 +72,44 @@ export default function ItemDetailsPage({ item, onBack, onEdit, approvalRequest 
       )}
 
       <section className="item-detail-hero">
-        <i className="item-detail-swatch" />
+        {image
+          ? <img className="item-detail-photo" src={image} alt={item.name} />
+          : (
+            <span className="item-detail-photo item-detail-photo-empty">
+              <ImageOff size={20} />
+              <small>No photo</small>
+            </span>
+          )}
         <div className="item-detail-identity">
           <h2>{item.name}</h2>
-          <b>{code}</b>
+          <b>{item.sku || 'No SKU recorded'}</b>
           <dl>
             <div>
-              <dt>Category</dt>
-              <dd>{item.type || 'Suiting'}</dd>
+              <dt>Type</dt>
+              <dd>{item.type || '—'}</dd>
             </div>
             <div>
-              <dt>Color</dt>
+              <dt>Colour</dt>
               <dd>
-                <i className="color-dot" style={{ background: item.color?.toLowerCase().replace('navy blue', '#193454') || '#333', display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '1px solid #ccc', marginRight: 5, verticalAlign: 'middle' }} />
-                {item.color || 'Black'}
+                {item.colour ? (
+                  <>
+                    <i className="color-dot" style={{ background: colourSwatch(item.colour), display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '1px solid #ccc', marginRight: 5, verticalAlign: 'middle' }} />
+                    {item.colour}
+                  </>
+                ) : '—'}
               </dd>
             </div>
             <div>
               <dt>Unit</dt>
-              <dd>{item.unit || 'm'}</dd>
+              <dd>{unit}</dd>
             </div>
             <div>
               <dt>Location</dt>
-              <dd>{item.location || 'Main Store'}</dd>
+              <dd>{item.location || '—'}</dd>
             </div>
             <div>
-              <dt>Date Added</dt>
-              <dd>10 May 2026</dd>
+              <dt>Added</dt>
+              <dd>{formatMoment(item.createdAt)}</dd>
             </div>
           </dl>
         </div>
@@ -79,7 +118,7 @@ export default function ItemDetailsPage({ item, onBack, onEdit, approvalRequest 
             <i><Box size={20} /></i>
             <span>
               <small>Current Stock</small>
-              <strong>{quantity.toFixed(1)} <em>{item.unit || 'm'}</em></strong>
+              <strong>{quantity.toLocaleString(undefined, { maximumFractionDigits: 1 })} <em>{unit}</em></strong>
               <b>{status}</b>
             </span>
           </article>
@@ -87,15 +126,17 @@ export default function ItemDetailsPage({ item, onBack, onEdit, approvalRequest 
             <i><Sliders size={20} /></i>
             <span>
               <small>Low-stock Threshold</small>
-              <strong>{threshold.toFixed(1)} <em>{item.unit || 'm'}</em></strong>
+              <strong>{threshold.toLocaleString(undefined, { maximumFractionDigits: 1 })} <em>{unit}</em></strong>
             </span>
           </article>
           <article>
             <i><TrendingUp size={20} /></i>
+            {/* Stock value was a flat ₦10,000 a metre on every item regardless of
+                what it cost. With no cost recorded there is no value to show. */}
             <span>
               <small>Stock Value</small>
-              <strong>&#8358;{(quantity * 10000).toLocaleString()}</strong>
-              <p>@ &#8358;10,000 per {item.unit || 'm'}</p>
+              <strong>{cost ? money.format(quantity * cost) : '—'}</strong>
+              <p>{cost ? `@ ${money.format(cost)} per ${unit === 'yards' ? 'yard' : 'unit'}` : 'No unit cost recorded'}</p>
             </span>
           </article>
         </div>
@@ -103,143 +144,88 @@ export default function ItemDetailsPage({ item, onBack, onEdit, approvalRequest 
 
       <section className="item-detail-grid">
         <main>
-          <article className="item-detail-card">
-            <header>
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <Activity size={13} />Recent Stock Movements
-              </h3>
-              <button>View All History &nbsp;›</button>
-            </header>
-            <table>
-              <thead>
-                <tr>
-                  <th>Date &amp; Time</th>
-                  <th>Type</th>
-                  <th>Reference</th>
-                  <th>Description</th>
-                  <th>In / Out</th>
-                  <th>Quantity</th>
-                  <th>Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movements.map((row) => (
-                  <tr key={row[2]}>
-                    <td>{row[0]}</td>
-                    <td><Status>{row[1]}</Status></td>
-                    <td><code style={{ fontSize: 8, color: '#596273' }}>{row[2]}</code></td>
-                    <td>
-                      {row[3]}
-                      {row[4] && <small>{row[4]}</small>}
-                    </td>
-                    <td className={row[5] === 'IN' ? 'positive' : 'negative'}>{row[5]}</td>
-                    <td><strong>{row[6]}</strong></td>
-                    <td>{row[7]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </article>
-
           <article className="item-detail-card allocation-history">
             <header>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <AlignLeft size={13} />Allocation History
+                <AlignLeft size={13} />Stock Movements
               </h3>
-              <button>View All Allocations &nbsp;›</button>
+              <span style={{ fontSize: 12, color: '#8a7a6a' }}>{allocations.length ? `${allocations.length} recorded` : ''}</span>
             </header>
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Invoice</th>
-                  <th>Customer</th>
-                  <th>Requested By</th>
-                  <th>Quantity</th>
-                  <th>Remaining Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ['22 Jul 2026', 'INV30659', 'Jimmy Aki', 'Production', '6.0 m', `${quantity.toFixed(1)} m`],
-                  ['19 Jul 2026', 'INV29871', 'Henry Eyo', 'Production', '4.0 m', '23.0 m'],
-                  ['12 Jul 2026', 'INV27933', 'Olive Lawrence', 'Production', '3.5 m', '27.0 m'],
-                ].map((row) => (
-                  <tr key={row[1]}>
-                    <td>{row[0]}</td>
-                    <td><code style={{ fontSize: 8, color: '#596273' }}>{row[1]}</code></td>
-                    <td><strong>{row[2]}</strong></td>
-                    <td>{row[3]}</td>
-                    <td><strong>{row[4]}</strong></td>
-                    <td>{row[5]}</td>
+            {/* This table used to list five invented movements and three invented
+                allocations — dates, reference numbers and balances that belonged
+                to no item. It now shows what production actually took. */}
+            {allocations.length ? (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Job</th>
+                    <th>Taken By</th>
+                    <th>Quantity</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <footer>Total Allocated <b>13.5 m</b></footer>
+                </thead>
+                <tbody>
+                  {allocations.map((row) => (
+                    <tr key={row.id}>
+                      <td>{formatMoment(row.createdAt)}</td>
+                      <td><code style={{ fontSize: 10, color: '#596273' }}>{row.jobId || row.invoiceNumber || '—'}</code></td>
+                      <td>{row.allocatedBy || row.requestedBy || 'Production'}</td>
+                      <td><strong>{Number(row.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} {unit}</strong></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p style={{ margin: 0, padding: '18px 4px', fontSize: 13, color: '#8a7a6a' }}>
+                Nothing has been allocated from this item yet. Stock moves out when production takes it against a job.
+              </p>
+            )}
+            {allocations.length ? (
+              <footer>Total allocated <b>{totalAllocated.toLocaleString(undefined, { maximumFractionDigits: 1 })} {unit}</b></footer>
+            ) : null}
           </article>
         </main>
 
         <aside>
-          <article className="item-detail-card supplier-card">
-            <header>
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <Building2 size={13} />Supplier Information
-              </h3>
-              <button>View Supplier &nbsp;›</button>
-            </header>
-            <section>
-              <i><Building2 size={22} /></i>
-              <div>
-                <h3>
-                  {item.supplier || 'Elegant Fabrics Ltd.'}{' '}
-                  <Status>Preferred Supplier</Status>
-                </h3>
-                <p style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Phone size={10} />0802 123 4567
-                </p>
-                <p style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Mail size={10} />info@elegantfabrics.com
-                </p>
-                <p style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <MapPin size={10} />Lagos, Nigeria
-                </p>
-              </div>
-            </section>
-          </article>
-
           <article className="item-detail-card item-information">
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <Tag size={13} />Item Information
             </h3>
+            {/* Width, composition, pattern and a fixed "Premium quality item for
+                suits and blazers" note were printed on every item. Only the
+                fields the system actually holds are listed. */}
             <dl>
-              <dt>Item Code</dt><dd>{code}</dd>
-              <dt>Category</dt><dd>{item.type || 'Suiting'}</dd>
-              <dt>Color</dt><dd>{item.color || 'Black'}</dd>
-              <dt>Width</dt><dd>1.5 m</dd>
-              <dt>Composition</dt><dd>Polyester Blend</dd>
-              <dt>Pattern</dt><dd>Jacquard</dd>
-              <dt>Notes</dt><dd>Premium quality item for suits and blazers.</dd>
-              <dt>Status</dt><dd><Status>Active</Status></dd>
+              <dt>SKU</dt><dd>{item.sku || '—'}</dd>
+              <dt>Type</dt><dd>{item.type || '—'}</dd>
+              <dt>Colour</dt><dd>{item.colour || '—'}</dd>
+              <dt>Unit</dt><dd>{unit}</dd>
+              <dt>Unit cost</dt><dd>{cost ? money.format(cost) : '—'}</dd>
+              <dt>Location</dt><dd>{item.location || '—'}</dd>
+              <dt>Last updated</dt><dd>{formatMoment(item.updatedAt)}</dd>
+              <dt>Status</dt><dd><Status>{status}</Status></dd>
             </dl>
           </article>
 
-          <section className="item-detail-actions">
-            <button>
-              <Sliders size={16} />
-              <span>
-                <strong>Adjust Stock</strong>
-                <small>Increase or decrease stock</small>
-              </span>
-            </button>
-            <button>
-              <Box size={16} />
-              <span>
-                <strong>Mark as Inactive</strong>
-                <small>Hide this item from inventory</small>
-              </span>
-            </button>
-          </section>
+          <article className="item-detail-card supplier-card">
+            <header>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <Building2 size={13} />Supplier
+              </h3>
+            </header>
+            <section>
+              <i><Building2 size={22} /></i>
+              <div>
+                {/* The supplier panel used to invent a company, a phone number
+                    and an email for every item. */}
+                <h3>{item.supplier || 'No supplier recorded'}</h3>
+                {item.location ? (
+                  <p style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <MapPin size={10} />{item.location}
+                  </p>
+                ) : null}
+              </div>
+            </section>
+          </article>
         </aside>
       </section>
     </div>
