@@ -8886,3 +8886,753 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   .os-stat-strip > div:nth-child(odd) { border-right: 1px solid #f3ede5 !important; }
   .os-stat-strip > div:nth-last-child(-n+2) { border-bottom: none; }
 }
+
+/* ═══ NOTIFICATION ROWS ═══════════════════════════════════════════════════
+   The timestamp now sits as a third line inside the text column, so it stays
+   visible on phones — it was previously a separate grid column that a media
+   query hid outright. Type sizes were 7–10px, which is unreadable on a phone.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.store-notification-list article {
+  grid-template-columns: 8px 42px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+}
+.store-notification-list article > div { gap: 3px; align-content: start; }
+.store-notification-list article > div strong { font-size: 13px; font-weight: 700; color: #0f0b06; line-height: 1.35; }
+.store-notification-list article > div p {
+  white-space: normal;
+  overflow: visible;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #5e5a55;
+}
+.store-notification-list article > div time {
+  display: block;
+  margin-top: 2px;
+  color: #8a7a6a;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.store-notification-list .notification-type-icon { align-self: start; margin-top: 1px; }
+.store-notification-list .unread-dot { align-self: start; margin-top: 16px; }
+.notification-category { align-self: start; margin-top: 2px; font-size: 10px; padding: 5px 9px; white-space: nowrap; }
+
+@media (max-width: 1050px) {
+  /* Undo the old rule that removed the timestamp column entirely. */
+  .store-notification-list article { grid-template-columns: 8px 42px minmax(0, 1fr) auto; }
+  .store-notification-list time { display: block; }
+}
+
+@media (max-width: 560px) {
+  /* The category chip moves under the text rather than squeezing the message. */
+  .store-notification-list article { grid-template-columns: 8px 38px minmax(0, 1fr); gap: 10px; }
+  .store-notification-list .notification-category { grid-column: 3; justify-self: start; margin-top: 6px; }
+  .store-notification-list .notification-type-icon { width: 38px; height: 38px; font-size: 16px; }
+}
+
+/* The plain list used by the remaining roles gets the same three lines. */
+.notification-list article strong { display: block; font-size: 13px; font-weight: 700; color: #0f0b06; }
+.notification-list article small { display: block; margin-top: 4px; color: #8a7a6a; font-size: 11px; font-variant-numeric: tabular-nums; }
+
+/* ═══ MOBILE TOP BAR ══════════════════════════════════════════════════════
+   The actions column was taking 246px of a 390px screen, because
+   `.user-chip .user-identity` (0,2,0) outranked the `.user-identity` reset
+   (0,1,0) and kept the name and role text on screen. That left 44px for the
+   page title, so it wrapped to nothing and the bar read as empty.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 780px) {
+  .topbar,
+  .production-role-shell .topbar,
+  .accounts-role-shell .topbar,
+  .store-role-shell .topbar,
+  .tailor-role-shell .topbar,
+  .owner-role-shell .topbar {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+  }
+
+  /* Avatar and bell only — the name is already known to whoever is holding
+     the phone, and it is still in the account menu. */
+  .user-chip .user-identity { display: none; }
+  .user-chip { gap: 2px; }
+  .user-chip .user-menu-button { min-width: 20px; padding: 2px; font-size: 12px; opacity: .65; }
+  .topbar-actions { gap: 6px; }
+
+  /* The title block only — .topbar-actions is also a direct div child. */
+  .topbar > div:not(.topbar-actions) { min-width: 0; display: grid; gap: 1px; }
+
+  .mobile-app-label {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .topbar h1,
+  .production-role-shell .topbar h1,
+  .accounts-role-shell .topbar h1,
+  .store-role-shell .topbar h1,
+  .tailor-role-shell .topbar h1,
+  .owner-role-shell .topbar h1 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 800;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Very small handsets: drop the wordmark so the page title keeps the row. */
+@media (max-width: 380px) {
+  .mobile-app-label { display: none; }
+  .topbar h1 { font-size: 18px; }
+}
+
+/* Sign-out reason shown on the login screen. */
+.login-notice {
+  border: 1px solid rgba(231, 162, 45, 0.4);
+  border-radius: 8px;
+  background: rgba(231, 162, 45, 0.12);
+  color: #f0c675;
+  padding: 11px 13px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* Each role shell repaints the top bar cream with a more specific selector
+   than the base mobile rules, which left white title text on a light bar and
+   the bell and avatar wrapping onto two rows. Settle both here. */
+@media (max-width: 780px) {
+  .topbar,
+  .production-role-shell .topbar,
+  .accounts-role-shell .topbar,
+  .store-role-shell .topbar,
+  .tailor-role-shell .topbar,
+  .owner-role-shell .topbar {
+    background: rgba(255, 253, 250, 0.94);
+    border-bottom: 1px solid rgba(221, 212, 199, 0.9);
+    color: #0f0b06;
+  }
+
+  .topbar h1,
+  .production-role-shell .topbar h1,
+  .accounts-role-shell .topbar h1,
+  .store-role-shell .topbar h1,
+  .tailor-role-shell .topbar h1,
+  .owner-role-shell .topbar h1 { color: #0f0b06; }
+
+  .topbar-actions,
+  .store-role-shell .topbar-actions,
+  .accounts-role-shell .topbar-actions,
+  .owner-role-shell .topbar-actions,
+  .production-role-shell .topbar-actions,
+  .tailor-role-shell .topbar-actions {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  /* The hamburger sat on a dark bar; it now needs to read on a light one. */
+  .menu-button { border: 1px solid rgba(15, 11, 6, 0.14); background: #fffdfa; }
+  .menu-button span { background: #0f0b06; }
+
+  .user-chip,
+  .store-role-shell .user-chip,
+  .accounts-role-shell .user-chip,
+  .owner-role-shell .user-chip,
+  .production-role-shell .user-chip,
+  .tailor-role-shell .user-chip {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 0;
+    color: #0f0b06;
+  }
+
+  .notification-bell { flex: 0 0 38px; width: 38px; height: 38px; }
+  .user-chip .profile-photo-button { width: 36px; height: 36px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE FOUNDATION
+   Every role had views that scrolled sideways — Production at 983px against a
+   380px screen. The cause was the same everywhere: a grid or flex item's
+   automatic minimum size is its content width, so cards, status pills and
+   tables refused to shrink and dragged the document with them. Setting
+   min-width:0 lets them shrink; genuine data tables still scroll inside their
+   own wrapper.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+  /* Nothing may drag the document sideways. */
+  body { overflow-x: hidden; }
+  .app-shell, .workspace { max-width: 100%; min-width: 0; }
+
+  .workspace :is(section, article, div, main, aside, header, footer, form, nav, ul, ol, dl, li, label, span, p) {
+    min-width: 0;
+  }
+
+  /* Wide data stays scrollable inside its own container rather than the page. */
+  .workspace :is(.table-wrap, .os-desktop-table, [class$="table-wrap"], [class*="table-wrap "]) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  /* Long invoice numbers, emails and notes wrap instead of setting the width. */
+  .workspace :is(td, th, dd, p, .status) { overflow-wrap: anywhere; }
+}
+
+/* ═══ READABILITY ═════════════════════════════════════════════════════════
+   Much of the interface was authored at 7–9px, which is legible on a desktop
+   mock-up and not on a phone held at arm's length.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+  .workspace :is(td, th) { font-size: 12px !important; }
+  .workspace :is(small, dt, dd, figcaption) { font-size: 11.5px !important; }
+  .workspace .status { font-size: 10.5px !important; padding: 4px 9px !important; }
+  .workspace :is(h2, h3) { line-height: 1.25; }
+  .workspace :is(button, a, input, select, textarea) { font-size: max(13px, 1em); }
+}
+
+/* ═══ NATIVE FEEL ═════════════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+  /* No blue flash on tap, and no accidental text selection when scrolling
+     through lists — both read as "web page" rather than "app". */
+  .app-shell :is(button, a, [role="button"], .os-card, article, .notification-actionable) {
+    -webkit-tap-highlight-color: transparent;
+  }
+  .app-shell :is(button, a, [role="button"]) { touch-action: manipulation; }
+
+  /* Comfortable targets. 44px is the platform minimum on both iOS and Android. */
+  .workspace :is(button, a[role="button"], .os-release-btn, .action-btn) { min-height: 40px; }
+  .mobile-bottom-nav :is(a, button) { min-height: 52px; }
+
+  /* Scrolling behaves like a native list: momentum, and no rubber-banding the
+     whole page when a horizontal carousel reaches its end. */
+  body { overscroll-behavior-y: contain; }
+  .workspace { -webkit-overflow-scrolling: touch; }
+
+  /* Sheets and rows respond to touch. */
+  .os-card, .notification-actionable { transition: transform 120ms ease, box-shadow 120ms ease; }
+  .notification-actionable:active, .os-card:active { transform: scale(0.995); }
+}
+
+/* Installed to the home screen, the browser chrome is gone, so the bar has to
+   own the status-area inset itself. */
+@media (display-mode: standalone) {
+  .topbar { padding-top: calc(12px + env(safe-area-inset-top)); }
+  .mobile-bottom-nav { bottom: calc(10px + env(safe-area-inset-bottom)); }
+}
+
+/* Honour a reduced-motion preference rather than animating regardless. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Five-across variants and the tailor's job info strip. */
+.os-kpi-row-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1150px) { .os-kpi-row-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.os-info-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; }
+@media (max-width: 1100px) { .os-info-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+  .os-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .os-info-grid > div { border-right: none !important; }
+  .os-info-grid > div:nth-child(odd) { border-right: 1px solid #eee5da !important; }
+}
+
+/* Last-resort guard: a stray fixed-width child must not drag the page
+   sideways. `clip` does not create a scroll container, so sticky headers and
+   the intentional horizontal carousels keep working. */
+@media (max-width: 900px) {
+  .workspace { overflow-x: clip; }
+}
+
+/* ═══ MOBILE TYPE FLOOR ═══════════════════════════════════════════════════
+   Much of the interface is authored at 7–9px. Generated from the rules that
+   apply at every width, so each selector is raised to its own readable size
+   rather than everything being flattened to one value.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+  .accounts-activity > div > button,
+  .accounts-activity article small, .accounts-activity article time,
+  .accounts-activity article span,
+  .accounts-invoice-kpis article p em,
+  .accounts-invoice-kpis article.chart p,
+  .accounts-invoice-register > nav b,
+  .accounts-invoice-table td small,
+  .accounts-invoice-table td:last-child button,
+  .accounts-invoice-table th,
+  .accounts-kpi > em,
+  .accounts-kpi.accounts-chart > b,
+  .accounts-panel header > button,
+  .accounts-table-wrap .status,
+  .accounts-table-wrap td,
+  .accounts-table-wrap th,
+  .action-insights article,
+  .action-insights article button,
+  .action-insights footer, .store-performance footer,
+  .card-due,
+  .card-total small, .store-order-card dt,
+  .client-current-order dt,
+  .client-list-row small,.client-list-row time,
+  .client-measure-card p,
+  .client-membership label,
+  .client-order-progress i,
+  .client-order-progress small,
+  .client-portal-bottom article>p,
+  .client-portal-triple article>header span,.client-portal-bottom article>header span,
+  .commercial-report > footer,
+  .commercial-report header button,
+  .commercial-report header p,
+  .commercial-report nav button,
+  .commercial-report td button,
+  .commercial-report th, .commercial-report td,
+  .current-item-values dl,
+  .customer-info-form label, .additional-preferences label, .customer-status-card label,
+  .customer-notes li,
+  .customer-orders-table th,
+  .customer-profile-hero dl small,
+  .customer-profile-hero dt,
+  .customer-profile-panel header button,
+  .customer-profile-person b,
+  .customer-profile-person small,
+  .customer-recent-orders section > footer,
+  .customer-recent-orders section > header,
+  .customer-recent-orders section > strong, .customer-recent-orders section > small, .customer-recent-orders section > p,
+  .customer-status-card dd, .edit-measurements-card dd,
+  .customer-status-card dt, .edit-measurements-card dt,
+  .customer-summary dt,
+  .customer-timeline small, .customer-timeline p,
+  .customer-timeline strong,
+  .detail-actions button,
+  .detail-documents article small,
+  .detail-documents article span,
+  .edit-approval-flow section small,
+  .edit-item-grid label small,
+  .edit-measurements-card > button, .internal-notes-card > button,
+  .edit-notification-note > small,
+  .edit-notification-note p,
+  .elite-membership > div,
+  .elite-membership > div small,
+  .elite-membership > p, .elite-membership > small,
+  .internal-notes-card li,
+  .inventory-alerts article > button,
+  .inventory-alerts article small,
+  .inventory-list-table th,
+  .inventory-overview-card th,
+  .inventory-quick-actions button small,
+  .invoice-customer-cell > i,
+  .invoice-customer-cell small,
+  .invoice-drawer-actions > button,
+  .invoice-drawer-actions > div span,
+  .invoice-drawer-customer button, .invoice-evidence button,
+  .invoice-drawer-customer small,
+  .invoice-order-summary th,
+  .invoice-preview-page-v2 > header small,
+  .invoice-review > footer, .stock-snapshot > footer,
+  .item-detail-actions button small,
+  .item-detail-card header button,
+  .item-detail-card td,
+  .item-detail-card th,
+  .item-detail-identity dt,
+  .item-detail-stats small,
+  .mini-report-stats span,
+  .notification-category,
+  .order-action-dropdown button,
+  .order-customer-cell small,
+  .order-date-filter, .orders-register > header button,
+  .order-number-label,
+  .order-summary > div span,
+  .order-summary-card header button, .order-detail-card header button,
+  .order-summary-chart li,
+  .order-timeline article small, .order-timeline time,
+  .order-timeline article span,
+  .orders-register .status,
+  .orders-register > footer,
+  .orders-register > footer select,
+  .orders-register nav button, .orders-register nav select,
+  .orders-register td,
+  .orders-register td > small,
+  .orders-register th,
+  .owner-inventory-approvals td,
+  .owner-inventory-approvals th,
+  .owner-kpi > small,
+  .owner-kpi > span,
+  .owner-panel > header,
+  .owner-panel header select, .owner-panel header button,
+  .owner-production article,
+  .owner-production-donut span,
+  .owner-quick-actions button,
+  .payment-donut span,
+  .payment-evidence-card > header span,
+  .payment-history-card dl, .review-information dl, .payment-evidence-card dl,
+  .payment-history-card section p,
+  .payment-kpis article > p,
+  .payment-kpis article small,
+  .payment-legend b,
+  .payment-legend small,
+  .payment-legend span,
+  .payment-quick-actions button small,
+  .payment-quick-actions button strong,
+  .payment-summary-donut li,
+  .payments-register > footer,
+  .payments-register > header label, .payments-register > header select, .payments-register > header button,
+  .payments-register > nav b,
+  .payments-table td,
+  .payments-table td small,
+  .payments-table th,
+  .pending-actions section small,
+  .pending-edit-banner small,
+  .preference-tags span,
+  .production-dashboard .production-tabs span,
+  .production-help button,
+  .production-job-drawer dt,
+  .production-recent article,
+  .production-register-row .status,
+  .production-register-row small,
+  .production-steps section > i,
+  .production-workflow-panel small,
+  .profile-measurements > p,
+  .profile-measurements header h3 b,
+  .profile-measurements small,
+  .quick-actions button,
+  .quick-insights p,
+  .receipt-preview > footer,
+  .recent-alerts article,
+  .recent-alerts article span, .recent-alerts article small,
+  .recent-exports button,
+  .recent-store-notifications section small,
+  .reconciliation-actions button span,
+  .reconciliation-donut li,
+  .reconciliation-kpis p,
+  .reconciliation-kpis small,
+  .reconciliation-note,
+  .reconciliation-register > footer,
+  .reconciliation-register > header label, .reconciliation-register > header select, .reconciliation-register > header button,
+  .reconciliation-register > nav b,
+  .reconciliation-register > nav button,
+  .reconciliation-side dl,
+  .reconciliation-table td,
+  .register-view-button,
+  .report-builder > p,
+  .report-builder label,
+  .report-chart-card header select,
+  .report-donut span,
+  .report-kpi > small,
+  .report-kpi > span,
+  .report-legend p,
+  .report-table-card th, .report-table-card td,
+  .review-actions-card > button small,
+  .review-activity section span,
+  .review-card dt, .review-card small,
+  .review-card h4,
+  .review-information dl,
+  .review-waiting-note,
+  .sidebar-account-type small,
+  .staff-form-page > header p, .staff-form-page > section label,
+  .staff-kpis p,
+  .staff-kpis small,
+  .staff-modal label,
+  .staff-profile-grid article > p,
+  .staff-profile-grid dl,
+  .staff-profile-page > header p, .staff-profile-page > header small,
+  .staff-register > footer,
+  .staff-register td small,
+  .staff-role, .tailor-grade,
+  .stock-snapshot > header small,
+  .stock-snapshot article small,
+  .stock-snapshot article span,
+  .store-customer-name small,
+  .store-customer-register > footer,
+  .store-customer-register td,
+  .store-customer-register td > b,
+  .store-customer-register th,
+  .store-detail-tabs button,
+  .store-invoice-actions button,
+  .store-invoice-table .status,
+  .store-invoice-table td,
+  .store-invoice-table th,
+  .store-invoices-panel > footer,
+  .store-invoices-panel > footer button,
+  .store-notification-filters nav span,
+  .store-notification-list time,
+  .store-order-card > footer,
+  .store-order-card > header > span,
+  .store-order-card > p,
+  .store-order-card dd,
+  .store-order-hero > div > span,
+  .store-order-hero dt, .store-detail-panel dt,
+  .store-order-kpi > small,
+  .store-order-kpi > span,
+  .store-orders-panel > footer,
+  .store-orders-panel > nav button,
+  .store-orders-panel > nav span,
+  .store-overview-panel > header button,
+  .store-performance td, .owner-table-panel td,
+  .table-avatar--sm,
+  .tailor-materials small, .tailor-collapsed-materials small,
+  .tailor-production-note > span,
+  .tailor-task-summary .status,
+  .todays-activity section > b,
+  .todays-activity section small, .todays-activity section p, .todays-activity time,
+  .top-discrepancies > button,
+  .top-discrepancies section,
+  .top-methods section span,
+  .upcoming-deliveries section > b,
+  .upcoming-deliveries section p,
+  .weekly-completed .status,
+  .weekly-completed th,
+  .weekly-performance article header small, .weekly-performance article > small { font-size: 11px; }
+  .accounts-invoice-drawer p, .accounts-invoice-drawer dl,
+  .accounts-invoice-kpis article small,
+  .accounts-invoice-register > footer,
+  .accounts-invoice-register > header label, .accounts-invoice-register > header select, .accounts-invoice-register > header button,
+  .accounts-invoice-register > nav button,
+  .accounts-invoice-table td,
+  .accounts-kpi > small,
+  .accounts-kpi > span,
+  .accounts-panel header p,
+  .accounts-payments-toolbar label, .accounts-payments-toolbar button,
+  .accounts-review-heading h2 .status,
+  .accounts-sidebar-help span,
+  .allocation-history > footer,
+  .body-measurement-table th,
+  .client-current-order dd,
+  .client-current-order header p,
+  .client-current-order>a,
+  .client-list-row strong,
+  .client-membership>a,
+  .client-membership>p,
+  .client-saved-styles p,
+  .commercial-report .status,
+  .customer-action-menu button,
+  .customer-info-form input, .customer-info-form select, .customer-info-form textarea, .additional-preferences select, .customer-status-card select,
+  .customer-order-summary dl,
+  .customer-order-summary ol li,
+  .customer-orders-table td:last-child button,
+  .customer-profile-contacts,
+  .customer-profile-person p,
+  .customer-profile-tabs button,
+  .customer-profile-toolbar > button,
+  .customer-profile-toolbar > div button,
+  .customer-recent-orders .status,
+  .customer-summary dd,
+  .edit-approval-flow section strong,
+  .edit-customer-page > header button,
+  .edit-customer-page > header p,
+  .edit-inventory-item-page > header p,
+  .edit-item-grid label,.edit-item-layout main article > label,
+  .edit-notification-note p,
+  .elite-membership > strong,
+  .email-preview-layout aside dt,
+  .help-message-btn,
+  .inventory-alerts article strong,
+  .inventory-list-filters label,
+  .inventory-list-kpis p,
+  .inventory-list-table > footer,
+  .inventory-list-table td small,
+  .inventory-overview-card > footer,
+  .inventory-overview-card header button,
+  .inventory-overview-card td > b,
+  .inventory-recent-activity article p,
+  .inventory-recent-activity article strong,
+  .invoice-drawer-customer span,
+  .invoice-order-summary table,
+  .item-detail-heading p,
+  .item-detail-identity > b,
+  .item-detail-identity dd,
+  .item-detail-stats b,
+  .item-detail-stats p,
+  .item-information dl,
+  .measurement-diagram li i,
+  .new-invoice-button,
+  .notification-bell span,
+  .order-activity-card > section,
+  .order-customer-cell > i,
+  .order-customer-notes p, .order-customer-notes small,
+  .order-items-card section strong, .order-items-card section small, .order-items-card section b,
+  .order-summary-card > section,
+  .orders-breadcrumb,
+  .orders-register > header input,
+  .orders-table-kpis p,
+  .owner-inventory-approvals > header p,
+  .owner-stores-table th,
+  .owner-table-panel .status,
+  .payment-evidence-card .download-receipt,
+  .payment-overview > footer,
+  .payments-register > nav button,
+  .payments-summary-side article > footer,
+  .prod-summary-avatar--sm,
+  .production-dashboard .production-tabs button,
+  .production-exception-grid article > span,
+  .production-exception-grid article small,
+  .production-progress-card > footer,
+  .production-register-footer,
+  .production-register-footer button,
+  .production-register-row strong,
+  .production-shortcuts > span,
+  .production-steps section strong, .production-steps section small, .production-steps time,
+  .production-workflow-panel strong,
+  .profile-measurements strong,
+  .receipt-preview dl,
+  .receive-stock-backdrop label,
+  .receive-stock-backdrop p,
+  .recent-store-notifications section strong,
+  .reconciliation-donut > i::after,
+  .reconciliation-table td small,
+  .reconciliation-table th,
+  .reconciliation-toolbar label, .reconciliation-toolbar button,
+  .report-builder footer button,
+  .report-builder select, .report-builder input,
+  .report-table-card .status,
+  .review-actions-card > button strong,
+  .review-card dd,
+  .review-notes p,
+  .review-totals,
+  .sales-overview footer small, .owner-production footer small,
+  .sidebar-account-type > i,
+  .store-customer-kpis article b,
+  .store-customer-name strong,
+  .store-customer-register nav button, .store-customer-register nav select,
+  .store-detail-panel dd,
+  .store-detail-toolbar button,
+  .store-invoice-tools input,
+  .store-invoice-tools select, .store-invoice-tools button,
+  .store-invoices-panel header p,
+  .store-metric small,
+  .store-notification-filters nav button,
+  .store-notification-filters select,
+  .store-notification-list article > div p,
+  .store-notifications > header button,
+  .store-notifications > header span,
+  .store-order-card .status,
+  .store-order-hero dd,
+  .store-orders-panel > header button, .store-orders-panel > header select,
+  .store-orders-panel > header input,
+  .store-overview-panel > button,
+  .store-performance th, .owner-table-panel th,
+  .supplier-card section p,
+  .table-avatar,
+  .tailor-availability article > b,
+  .tailor-availability article > i,
+  .tailor-availability article small,
+  .tailor-help button,
+  .tailor-help span,
+  .tailor-info-cell small,
+  .tailor-task-customer small,
+  .tailor-task-invoice span,
+  .tailor-task-summary small,
+  .um-table th,
+  .upcoming-deliveries section header strong,
+  .view-completed,
+  .weekly-avatar,
+  .weekly-completed td,
+  .weekly-completed td > i,
+  .weekly-perf-best-badge,
+  .weekly-performance article header > span,
+  .weekly-summary article small,
+  .weekly-summary header button { font-size: 11.5px; }
+  .accounts-empty,
+  .accounts-invoice-heading > label,
+  .accounts-invoice-kpis article p,
+  .accounts-kpi > em,
+  .accounts-review-heading p,
+  .beau-table th,
+  .body-measurement-table footer,
+  .customer-orders-hero dl small,
+  .customer-orders-person small, .customer-orders-hero dt,
+  .customer-orders-person span > div b,
+  .customer-orders-register > footer,
+  .customer-orders-register nav button, .customer-orders-register nav select,
+  .customer-orders-table td,
+  .edit-approval-flow section strong,
+  .edit-customer-page > header span,
+  .edit-inventory-item-page > header span,
+  .email-preview-layout > main > dl,
+  .email-preview-layout aside dd,
+  .ia-kpi small,
+  .inventory-category-list span small,
+  .inventory-list-kpis small,
+  .inventory-list-table td,
+  .inventory-overview-card td,
+  .invoice-preview-title p,
+  .item-detail-actions button strong,
+  .job-item-list-label,
+  .measurement-diagram header button,
+  .measurement-diagram li,
+  .new-invoice-toolbar li,
+  .notification-category,
+  .order-details-facts dt, .order-details-facts small,
+  .order-details-tabs button,
+  .order-items-card > footer,
+  .order-summary-card dl,
+  .os-summary-card dt,
+  .owner-inventory-approvals > header span,
+  .owner-store-kpi small,
+  .payment-summary-donut > i::after,
+  .pending-actions section strong,
+  .pjm-info-grid small,
+  .portal-logout,
+  .prod-activity-time,
+  .prod-summary-avatar,
+  .production-active-header button,
+  .production-active-header input,
+  .production-dashboard .production-job-head .avatar,
+  .production-dashboard .production-job-head span,
+  .production-exception-grid article strong,
+  .production-exceptions-panel header b,
+  .production-exceptions-panel header button, .production-rail-panel header button,
+  .production-job-drawer dd,
+  .production-kpi small,
+  .production-kpi span,
+  .reconciliation-side h3,
+  .register-customer > i,
+  .report-builder > header,
+  .staff-form-page h3,
+  .staff-profile-grid h3,
+  .status,
+  .store-card-top-badge,
+  .store-customer-create button,
+  .store-customer-name > i,
+  .store-customer-register > header button,
+  .store-customer-register > header input,
+  .store-notification-list article > div strong,
+  .store-order-hero p,
+  .store-overview-kpis article b,
+  .tab-pills button b,
+  .tailor-availability article strong,
+  .tailor-info-cell small,
+  .tailor-materials strong, .tailor-collapsed-materials strong,
+  .tailor-production-note p,
+  .tailor-task-card > footer button,
+  .tailor-task-page > header button,
+  .tailor-workload-name small,
+  .todays-activity section > i,
+  .todays-activity section strong,
+  .um-kpi-card small,
+  .user-chip .user-identity small,
+  .weekly-perf-dates,
+  .weekly-section-count,
+  .weekly-stat-body small,
+  .weekly-table th { font-size: 12px; }
+}

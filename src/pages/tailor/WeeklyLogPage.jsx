@@ -70,7 +70,7 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
       </div>
 
       {/* KPI Summary Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      <div className="os-kpi-row" style={{ gap: 12 }}>
         {SUMMARY_ITEMS.map(({ key, icon: Icon, label, tone }) => {
           const s = toneStyle[tone];
           return (
@@ -181,7 +181,7 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
           <Award size={16} strokeWidth={1.5} className="os-card-icon" />
         </div>
         <div className="os-card-body">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          <div className="os-kpi-row os-kpi-row-5" style={{ gap: 10 }}>
             {[5, 7, completedJobs.length, null, null].map((jobs, index) => {
               const start = new Date(monday);
               start.setDate(monday.getDate() + ((index - 2) * 7));

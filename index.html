@@ -6,11 +6,14 @@
     <link rel="apple-touch-icon" href="/Logomark.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#050505" />
+    <!-- Matches the app bar, so the system status bar blends into the app
+         instead of sitting as a black band above a light header. -->
+    <meta name="theme-color" content="#fffdfa" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Twif OMS" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- The bar is light, so iOS needs dark status-bar text to stay legible. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="description" content="Twif Operations Management System for invoices, payments, production, inventory, tailoring, and customer tracking." />
     <title>Twif OMS</title>
   </head>

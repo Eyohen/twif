@@ -140,10 +140,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
               </div>
 
               {/* Info Grid */}
-              <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 0,
-                borderBottom: '1px solid #f3ede5', background: '#faf7f3',
-              }}>
+              <div className="os-info-grid" style={{ borderBottom: '1px solid #f3ede5', background: '#faf7f3' }}>
                 {[
                   { icon: Package, label: 'Product', value: order.item || 'Not specified' },
                   { icon: Scissors, label: 'Fabric', value: order.fabric || 'Not specified' },

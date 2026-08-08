@@ -35,10 +35,43 @@ const trackingUrlForToken = (token) => `${trackingBaseUrl}/c/${token}`;
 const OMS_SESSION_KEY = 'twif_oms_session';
 const roleSlug = (value = '') => String(value || '').replaceAll('_', '-');
 const viewSlug = (value = '') => String(value || '').toLowerCase().replaceAll('&', 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+// Sessions are persistent by design, but the scope requires re-authentication
+// after 8 hours idle so an unattended shop-floor device cannot be picked up
+// and used. Stored alongside the session so it survives a reload or a device
+// being locked overnight.
+const IDLE_LIMIT_MS = 8 * 60 * 60 * 1000;
+const LAST_ACTIVE_KEY = 'twif_oms_last_active';
+
+const readLastActive = () => {
+  const stored = Number(window.localStorage.getItem(LAST_ACTIVE_KEY));
+  return Number.isFinite(stored) && stored > 0 ? stored : 0;
+};
+
+const markActive = () => window.localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+
+const clearSessionStorage = () => {
+  window.localStorage.removeItem(OMS_SESSION_KEY);
+  window.localStorage.removeItem(LAST_ACTIVE_KEY);
+};
+
+// Set when a stored session is discarded for being stale, so the login screen
+// can say why. Read once at start-up.
+let sessionExpiredOnLoad = false;
+const expiredOnLoad = () => sessionExpiredOnLoad;
+
 const sessionFromStorage = () => {
   try {
     const saved = JSON.parse(window.localStorage.getItem(OMS_SESSION_KEY) || 'null');
     if (!saved?.role || !navByRole[saved.role]) return null;
+
+    // An unknown last-active stamp is treated as expired rather than trusted.
+    const lastActive = readLastActive();
+    if (!lastActive || Date.now() - lastActive > IDLE_LIMIT_MS) {
+      clearSessionStorage();
+      sessionExpiredOnLoad = true;
+      return null;
+    }
+
     const roleDetails = roles.find((item) => item.id === saved.role);
     const demoAccount = demoCredentials.find((item) => item.role === saved.role && (!saved.phone || item.phone === saved.phone));
     return { ...roleDetails, ...demoAccount, ...saved };
@@ -505,7 +538,7 @@ function OwnerStoresPage({ sentInvoices = [] }) {
       </div>
 
       {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+      <div className="os-kpi-row" style={{ gap: 14 }}>
         {[
           { label: 'Total Stores', value: stores.length, detail: `${activeStores.length} active`, icon: <Building2 size={16} />, color: '#c97b08' },
           { label: 'Active Stores', value: activeStores.length, detail: 'Currently operating', icon: <CheckCircle size={16} />, color: '#2a7d4f' },
@@ -1414,7 +1447,6 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
   });
   const total = sentInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
   const pending = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts');
-  const approved = sentInvoices.filter(isInvoiceApproved);
   const partial = sentInvoices.filter((invoice) => invoice.paymentStatus === 'Partial Paid');
 
   if (creating) {
@@ -2174,7 +2206,7 @@ function CustomersView() {
       </div>
 
       {/* KPI stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+      <div className="os-kpi-row" style={{ gap: 14 }}>
         {[
           { label: 'Total Customers', value: customers.length, detail: 'Live profiles', icon: <Users size={16} /> },
           { label: 'Returning', value: repeatCustomers, detail: 'More than one order', icon: <RefreshCw size={16} /> },
@@ -2836,7 +2868,7 @@ function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
       </div>
 
       {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+      <div className="os-kpi-row" style={{ gap: 14 }}>
         {[
           { label: 'Total Revenue', value: money.format(totalValue), detail: `${invoiceQueue.length} invoices`, icon: <TrendingUp size={16} />, color: '#c97b08' },
           { label: 'Fully Paid', value: money.format(paidValue), detail: `${completedCount} invoices`, icon: <CheckCircle size={16} />, color: '#2a7d4f' },
@@ -3154,7 +3186,11 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       productionNote: '',
       fabricConfirmed: false,
       // Every garment on the order, each with its own fabric and measurements.
-      items: items.map(({ key, ...item }) => ({ ...item, styleImages: styleImagesFor(item) })),
+      // The React list key is dropped — it is a rendering concern, not data.
+      items: items.map((item) => {
+        const { key: _listKey, ...rest } = item;
+        return { ...rest, styleImages: styleImagesFor(item) };
+      }),
       // The first garment is also mirrored onto the top level so the production
       // queue, tailor task list and customer tracking page keep working
       // unchanged for the common single-item order.
@@ -3537,7 +3573,7 @@ function ProductionView({ productionJobs, onUpdateJob }) {
       </div>
 
       {/* KPI Stats Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      <div className="os-kpi-row" style={{ gap: 12 }}>
         {[
           { icon: <ClipboardList size={18} strokeWidth={1.5} />, label: 'Ready to Assign', value: readyToAssign, detail: 'Awaiting tailor', color: '#c97b08', bg: '#fffbf0' },
           { icon: <Scissors size={18} strokeWidth={1.5} />, label: 'In Progress', value: inProgress, detail: 'Currently with tailors', color: '#4a6fa5', bg: '#f0f4ff' },
@@ -4029,7 +4065,7 @@ function InventoryView() {
       </div>
 
       {/* KPI Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      <div className="os-kpi-row" style={{ gap: 12 }}>
         {[
           { label: 'Total Fabrics', value: totalFabrics, color: '#c97b08', bg: '#fffbf0', icon: <Boxes size={17} strokeWidth={1.5} /> },
           { label: 'In Stock', value: inStock, color: '#2a7d4f', bg: '#f0faf4', icon: <CheckCircle size={17} strokeWidth={1.5} /> },
@@ -5228,7 +5264,7 @@ function ReportsView({ role }) {
       {report ? (
         <>
           {/* KPI Stats Row 1 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <div className="os-kpi-row" style={{ gap: 12 }}>
             {[
               { label: 'Total Invoiced', value: money.format(report.summary.totalInvoiced), detail: `${report.summary.invoiceCount} invoices`, color: '#c97b08', bg: '#fffbf0', icon: <FileText size={17} strokeWidth={1.5} /> },
               { label: 'Customers', value: String(report.summary.customerCount), detail: 'Unique in period', color: '#4a6fa5', bg: '#f0f4ff', icon: <Users size={17} strokeWidth={1.5} /> },
@@ -5247,7 +5283,7 @@ function ReportsView({ role }) {
           </div>
 
           {/* KPI Stats Row 2 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <div className="os-kpi-row" style={{ gap: 12 }}>
             {[
               { label: 'Fully Paid', value: String(report.summary.fullyPaidCount), detail: `${report.summary.partiallyPaidCount} partial`, color: '#2a7d4f', bg: '#f0faf4', icon: <CheckCircle size={17} strokeWidth={1.5} /> },
               { label: 'Allocations', value: String(report.summary.allocationCount), detail: 'Production usage', color: '#7a5230', bg: '#fdf6ee', icon: <Boxes size={17} strokeWidth={1.5} /> },
@@ -5409,6 +5445,21 @@ const notificationDestination = (item, role) => {
   }
 };
 
+// Older rows predate server-side titles, and slicing the message at its first
+// full stop just reproduced the message, so fall back to the channel instead.
+const notificationTitle = (item) => item.metadata?.title
+  || item.title
+  || item.subject
+  || (item.channel ? `${item.channel} update` : 'Notification');
+
+const notificationTimestamp = (value) => {
+  const when = new Date(value);
+  if (Number.isNaN(when.getTime())) return '';
+  return when.toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).replace(',', ' ·');
+};
+
 function NotificationPanel({ role, currentRole, onNavigate }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -5450,7 +5501,7 @@ function NotificationPanel({ role, currentRole, onNavigate }) {
 
   if (role === 'store_manager' || role === 'accounts') {
     const notificationCategory = (item) => {
-      const text = `${item.channel || ''} ${item.message || ''}`.toLowerCase();
+      const text = `${item.channel || ''} ${item.metadata?.title || ''} ${item.message || ''}`.toLowerCase();
       if (role === 'accounts' && (text.includes('inventory') || text.includes('stock') || text.includes('reconcil'))) return 'Inventory';
       if (text.includes('invoice')) return 'Invoices';
       if (text.includes('payment') || text.includes('paid')) return 'Payments';
@@ -5491,9 +5542,12 @@ function NotificationPanel({ role, currentRole, onNavigate }) {
               onKeyDown={actionable ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openNotification(item); } } : undefined}
             >
               <i className="unread-dot"/><span className={`notification-type-icon type-${itemCategory.toLowerCase()}`}>{iconFor(itemCategory)}</span>
-              <div><strong>{item.title || item.subject || item.message?.split(/[.!]/)[0] || 'Notification'}</strong><p>{item.message}</p></div>
+              <div>
+                <strong>{notificationTitle(item)}</strong>
+                <p>{item.message}</p>
+                <time dateTime={item.createdAt}>{notificationTimestamp(item.createdAt)}</time>
+              </div>
               <b className={`notification-category type-${itemCategory.toLowerCase()}`}>{itemCategory === 'Orders' ? 'Order' : itemCategory === 'Payments' ? 'Payment' : itemCategory === 'Invoices' ? 'Invoice' : itemCategory}</b>
-              <time>{new Date(item.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</time><button className="notification-more">⋮</button>
             </article>;
           }) : <div className="invoice-preview-empty">No notifications in this category.</div>}
         </div>
@@ -5520,8 +5574,9 @@ function NotificationPanel({ role, currentRole, onNavigate }) {
               onKeyDown={actionable ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openNotification(item); } } : undefined}
             >
               <span>{item.channel}</span>
+              <strong>{notificationTitle(item)}</strong>
               <p>{item.message}</p>
-              <small>{new Date(item.createdAt).toLocaleString('en-GB')}</small>
+              <small>{notificationTimestamp(item.createdAt)}</small>
             </article>
           );
         }) : <div className="invoice-preview-empty">No notifications for this account yet.</div>}
@@ -5906,6 +5961,11 @@ function App() {
   const [productionJobs, setProductionJobs] = useState([]);
   const [signedInAccount, setSignedInAccount] = useState(restoredSession);
   const [staffProfile, setStaffProfile] = useState(null);
+  // Explains an automatic sign-out on the login screen, so a staff member who
+  // returns to a logged-out device knows why rather than assuming a fault.
+  const [signOutReason, setSignOutReason] = useState(
+    expiredOnLoad() ? 'Signed out after 8 hours of inactivity. Please sign in again.' : ''
+  );
   const signedIn = Boolean(role && signedInAccount);
   const pathSegments = location.pathname.split('/').filter(Boolean);
   const requestedViewSlug = pathSegments[0] === roleSlug(role) ? pathSegments[1] : '';
@@ -6035,19 +6095,48 @@ function App() {
     setSignedInAccount(account);
     setStaffProfile(null);
     window.localStorage.setItem(OMS_SESSION_KEY, JSON.stringify({ role: account.role, phone: account.phone, label: account.label }));
+    markActive();
     setMobileMenuOpen(false);
     navigate(`/${roleSlug(account.role)}/${viewSlug(navByRole[account.role][0])}`, { replace: true });
   };
 
-  const handleLogout = () => {
-    window.localStorage.removeItem(OMS_SESSION_KEY);
+  const handleLogout = (reason = '') => {
+    clearSessionStorage();
     setRole(null);
     setSignedInAccount(null);
     setStaffProfile(null);
     setMobileMenuOpen(false);
     setUserMenuOpen(false);
+    setSignOutReason(reason);
     navigate('/login', { replace: true });
   };
+
+  // Idle timeout. Activity refreshes the stamp; a minute-by-minute check ends
+  // the session once 8 hours have passed with none. The visibility check
+  // catches a device that was simply asleep, where no timer would have fired.
+  useEffect(() => {
+    if (!signedIn) return undefined;
+
+    const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
+    const onActivity = () => markActive();
+    events.forEach((name) => window.addEventListener(name, onActivity, { passive: true }));
+
+    const endIfIdle = () => {
+      const lastActive = readLastActive();
+      if (lastActive && Date.now() - lastActive <= IDLE_LIMIT_MS) return;
+      handleLogout('Signed out after 8 hours of inactivity. Please sign in again.');
+    };
+
+    const intervalId = window.setInterval(endIfIdle, 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === 'visible') endIfIdle(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      events.forEach((name) => window.removeEventListener(name, onActivity));
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [signedIn]);
 
   useEffect(() => {
     if (!userMenuOpen) return;
@@ -6086,7 +6175,7 @@ function App() {
 
   if (!signedIn) {
     if (location.pathname !== '/login') return <Navigate to="/login" replace />;
-    return <LoginPage onLogin={handleLogin} />;
+    return <LoginPage onLogin={handleLogin} notice={signOutReason} />;
   }
 
   return (
@@ -6174,7 +6263,7 @@ function App() {
               <button className="user-menu-button" onClick={() => setUserMenuOpen((prev) => !prev)} aria-label="Open account menu" aria-expanded={userMenuOpen}>⌄</button>
               {userMenuOpen && (
                 <div className="user-menu-dropdown">
-                  <button type="button" onClick={handleLogout}>← &nbsp; Logout</button>
+                  <button type="button" onClick={() => handleLogout()}>← &nbsp; Logout</button>
                 </div>
               )}
             </div>

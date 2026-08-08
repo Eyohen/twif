@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { demoCredentials } from '../../config/oms';
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage({ onLogin, notice = '' }) {
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
@@ -45,6 +45,7 @@ export default function LoginPage({ onLogin }) {
             <div className="login-panel-head"><div><h2>Welcome back</h2><p>Sign in to continue to your account</p></div></div>
             <form onSubmit={submit}>
               {error ? <div className="login-error">{error}</div> : null}
+              {!error && notice ? <div className="login-notice">{notice}</div> : null}
               <label>Phone number<span className="login-input-icon">⌕</span><input value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="08160000000" /></label>
               <label>PIN<span className="pin-input-wrap"><input value={pin} onChange={(event) => setPin(event.target.value)} type={showPin ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter PIN" /><button type="button" className="pin-toggle" aria-label={showPin ? 'Hide PIN' : 'Show PIN'} onClick={() => setShowPin((current) => !current)}>{showPin ? '◉' : '◎'}</button></span></label>
               <div className="login-form-options"><label><input type="checkbox" defaultChecked />Remember me on this device</label><button type="button">Forgot PIN?</button></div>

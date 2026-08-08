@@ -145,7 +145,7 @@ export default function OwnerInventoryApprovalsPage({ currentRole, onBack }) {
       </div>
 
       {/* KPI Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      <div className="os-kpi-row" style={{ gap: 12 }}>
         {[
           { icon: Clock, label: 'Pending Review', value: pending, bg: '#fffbf0', iconBg: '#c97b08' },
           { icon: CheckCircle, label: 'Approved', value: approved, bg: '#f0faf4', iconBg: '#2a7d4f' },

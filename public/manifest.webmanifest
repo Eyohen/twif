@@ -8,8 +8,8 @@
   "display": "standalone",
   "orientation": "any",
   "categories": ["business", "productivity"],
-  "background_color": "#050505",
-  "theme_color": "#050505",
+  "background_color": "#0a0a0a",
+  "theme_color": "#fffdfa",
   "icons": [
     {
       "src": "/Logomark.png",

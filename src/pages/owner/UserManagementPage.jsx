@@ -200,7 +200,7 @@ export default function UserManagementPage({ currentRole }) {
       </div>
 
       {/* KPI Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      <div className="os-kpi-row" style={{ gap: 12 }}>
         {kpis.map(({ icon: Icon, label, value, detail, bg, color }) => (
           <div key={label} style={{
             background: bg, borderRadius: 12, padding: '16px 18px',
