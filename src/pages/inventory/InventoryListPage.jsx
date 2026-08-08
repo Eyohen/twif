@@ -291,20 +291,20 @@ export default function InventoryListPage({ currentRole, ownerMode = false }) {
               <div className="os-card-body">
                 <div className="os-grid-3" style={{ gap: 10 }}>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>In Stock</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>In Stock</div>
                     <div style={{ fontSize: 15, fontWeight: 800, color: itemStatus === 'Out of Stock' ? '#8a3520' : itemStatus === 'Low Stock' ? '#7a6030' : '#1a1611', marginTop: 3 }}>
                       {Number(fabric.quantity || 0).toFixed(1)} {fabric.unit || 'm'}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Color</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Color</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
                       <span style={{ width: 10, height: 10, borderRadius: '50%', background: colorDot(fabric.color), border: '1px solid rgba(0,0,0,0.1)' }} />
                       <span style={{ fontSize: 12, color: '#5a4e42' }}>{fabric.color || 'Natural'}</span>
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Updated</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Updated</div>
                     <div style={{ fontSize: 12, color: '#5a4e42', marginTop: 3 }}>
                       {fabric.updatedAt ? new Date(fabric.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'Recently'}
                     </div>

@@ -246,7 +246,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
               <thead>
                 <tr style={{ background: '#faf7f3' }}>
                   {['Customer', 'Phone', 'Status', 'Last Visit', 'Measurements', 'Store', 'Actions'].map((col) => (
-                    <th key={col} style={{ padding: '11px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>{col}</th>
+                    <th key={col} style={{ padding: '11px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>{col}</th>
                   ))}
                 </tr>
               </thead>
@@ -356,23 +356,23 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
                   </div>
                   <div style={{ borderTop: '1px solid #f3ede5', display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 16px', gap: 8 }}>
                     <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Last Visit</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Last Visit</div>
                       <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>
                         {customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : `${22 - index} Jul 2026`}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Measurements</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Measurements</div>
                       <div style={{ fontSize: 12, color: customer.measurementsAdded ? '#2a7d4f' : '#8a3520', marginTop: 2, fontWeight: 600 }}>
                         {customer.measurementsAdded ? '✓ Saved' : '× Not saved'}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Store</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Store</div>
                       <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>{customer.stores?.[0] || 'Lekki'}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Customer Since</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Customer Since</div>
                       <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>
                         {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Jan 2026'}
                       </div>

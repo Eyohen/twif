@@ -105,7 +105,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
                   ['Store', invoice.store || 'Lekki'],
                 ].map(([label, val]) => (
                   <div key={label}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611' }}>{val}</div>
                   </div>
                 ))}
@@ -128,7 +128,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
                   ['Email', invoice.customerEmail || 'jimmy.aki@gmail.com'],
                 ].map(([label, val]) => (
                   <div key={label}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
                     <div style={{ fontSize: 12, color: '#1a1611' }}>{val}</div>
                   </div>
                 ))}
@@ -142,7 +142,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
                   <thead>
                     <tr>
                       {['Item', 'Qty', 'Unit Price', 'Total'].map((col) => (
-                        <th key={col} style={{ textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '6px 0', borderBottom: '1px solid #f3ede5' }}>{col}</th>
+                        <th key={col} style={{ textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '6px 0', borderBottom: '1px solid #f3ede5' }}>{col}</th>
                       ))}
                     </tr>
                   </thead>
@@ -199,7 +199,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
                   ['Submitted By', `${invoice.createdBy || 'Bola'} (Store Manager)`],
                 ].map(([label, val]) => (
                   <div key={label}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
                     <div style={{ fontSize: 13, color: '#1a1611' }}>{val}</div>
                   </div>
                 ))}

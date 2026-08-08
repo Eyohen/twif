@@ -152,7 +152,7 @@ export default function MeasurementsPage({ customer, onBack }) {
                 background: '#faf7f3', border: '1px solid #eee5da', borderRadius: 8,
                 padding: '8px 12px', minWidth: 90,
               }}>
-                <small style={{ display: 'block', fontSize: 10, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</small>
+                <small style={{ display: 'block', fontSize: 11, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</small>
                 <strong style={{ fontSize: 13, color: '#1a1611' }}>{value}</strong>
               </div>
             ))}
@@ -193,7 +193,7 @@ export default function MeasurementsPage({ customer, onBack }) {
                 <tr>
                   {['#', 'Measurement', 'Value', 'Units', 'Fit Note'].map((h) => (
                     <th key={h} style={{
-                      textAlign: 'left', padding: '11px 14px', fontSize: 10,
+                      textAlign: 'left', padding: '11px 14px', fontSize: 11,
                       color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.08em',
                       background: '#faf7f3', borderBottom: '1px solid #eee5da',
                     }}>{h}</th>

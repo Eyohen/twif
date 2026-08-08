@@ -244,7 +244,7 @@ export default function AccountsInventoryReconciliationPage() {
                       ['Variance', `${item.variance > 0 ? '+' : ''}${item.variance.toFixed(1)} yds`],
                     ].map(([label, val]) => (
                       <div key={label}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1611', marginTop: 3 }}>{val}</div>
                       </div>
                     ))}

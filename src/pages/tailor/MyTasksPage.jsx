@@ -154,7 +154,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                   }}>
                     <Icon size={13} style={{ color: '#8a7a6a', flexShrink: 0 }} />
                     <div>
-                      <small style={{ display: 'block', fontSize: 10, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</small>
+                      <small style={{ display: 'block', fontSize: 11, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</small>
                       <strong style={{
                         display: 'block', fontSize: 12, color: order.measurements === false && label === 'Measurements' ? '#8a3520' : '#1a1611',
                       }}>{String(value)}</strong>

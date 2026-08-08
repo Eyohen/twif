@@ -110,7 +110,7 @@ export default function OrderDetailsPage({ order, onBack }) {
               padding: '12px 14px', borderRight: i < 5 ? '1px solid #f3ede5' : 'none',
               textAlign: 'center',
             }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
               <div style={{ marginTop: 5 }}>
                 {s ? <Status>{s}</Status> : (
                   <span style={{ fontSize: 14, fontWeight: 700, color: valueColor || '#1a1611' }}>{value}</span>
@@ -145,12 +145,12 @@ export default function OrderDetailsPage({ order, onBack }) {
                   ['Delivery Address', order.store || 'Lekki Store'],
                 ].map(([label, value]) => (
                   <div key={label}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 3 }}>{value}</div>
                   </div>
                 ))}
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Special Instructions</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Special Instructions</div>
                   <div style={{ fontSize: 13, color: '#5a4e42', marginTop: 3, padding: '10px 12px', background: '#faf7f3', borderRadius: 8, border: '1px solid #eee5da' }}>
                     {job.productionNote || 'Prefers slim fit and dark colors.'}
                   </div>

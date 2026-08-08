@@ -165,7 +165,7 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
             <tr style={{ background: '#faf7f3' }}>
               {['Invoice No.', 'Item / Description', 'Pieces', 'Status', 'Order Date', 'Delivery Date', 'Total', 'Actions'].map((col) => (
                 <th key={col} style={{
-                  padding: '11px 14px', textAlign: 'left', fontSize: 10,
+                  padding: '11px 14px', textAlign: 'left', fontSize: 11,
                   fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase',
                   letterSpacing: '0.08em', whiteSpace: 'nowrap',
                 }}>{col}</th>
@@ -266,11 +266,11 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
             </div>
             <div style={{ borderTop: '1px solid #f3ede5', display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 16px', gap: 8 }}>
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1611', marginTop: 2 }}>{money.format(order.total)}</div>
               </div>
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Delivery</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Delivery</div>
                 <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>{order.deliveryDate}</div>
               </div>
             </div>

@@ -235,7 +235,7 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
                   ['Preferred Store', `${customer.stores?.[0] || 'Lekki'} Store`],
                 ].map(([label, value]) => (
                   <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
                     <span style={{ fontSize: 13, color: '#1a1611', fontWeight: 500 }}>{value}</span>
                   </div>
                 ))}
@@ -345,7 +345,7 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
                 {measurementRows.map(([label, value]) => (
                   <div key={label} style={{ padding: '8px 16px', borderBottom: '1px solid #f3ede5' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 2 }}>{value}</div>
                   </div>
                 ))}

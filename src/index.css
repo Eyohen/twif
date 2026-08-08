@@ -9641,3 +9641,33 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
    values like "Lekki" stop wrapping one character per line. */
 .os-kpi-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 1000px) { .os-kpi-row-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* The mobile workspace default is a near-black gradient, and every role shell
+   repaints it cream — except Inventory Manager and Admin, which have no shell
+   class. Those two rendered dark page titles on a near-black background.
+   Correcting the default means a role can no longer be forgotten. */
+@media (max-width: 900px) {
+  .workspace { background: #fffdfa; }
+}
+
+/* Below 780px the stylesheet stacks table rows into cards. A table that also
+   carries a desktop `min-width` keeps that width while stacked, so each row
+   becomes a 920px-wide card inside a 330px scroller: the label shows at the
+   left and its value sits far off-screen to the right. Stacking and a fixed
+   minimum width cannot both apply, and stacking is what mobile wants. */
+@media (max-width: 900px) {
+  .workspace table { min-width: 0 !important; }
+}
+
+/* The blanket min-width:0 above also cleared the deliberate widths on
+   horizontal card carousels, collapsing them into slivers. Carousel items
+   need their width back — they are meant to overflow their scroller. */
+@media (max-width: 900px) {
+  .metrics-grid > .stat,
+  .metrics-grid > article { min-width: 72vw; }
+  .os-kpi-row > * { width: 70vw; max-width: 260px; }
+  .store-overview-kpis > article { min-width: 72vw; }
+  .orders-table-kpis > article { min-width: 74vw; }
+  .store-invoice-kpis > article,
+  .store-order-kpis > article { min-width: 70vw; }
+}

@@ -260,7 +260,7 @@ export default function OwnerInventoryApprovalsPage({ currentRole, onBack }) {
                   <tr>
                     {['Item', 'Requested By', 'Proposed Changes', 'Reason', 'Status', 'Submitted', 'Actions'].map((h) => (
                       <th key={h} style={{
-                        textAlign: 'left', padding: '11px 14px', fontSize: 10,
+                        textAlign: 'left', padding: '11px 14px', fontSize: 11,
                         color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.08em',
                         background: '#faf7f3', borderBottom: '1px solid #eee5da',
                       }}>{h}</th>

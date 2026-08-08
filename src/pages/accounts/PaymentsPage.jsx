@@ -255,11 +255,11 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
                   <div style={{ padding: '10px 16px', borderRight: '1px solid #f3ede5' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Received</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Received</div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#2a7d4f', marginTop: 3 }}>{money.format(payment.received)}</div>
                   </div>
                   <div style={{ padding: '10px 16px' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Balance</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Balance</div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: payment.total - payment.received > 0 ? '#8a3520' : '#2a7d4f', marginTop: 3 }}>{money.format(Math.max(0, payment.total - payment.received))}</div>
                   </div>
                 </div>

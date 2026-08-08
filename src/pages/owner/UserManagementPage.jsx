@@ -296,7 +296,7 @@ export default function UserManagementPage({ currentRole }) {
                   <tr>
                     {['Staff Member', 'Role', 'Store', 'Phone', 'Tailor Grade', 'Last Login', 'Status', 'Actions'].map((h) => (
                       <th key={h} style={{
-                        textAlign: 'left', padding: '11px 14px', fontSize: 10,
+                        textAlign: 'left', padding: '11px 14px', fontSize: 11,
                         color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.08em',
                         background: '#faf7f3', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap',
                       }}>{h}</th>
@@ -922,7 +922,7 @@ function LoginHistory({ person, onBack }) {
               <tr>
                 {['Date & Time', 'Device', 'Browser / App', 'IP Address', 'Status', 'Location'].map((h) => (
                   <th key={h} style={{
-                    textAlign: 'left', padding: '11px 14px', fontSize: 10,
+                    textAlign: 'left', padding: '11px 14px', fontSize: 11,
                     color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.08em',
                     background: '#faf7f3', borderBottom: '1px solid #eee5da',
                   }}>{h}</th>

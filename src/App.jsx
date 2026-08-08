@@ -618,7 +618,7 @@ function OwnerStoresPage({ sentInvoices = [] }) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, paddingTop: 14, borderTop: '1px solid #f3ede5', marginBottom: 14 }}>
                       {[['Revenue', money.format(revenue)], ['Orders', String(orders)], ['Share', `${share}%`]].map(([label, val]) => (
                         <div key={label}>
-                          <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
+                          <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
                           <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1611' }}>{val}</div>
                         </div>
                       ))}
@@ -661,7 +661,7 @@ function OwnerStoresPage({ sentInvoices = [] }) {
               <thead>
                 <tr>
                   {['Store', 'Location', 'Manager', 'Revenue', 'Orders', 'Share', 'Status', 'Actions'].map((col) => (
-                    <th key={col} style={{ textAlign: 'left', padding: '11px 14px', fontSize: 10, textTransform: 'uppercase', color: '#8a7a6a', letterSpacing: '0.08em', background: '#faf7f3', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{col}</th>
+                    <th key={col} style={{ textAlign: 'left', padding: '11px 14px', fontSize: 11, textTransform: 'uppercase', color: '#8a7a6a', letterSpacing: '0.08em', background: '#faf7f3', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{col}</th>
                   ))}
                 </tr>
               </thead>
@@ -1256,7 +1256,7 @@ function OrdersView({ sentInvoices }) {
                     ['Tailor', order.tailor || 'Unassigned'],
                   ].map(([label, value]) => (
                     <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <dt style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>{label}</dt>
+                      <dt style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>{label}</dt>
                       <dd style={{ fontSize: 12, fontWeight: 600, color: '#1a1611', margin: 0 }}>{value}</dd>
                     </div>
                   ))}
@@ -1295,7 +1295,7 @@ function OrdersView({ sentInvoices }) {
             { label: 'Not Paid', value: sentInvoices.filter(inv => !inv.paymentStatus || inv.paymentStatus === 'Not Paid' || inv.paymentStatus === 'Awaiting Payment').length },
           ].map(({ label, value }, i) => (
             <div key={label} style={{ flex: 1, padding: '12px 16px', borderRight: i < 3 ? '1px solid #eee5da' : 'none', background: '#faf7f3' }}>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
+              <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
               <div style={{ fontSize: 18, fontWeight: 700, color: '#1a1611' }}>{value}</div>
             </div>
           ))}
@@ -1307,7 +1307,7 @@ function OrdersView({ sentInvoices }) {
             <thead>
               <tr>
                 {['Invoice', 'Customer', 'Store', 'Item', 'Amount', 'Payment', 'Accounts', 'Date'].map((col) => (
-                  <th key={col} style={{ textAlign: 'left', padding: '11px 14px', fontSize: 10, textTransform: 'uppercase', color: '#8a7a6a', letterSpacing: '0.08em', background: '#faf7f3', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{col}</th>
+                  <th key={col} style={{ textAlign: 'left', padding: '11px 14px', fontSize: 11, textTransform: 'uppercase', color: '#8a7a6a', letterSpacing: '0.08em', background: '#faf7f3', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{col}</th>
                 ))}
               </tr>
             </thead>
@@ -1358,8 +1358,8 @@ function OrdersView({ sentInvoices }) {
                 <Status>{invoice.paymentStatus}</Status>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, paddingTop: 8, borderTop: '1px solid #f3ede5' }}>
-                <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Amount</div><div style={{ fontWeight: 700, fontSize: 13 }}>{money.format(invoice.total)}</div></div>
-                <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Approval</div><Status>{invoiceApprovalStatus(invoice)}</Status></div>
+                <div><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Amount</div><div style={{ fontWeight: 700, fontSize: 13 }}>{money.format(invoice.total)}</div></div>
+                <div><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Approval</div><Status>{invoiceApprovalStatus(invoice)}</Status></div>
               </div>
             </div>
           ))}
@@ -1758,15 +1758,15 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, paddingTop: 10, borderTop: '1px solid #f3ede5' }}>
                   <div>
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 2 }}>Amount</div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 2 }}>Amount</div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1611' }}>{money.format(invoice.total)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 2 }}>Approval</div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 2 }}>Approval</div>
                     <Status>{invoiceApprovalStatus(invoice)}</Status>
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 2 }}>Date</div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 2 }}>Date</div>
                     <div style={{ fontSize: 12, color: '#5a4e42' }}>{invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
@@ -2077,7 +2077,7 @@ function StoreOrdersView({ sentInvoices = [] }) {
                       borderTop: '1px solid #f3ede5',
                     }}>
                       <div>
-                        <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
+                        <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
                           Delivery
                         </div>
                         <div style={{ fontSize: 12, color: '#5a4e42', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -2088,7 +2088,7 @@ function StoreOrdersView({ sentInvoices = [] }) {
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
+                        <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
                           Total
                         </div>
                         <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1611' }}>
@@ -2096,7 +2096,7 @@ function StoreOrdersView({ sentInvoices = [] }) {
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
+                        <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
                           Fabric
                         </div>
                         <div style={{ fontSize: 12, color: '#5a4e42', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -2105,7 +2105,7 @@ function StoreOrdersView({ sentInvoices = [] }) {
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
+                        <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 3 }}>
                           Payment
                         </div>
                         <Status>{invoice.paymentStatus}</Status>
@@ -2253,7 +2253,7 @@ function CustomersView() {
               <thead>
                 <tr>
                   {['Customer', 'Phone', 'Store(s)', 'Category', 'Orders', '12-Month Spend', 'Last Order'].map((col) => (
-                    <th key={col} style={{ textAlign: 'left', padding: '11px 14px', fontSize: 10, textTransform: 'uppercase', color: '#8a7a6a', letterSpacing: '0.08em', background: '#faf7f3', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{col}</th>
+                    <th key={col} style={{ textAlign: 'left', padding: '11px 14px', fontSize: 11, textTransform: 'uppercase', color: '#8a7a6a', letterSpacing: '0.08em', background: '#faf7f3', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{col}</th>
                   ))}
                 </tr>
               </thead>
@@ -2315,9 +2315,9 @@ function CustomersView() {
                 <Status>{customer.category}</Status>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, paddingTop: 8, borderTop: '1px solid #f3ede5' }}>
-                <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Orders</div><div style={{ fontWeight: 700, fontSize: 13 }}>{customer.totalOrders}</div></div>
-                <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>12M Spend</div><div style={{ fontWeight: 700, fontSize: 13 }}>{money.format(customer.twelveMonthSpend)}</div></div>
-                <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Store</div><div style={{ fontSize: 12, color: '#5a4e42' }}>{customer.stores?.[0] || '—'}</div></div>
+                <div><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Orders</div><div style={{ fontWeight: 700, fontSize: 13 }}>{customer.totalOrders}</div></div>
+                <div><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>12M Spend</div><div style={{ fontWeight: 700, fontSize: 13 }}>{money.format(customer.twelveMonthSpend)}</div></div>
+                <div><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Store</div><div style={{ fontSize: 12, color: '#5a4e42' }}>{customer.stores?.[0] || '—'}</div></div>
               </div>
             </div>
           ))}
@@ -2928,7 +2928,7 @@ function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
             <thead>
               <tr>
                 {['Invoice', 'Customer', 'Store', 'Total', 'Paid', 'Balance', 'Method', 'Date', 'Status', 'Actions'].map((col) => (
-                  <th key={col} style={{ textAlign: 'left', padding: '11px 14px', fontSize: 10, textTransform: 'uppercase', color: '#8a7a6a', letterSpacing: '0.08em', background: '#faf7f3', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{col}</th>
+                  <th key={col} style={{ textAlign: 'left', padding: '11px 14px', fontSize: 11, textTransform: 'uppercase', color: '#8a7a6a', letterSpacing: '0.08em', background: '#faf7f3', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{col}</th>
                 ))}
               </tr>
             </thead>
@@ -3001,9 +3001,9 @@ function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
                   <Status>{invoiceApprovalStatus(invoice)}</Status>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, paddingTop: 8, borderTop: '1px solid #f3ede5', marginBottom: 10 }}>
-                  <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Total</div><div style={{ fontWeight: 700, fontSize: 13 }}>{money.format(invoice.total)}</div></div>
-                  <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Paid</div><div style={{ fontWeight: 700, fontSize: 13, color: '#2a7d4f' }}>{money.format(paidAmt)}</div></div>
-                  <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Balance</div><div style={{ fontWeight: 700, fontSize: 13, color: balance > 0 ? '#8a3520' : '#2a7d4f' }}>{balance > 0 ? money.format(balance) : '—'}</div></div>
+                  <div><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Total</div><div style={{ fontWeight: 700, fontSize: 13 }}>{money.format(invoice.total)}</div></div>
+                  <div><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Paid</div><div style={{ fontWeight: 700, fontSize: 13, color: '#2a7d4f' }}>{money.format(paidAmt)}</div></div>
+                  <div><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Balance</div><div style={{ fontWeight: 700, fontSize: 13, color: balance > 0 ? '#8a3520' : '#2a7d4f' }}>{balance > 0 ? money.format(balance) : '—'}</div></div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button type="button" onClick={() => onApproveInvoice?.(invoice.invoiceNumber, 'Flagged')}
@@ -3640,7 +3640,7 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                 <thead>
                   <tr>
                     {['Customer', 'Item', 'Delivery', 'Tailor', 'Fabric', 'Status', ''].map((h) => (
-                      <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 10, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 11, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -3843,7 +3843,7 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                   ['Delivery Date', jobModal.delivery ? new Date(`${jobModal.delivery}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : 'Not set'],
                 ].map(([label, value]) => (
                   <div key={label} style={{ padding: '10px 12px', background: '#faf7f3', borderRadius: 8, border: '1px solid #eee5da' }}>
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 3 }}>{label}</div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611' }}>{value}</div>
                   </div>
                 ))}
@@ -3874,7 +3874,7 @@ function ProductionView({ productionJobs, onUpdateJob }) {
               {/* Production note display */}
               {(jobModal.designNotes || jobModal.productionNote || jobModal.note) ? (
                 <div style={{ padding: '12px 14px', background: '#fffbf0', border: '1px solid #e8d9a0', borderRadius: 8, fontSize: 13, color: '#5a4e42' }}>
-                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Production Note</div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Production Note</div>
                   {jobModal.productionNote || jobModal.designNotes || jobModal.note}
                 </div>
               ) : null}
@@ -4165,7 +4165,7 @@ function InventoryView() {
               <thead>
                 <tr>
                   {['Fabric', 'Category', 'Stock', 'Unit', 'Threshold', 'Supplier', 'Status'].map((h) => (
-                    <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 10, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 11, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -4243,7 +4243,7 @@ function InventoryView() {
               <thead>
                 <tr>
                   {['Date', 'Fabric / Item', 'Quantity', 'Order', 'Customer', 'Tailor'].map((h) => (
-                    <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 10, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 11, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -4528,7 +4528,7 @@ function StaffView({ role, currentRole }) {
             <thead>
               <tr>
                 {['Name', 'Role', 'Store', 'Status', 'Last Login', 'Department', 'Grade', ...(role === 'owner' ? ['Actions'] : [])].map((h) => (
-                  <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 10, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 11, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -4631,7 +4631,7 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
   const pending = report.invoices.filter((invoice) => invoice.approvalStatus === 'Pending Accounts');
   const flagged = report.invoices.filter((invoice) => ['Flagged', 'Rejected'].includes(invoice.approvalStatus));
   const partial = report.invoices.filter((invoice) => invoice.paymentStatus === 'Partial Paid');
-  const thStyle = { padding: '11px 14px', background: '#faf7f3', fontSize: 10, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' };
+  const thStyle = { padding: '11px 14px', background: '#faf7f3', fontSize: 11, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' };
   const tdStyle = { padding: '12px 14px', fontSize: 13, color: '#5a4e42', borderBottom: '1px solid #f3ede5' };
   const trHover = { onMouseEnter: (e) => { e.currentTarget.style.background = '#faf7f3'; }, onMouseLeave: (e) => { e.currentTarget.style.background = 'white'; } };
   const kpiCards = [
@@ -5315,7 +5315,7 @@ function ReportsView({ role }) {
                 <thead>
                   <tr>
                     {['Store', 'Invoices', 'Total Invoiced'].map((h) => (
-                      <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 10, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da' }}>{h}</th>
+                      <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 11, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -5346,7 +5346,7 @@ function ReportsView({ role }) {
                   <thead>
                     <tr>
                       {['Date', 'Invoice', 'Customer', 'Store', 'Total', 'Payment', 'Approval', 'Order'].map((h) => (
-                        <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 10, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
+                        <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 11, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -5385,7 +5385,7 @@ function ReportsView({ role }) {
                   <thead>
                     <tr>
                       {['Date', 'Fabric', 'Quantity', 'Order', 'Customer', 'Tailor'].map((h) => (
-                        <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 10, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
+                        <th key={h} style={{ padding: '11px 14px', background: '#faf7f3', fontSize: 11, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>

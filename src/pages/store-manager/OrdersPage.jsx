@@ -148,7 +148,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
             <tr style={{ background: '#faf7f3' }}>
               {['Invoice No.', 'Customer', 'Items', 'Invoice Total', 'Payment', 'Delivery Date', 'Production', 'Created', 'Actions'].map((col) => (
                 <th key={col} style={{
-                  padding: '11px 14px', textAlign: 'left', fontSize: 10,
+                  padding: '11px 14px', textAlign: 'left', fontSize: 11,
                   fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase',
                   letterSpacing: '0.08em', whiteSpace: 'nowrap',
                 }}>{col}</th>
@@ -285,15 +285,15 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
               </div>
               <div style={{ borderTop: '1px solid #f3ede5', display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 16px', gap: 8 }}>
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Invoice Total</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Invoice Total</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1611', marginTop: 2 }}>{money.format(order.total)}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Payment</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Payment</div>
                   <div style={{ marginTop: 2 }}><Status>{order.paymentStatus}</Status></div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Delivery</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Delivery</div>
                   <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>
                     {delivery ? new Date(`${String(delivery).slice(0, 10)}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Not set'}
                   </div>
@@ -302,7 +302,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Items</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Items</div>
                   <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>{order.pieces || order.job.pieces || 1} pieces</div>
                 </div>
               </div>
