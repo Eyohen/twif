@@ -26,6 +26,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
   const [openOrder, setOpenOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [messageIsError, setMessageIsError] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createForm, setCreateForm] = useState({ fullName: '', phone: '', email: '', category: 'New' });
   const [activeKpiDot, setActiveKpiDot] = useState(0);
@@ -38,10 +39,13 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
     setActiveKpiDot(Math.round(scrollLeft / cardWidth));
   };
 
+  const showError = (text) => { setMessage(text); setMessageIsError(true); };
+  const showSuccess = (text) => { setMessage(text); setMessageIsError(false); };
+
   useEffect(() => {
     api.get('/oms/customers')
       .then((response) => setCustomers(response.data?.data?.customers || []))
-      .catch((error) => setMessage(error.response?.data?.message || 'Unable to load customers.'))
+      .catch((error) => showError(error.response?.data?.message || 'Unable to load customers.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -52,16 +56,17 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
       const saved = response.data?.data?.customer;
       setCustomers((current) => [{ ...saved, totalOrders: 0, measurementsAdded: false, stores: [] }, ...current]);
       setCreateForm({ fullName: '', phone: '', email: '', category: 'New' });
-      setCreating(false); setMessage('Customer created successfully.');
-    } catch (error) { setMessage(error.response?.data?.message || 'Unable to create customer.'); }
+      setCreating(false);
+      showSuccess(`${saved?.fullName || 'Customer'} was created.`);
+    } catch (error) { showError(error.response?.data?.message || 'Unable to create customer.'); }
   };
 
   const archiveCustomer = async (customer) => {
     try {
       await api.delete(`/oms/customers/${customer.id}`);
       setCustomers((current) => current.filter((item) => item.id !== customer.id));
-      setMessage(`${customer.fullName} was archived.`);
-    } catch (error) { setMessage(error.response?.data?.message || 'Unable to archive customer.'); }
+      showSuccess(`${customer.fullName} was archived.`);
+    } catch (error) { showError(error.response?.data?.message || 'Unable to archive customer.'); }
   };
 
   const returning = customers.filter((customer) => Number(customer.totalOrders) > 1);
@@ -242,8 +247,12 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
         </div>
       </div>
 
+      {/* Every message used to be painted green, so "Unable to create customer"
+          and "already uses that email" read as confirmations. */}
       {message ? (
-        <div style={{ padding: '12px 16px', borderRadius: 8, background: '#f0faf4', color: '#2a7d4f', border: '1px solid #c0e8d0', fontSize: 13 }}>
+        <div style={messageIsError
+          ? { padding: '12px 16px', borderRadius: 8, background: '#fff5f0', color: '#8a3520', border: '1px solid #f0c8b8', fontSize: 13 }
+          : { padding: '12px 16px', borderRadius: 8, background: '#f0faf4', color: '#2a7d4f', border: '1px solid #c0e8d0', fontSize: 13 }}>
           {message}
         </div>
       ) : null}
@@ -467,7 +476,9 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
               </label>
               <label className="os-field">
                 <span>Email Address</span>
-                <input type="email" value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} placeholder="optional" />
+                {/* The invoice and the tracking link both go to this address,
+                    so it was never really optional. */}
+                <input type="email" value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} required placeholder="name@example.com" />
               </label>
               <label className="os-field os-field-full">
                 <span>Customer Type</span>

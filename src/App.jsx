@@ -2379,6 +2379,61 @@ function CustomersView() {
   );
 }
 
+// The invoice document is laid out for email and print at a fixed 760px, so on
+// a phone it ran off the side of the preview. It is scaled to the space
+// available instead — the document itself is untouched, and the zoom controls,
+// which previously did nothing at all, now drive that scale.
+const INVOICE_DOCUMENT_WIDTH = 760;
+const INVOICE_PREVIEW_HEIGHT = 690;
+
+function InvoiceDocumentPreview({ html, invoiceNumber }) {
+  const frameRef = useRef(null);
+  const [available, setAvailable] = useState(INVOICE_DOCUMENT_WIDTH);
+  const [zoom, setZoom] = useState(null);
+
+  useEffect(() => {
+    const element = frameRef.current;
+    if (!element) return undefined;
+    const measure = () => setAvailable(element.clientWidth || INVOICE_DOCUMENT_WIDTH);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  // Fit-width is the default: at 100% on a 390px screen only half the invoice
+  // would be visible.
+  const fitScale = Math.min(1, available / INVOICE_DOCUMENT_WIDTH);
+  const scale = zoom ?? fitScale;
+  const percentage = Math.round(scale * 100);
+
+  return (
+    <section className="invoice-document-preview">
+      <div className="invoice-preview-tools">
+        <button type="button" onClick={() => setZoom(Math.max(0.25, Number((scale - 0.1).toFixed(2))))} aria-label="Zoom out">−</button>
+        <span>{percentage}%</span>
+        <button type="button" onClick={() => setZoom(Math.min(2, Number((scale + 0.1).toFixed(2))))} aria-label="Zoom in">＋</button>
+        <button type="button" onClick={() => setZoom(null)}>Fit Width</button>
+        <span />
+        {/* There were two icon buttons here that did exactly the same thing. */}
+        <button type="button" onClick={() => printInvoiceHtml(html, invoiceNumber)}>⇩ Download</button>
+      </div>
+      <div className="invoice-document-frame" ref={frameRef} style={{ height: INVOICE_PREVIEW_HEIGHT }}>
+        <iframe
+          title="Invoice preview"
+          srcDoc={html}
+          style={{
+            width: INVOICE_DOCUMENT_WIDTH,
+            height: INVOICE_PREVIEW_HEIGHT / scale,
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+          }}
+        />
+      </div>
+    </section>
+  );
+}
+
 function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   const [form, setForm] = useState({
     store: 'lekki',
@@ -2585,7 +2640,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     return <div className="invoice-preview-page-v2">
       <header><button type="button" onClick={() => setPreviewMode(false)}>← &nbsp; Back to Invoice</button><div><small>INVOICE</small><strong>{form.invoiceNumber}</strong><Status>Not Sent Yet</Status></div></header>
       <section className="invoice-preview-title"><div><h2>{previewTab === 'invoice' ? 'Invoice Preview' : 'Email Preview'}</h2><p>This is how your {previewTab === 'invoice' ? 'invoice' : 'email'} will appear to the customer.</p></div><nav><button className={previewTab === 'invoice' ? 'active' : ''} onClick={() => setPreviewTab('invoice')}>Invoice Preview</button><button className={previewTab === 'email' ? 'active' : ''} onClick={() => setPreviewTab('email')}>Email Preview</button></nav></section>
-      {previewTab === 'invoice' ? <section className="invoice-document-preview"><div className="invoice-preview-tools"><button>−</button><span>100%</span><button>＋</button><button>Fit Width</button><span/><button onClick={() => printInvoiceHtml(previewHtml, form.invoiceNumber)}>⇩</button><button onClick={() => printInvoiceHtml(previewHtml, form.invoiceNumber)}>▣</button></div><iframe title="Invoice preview" srcDoc={previewHtml}/></section> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], ['Amount Due', money.format(balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div><button>Download Invoice PDF</button><button>Track Your Order</button></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>Balance Due</span><strong>{money.format(balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
+      {previewTab === 'invoice' ? <InvoiceDocumentPreview html={previewHtml} invoiceNumber={form.invoiceNumber} /> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], ['Amount Due', money.format(balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div><button>Download Invoice PDF</button><button>Track Your Order</button></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>Balance Due</span><strong>{money.format(balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
       {message ? <div className="invoice-message">{message}</div> : null}
       <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => printInvoiceHtml(previewHtml, form.invoiceNumber)}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
     </div>;
@@ -2674,8 +2729,11 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
             </div>
             <div className="os-card-body" style={{ gap: 12 }}>
               {items.map((item, index) => (
-                <div key={item.id} style={{ border: '1px solid #eee5da', borderRadius: 10, padding: '14px 16px', background: '#faf7f3', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
+                <div key={item.id} className="invoice-item-row" style={{ border: '1px solid #eee5da', borderRadius: 10, padding: '14px 16px', background: '#faf7f3', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {/* Five columns fit a desktop and nothing else — on a phone the
+                      description shrank to about six characters and the headings
+                      ran into each other. The widths now live in the stylesheet. */}
+                  <div className="invoice-item-fields">
                     <label className="os-field">
                       <span>Description</span>
                       <input value={item.description} onChange={(event) => updateItem(index, 'description', event.target.value)} placeholder="e.g. Three-piece suit" />
@@ -2697,8 +2755,8 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
                       <input readOnly value={money.format(toNumber(item.amount))} style={{ background: '#faf7f3', fontWeight: 700, color: '#1a1611', cursor: 'default' }} />
                     </label>
                   </div>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                    <label className="os-field" style={{ flex: 1 }}>
+                  <div className="invoice-item-note-row">
+                    <label className="os-field">
                       <span>Item Note <em style={{ fontWeight: 400, fontSize: 10, textTransform: 'none' }}>(optional)</em></span>
                       <input value={item.note} onChange={(event) => updateItem(index, 'note', event.target.value)} placeholder="Delivery date, style details…" />
                     </label>
@@ -2749,9 +2807,9 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
               </label>
               <label className="os-field" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span>Elite Discount</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: '#5a4e42' }}>
-                    <input type="checkbox" checked={form.eliteDiscountEnabled} onChange={(event) => updateForm('eliteDiscountEnabled', event.target.checked)} style={{ accentColor: '#c97b08' }} />
+                <div className="os-checkbox-row">
+                  <label>
+                    <input type="checkbox" checked={form.eliteDiscountEnabled} onChange={(event) => updateForm('eliteDiscountEnabled', event.target.checked)} />
                     Apply 5% Elite discount
                   </label>
                 </div>
@@ -2798,9 +2856,9 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
               <Edit2 size={16} strokeWidth={1.5} className="os-card-icon" />
             </div>
             <div className="os-card-body">
-              <label className="os-field os-field-full">
+              <label className="os-field os-field-full invoice-notes-field">
                 <span>Invoice Notes</span>
-                <textarea value={form.notes} onChange={(event) => updateForm('notes', event.target.value)} rows={3} />
+                <textarea value={form.notes} onChange={(event) => updateForm('notes', event.target.value)} rows={4} />
               </label>
               <label className="os-field os-field-full">
                 <span>Tracking Link</span>

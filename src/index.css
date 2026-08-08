@@ -348,7 +348,10 @@ a {
   font-weight: 800;
 }
 
-input,
+/* Checkboxes and radios are excluded: the full width, 46px height and 12px
+   padding meant for a text field turned every one of them into a large pale
+   rectangle sitting beside its label. */
+input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
   width: 100%;
@@ -367,13 +370,13 @@ textarea {
   resize: vertical;
 }
 
-input:hover,
+input:not([type="checkbox"]):not([type="radio"]):hover,
 select:hover,
 textarea:hover {
   border-color: #c9c0b1;
 }
 
-input:focus,
+input:not([type="checkbox"]):not([type="radio"]):focus,
 select:focus,
 textarea:focus {
   border-color: var(--gold);
@@ -3429,7 +3432,10 @@ dd {
     padding: 14px;
   }
 
-  input,
+  /* A 48px tap target is right for a field you type in, but it was also
+     applied to checkboxes and radios, which stretched them into large dark
+     squares beside their labels. */
+  input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea {
     min-height: 48px;
@@ -10150,3 +10156,43 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   .item-detail-hero { grid-template-columns: 1fr; }
   .item-detail-photo { width: 100%; height: 160px; }
 }
+
+/* ---------------------------------------------------------------------------
+   New invoice form
+   The item row was a fixed five-column grid written inline, so on a phone the
+   description field shrank to about six characters wide and the column
+   headings ran into one another. The Elite discount checkbox also picked up
+   the 10px padding meant for text inputs and rendered as a large black square.
+--------------------------------------------------------------------------- */
+.invoice-item-fields { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 10px; }
+.invoice-item-note-row { display: flex; gap: 10px; align-items: flex-end; }
+.invoice-item-note-row > .os-field { flex: 1; }
+
+@media (max-width: 760px) {
+  /* Description and amount take the full width; the three small numbers share
+     a row, which is how they are read anyway. */
+  .invoice-item-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .invoice-item-fields > .os-field:first-child,
+  .invoice-item-fields > .os-field:last-child { grid-column: 1 / -1; }
+  /* The note is the widest thing in the row, so Remove drops below it. */
+  .invoice-item-note-row { flex-wrap: wrap; }
+  .invoice-item-note-row > .os-field { flex: 1 1 100%; }
+}
+
+.os-checkbox-row { display: flex; align-items: center; gap: 10px; }
+.os-checkbox-row label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #5a4e42; }
+.os-field .os-checkbox-row input[type="checkbox"] {
+  width: 16px; height: 16px; flex-shrink: 0; padding: 0; margin: 0;
+  accent-color: #c97b08; border-radius: 4px;
+}
+
+.invoice-notes-field textarea { min-height: 104px; }
+
+/* The invoice document is a fixed-width email layout, so the preview scales it
+   to the space available rather than letting it run off the side. */
+/* auto rather than hidden: at fit-width nothing overflows, and when zoomed in
+   past that the document can be panned instead of being clipped. */
+.invoice-document-frame { overflow: auto; background: #eee; -webkit-overflow-scrolling: touch; }
+.invoice-document-frame iframe { border: 0; background: #fff; display: block; }
+.invoice-preview-tools { flex-wrap: wrap; padding: 8px; }
+.invoice-preview-tools button { white-space: nowrap; }
