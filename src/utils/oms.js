@@ -142,3 +142,57 @@ export const mergeJobsByInvoice = (currentJobs, incomingJobs) => {
 };
 
 export const classNames = (...items) => items.filter(Boolean).join(' ');
+
+export const PERIOD_OPTIONS = [
+  ['today', 'Today'],
+  ['week', 'This Week'],
+  ['month', 'This Month'],
+  ['year', 'This Year'],
+  ['all', 'All Time'],
+];
+
+// Shared by the dashboard's overall filter and by each panel's own selector.
+// `getDate` pulls the date off a record, since invoices and production jobs
+// carry theirs under different names.
+export const filterByPeriod = (records, getDate, period, customFrom, customTo) => {
+  if (period === 'all') return records;
+
+  const today = todayIso();
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const yearStart = `${today.slice(0, 4)}-01-01`;
+
+  const on = (record) => String(getDate(record) || '').slice(0, 10);
+
+  if (period === 'today') return records.filter((record) => on(record) === today);
+  if (period === 'week') return records.filter((record) => getDate(record) && new Date(getDate(record)) >= weekAgo);
+  if (period === 'month') return records.filter((record) => on(record) >= monthStart);
+  if (period === 'year') return records.filter((record) => on(record) >= yearStart);
+  if (period === 'custom' && customFrom) {
+    return records.filter((record) => {
+      const date = on(record);
+      return date >= customFrom && (!customTo || date <= customTo);
+    });
+  }
+  return records;
+};
+
+// Buckets a period's records into columns for the dashboard chart, so the bars
+// move with the selected range instead of being a fixed decorative shape.
+export const periodTrend = (records, period, buckets = 11) => {
+  const now = new Date();
+  const spanDays = period === 'today' ? 1 : period === 'week' ? 7 : period === 'year' ? 365 : 30;
+  const totals = new Array(buckets).fill(0);
+
+  records.forEach((record) => {
+    const when = new Date(record.createdAt);
+    if (Number.isNaN(when.getTime())) return;
+    const daysAgo = (now - when) / 86400000;
+    const index = buckets - 1 - Math.floor((daysAgo / spanDays) * buckets);
+    if (index >= 0 && index < buckets) totals[index] += toNumber(record.total);
+  });
+
+  const peak = Math.max(...totals, 1);
+  return totals.map((value) => ({ value, height: Math.max(4, Math.round((value / peak) * 100)) }));
+};

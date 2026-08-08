@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors } from 'lucide-react';
 import { api } from './lib/api';
 import LoginPage from './pages/auth/LoginPage';
 import MyTasksPage from './pages/tailor/MyTasksPage';
@@ -17,13 +17,14 @@ import InventoryListPage from './pages/inventory/InventoryListPage';
 import { roles, demoCredentials, inventoryCategories, navByRole, accountTypeByRole } from './config/oms';
 import { Stat, Status, SectionHeader } from './components/oms/Common';
 import useLabelledTables from './hooks/useLabelledTables';
+import useCarouselIndicators from './hooks/useCarouselIndicators';
 import InvoiceActionConfirmModal from './components/oms/InvoiceActionConfirmModal';
 import {
   money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
   dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
   isInvoiceApproved, canShowJobInProduction, productionJobFromInvoice,
   mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid,
-  invoiceDocumentPayload, printInvoiceHtml,
+  invoiceDocumentPayload, printInvoiceHtml, PERIOD_OPTIONS, filterByPeriod, periodTrend,
 } from './utils/oms';
 
 const trackingBaseUrl = (
@@ -369,6 +370,9 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
   const [customers, setCustomers] = useState([]);
   const [staff, setStaff] = useState([]);
   const [period, setPeriod] = useState('month');
+  const [salesPeriod, setSalesPeriod] = useState('month');
+  const [productionPeriod, setProductionPeriod] = useState('week');
+  const [storePeriod, setStorePeriod] = useState('month');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState(todayIso());
   const [activeKpiDot, setActiveKpiDot] = useState(0);
@@ -389,34 +393,47 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
     });
   }, []);
 
-  const filteredInvoices = useMemo(() => {
-    const today = todayIso();
-    const now = new Date();
-    const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
-    const monthStart = `${today.slice(0, 7)}-01`;
-    const yearStart = `${today.slice(0, 4)}-01-01`;
-    if (period === 'today') return sentInvoices.filter(inv => String(inv.createdAt || '').slice(0, 10) === today);
-    if (period === 'week') return sentInvoices.filter(inv => inv.createdAt && new Date(inv.createdAt) >= weekAgo);
-    if (period === 'month') return sentInvoices.filter(inv => String(inv.createdAt || '').slice(0, 10) >= monthStart);
-    if (period === 'year') return sentInvoices.filter(inv => String(inv.createdAt || '').slice(0, 10) >= yearStart);
-    if (period === 'custom' && customFrom) return sentInvoices.filter(inv => {
-      const d = String(inv.createdAt || '').slice(0, 10);
-      return d >= customFrom && (!customTo || d <= customTo);
-    });
-    return sentInvoices;
-  }, [sentInvoices, period, customFrom, customTo]);
+  const filteredInvoices = useMemo(
+    () => filterByPeriod(sentInvoices, (invoice) => invoice.createdAt, period, customFrom, customTo),
+    [sentInvoices, period, customFrom, customTo]
+  );
+
+  // Each panel filters on its own, because a control that sits inside a panel
+  // reads as belonging to that panel. They were fixed labels over a select
+  // with a single option and no handler, so nothing happened when used.
+  const salesInvoices = useMemo(
+    () => filterByPeriod(sentInvoices, (invoice) => invoice.createdAt, salesPeriod),
+    [sentInvoices, salesPeriod]
+  );
+  const storeInvoices = useMemo(
+    () => filterByPeriod(sentInvoices, (invoice) => invoice.createdAt, storePeriod),
+    [sentInvoices, storePeriod]
+  );
+  // Jobs carry no created date, so their most recent activity stands in.
+  const periodJobs = useMemo(
+    () => filterByPeriod(productionJobs, (job) => job.updatedAt || job.assignedAt, productionPeriod),
+    [productionJobs, productionPeriod]
+  );
+
+  const salesRevenue = salesInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
+  const salesTrend = periodTrend(salesInvoices, salesPeriod);
+  const periodCompleted = periodJobs.filter((job) => job.status === 'Ready');
+  const periodInProgress = periodJobs.filter((job) => ['Assigned', 'In Progress'].includes(job.status));
+  const periodPending = periodJobs.filter((job) => job.status === 'Order Sheet Confirmed');
+  const periodDelayed = periodJobs.filter((job) => job.delivery && new Date(`${job.delivery}T23:59:59`) < new Date() && job.status !== 'Ready');
 
   const totalRevenue = filteredInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
   const completed = productionJobs.filter((job) => job.status === 'Ready');
-  const inProgress = productionJobs.filter((job) => ['Assigned', 'In Progress'].includes(job.status));
-  const pendingJobs = productionJobs.filter((job) => ['Order Sheet Confirmed'].includes(job.status));
+  // Overdue jobs are a standing concern, so this one is measured across the
+  // whole board rather than the selected period.
   const delayed = productionJobs.filter((job) => job.delivery && new Date(`${job.delivery}T23:59:59`) < new Date() && job.status !== 'Ready');
   const lowStock = inventory.filter((item) => toNumber(item.quantity) <= toNumber(item.lowStockThreshold || 5));
   const outstanding = filteredInvoices.filter((invoice) => invoice.paymentStatus !== 'Fully Paid').reduce((sum, invoice) => sum + Math.max(0, toNumber(invoice.total) - toNumber(invoice.paid)), 0);
   const storeRows = ['Lekki', 'Ikeja', 'Surulere'].map((store) => {
-    const storeInvoices = filteredInvoices.filter((invoice) => String(invoice.store).toLowerCase().includes(store.toLowerCase()));
-    return { store, revenue: storeInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), orders: storeInvoices.length };
+    const rowInvoices = storeInvoices.filter((invoice) => String(invoice.store).toLowerCase().includes(store.toLowerCase()));
+    return { store, revenue: rowInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), orders: rowInvoices.length };
   });
+  const storeRevenue = storeRows.reduce((sum, row) => sum + row.revenue, 0);
   const topCustomers = customers.length ? [...customers].sort((a, b) => toNumber(b.lifetimeSpend) - toNumber(a.lifetimeSpend)).slice(0, 5) : filteredInvoices.slice(0, 5).map((invoice) => ({ id: invoice.invoiceNumber, fullName: invoice.customer, lifetimeSpend: invoice.total, totalOrders: 1 }));
   const tailorRows = staff.filter((person) => person.role === 'tailor').slice(0, 5);
 
@@ -462,9 +479,77 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
       </section>
 
       <section className="owner-analytics-grid">
-        <section className="owner-panel sales-overview"><header><span>Sales Overview</span><select><option>This Month</option></select></header><div className="sales-chart"><div className="chart-bars">{[28, 43, 36, 50, 62, 39, 72, 61, 48, 59, 92].map((height, index) => <i style={{ height: `${height}%` }} key={index}/>)}</div><svg viewBox="0 0 500 130" preserveAspectRatio="none"><polyline points="0,105 45,65 90,85 135,50 180,75 225,38 270,58 315,20 360,55 405,72 455,24 500,48"/></svg></div><footer>{[[money.format(totalRevenue), 'Total Revenue'], [filteredInvoices.length, 'Total Orders'], [filteredInvoices.length ? money.format(totalRevenue / filteredInvoices.length) : money.format(0), 'Avg. Order Value'], ['18.7%', 'Growth vs Last 30 Days']].map(([value, label]) => <div key={label}><strong>{value}</strong><small>{label}</small></div>)}</footer></section>
-        <section className="owner-panel owner-production"><header><span>Production Overview</span><select><option>This Week</option></select></header><div><div className="owner-production-donut"><span><strong>{productionJobs.length}</strong>Total Jobs</span></div><div>{[['Completed', completed.length, 'green'], ['In Progress', inProgress.length, 'gold'], ['Pending', pendingJobs.length, 'blue'], ['Delayed', delayed.length, 'red']].map(([label, value, tone]) => <article key={label}><i className={tone}/><span>{label}</span><strong>{value}</strong></article>)}</div></div><footer><div><strong>{completed.length}</strong><small>Ready for Collection</small></div><div><strong className="red">{delayed.length}</strong><small>Delayed Jobs</small></div><div><strong className="green">{productionJobs.length ? Math.round((completed.length / productionJobs.length) * 100) : 0}%</strong><small>Completion Rate</small></div></footer></section>
-        <section className="owner-panel store-performance"><header><span>Store Performance</span><select><option>This Month</option></select></header><table><thead><tr><th>Store</th><th>Revenue</th><th>Orders</th><th>% Revenue</th><th>Status</th></tr></thead><tbody>{storeRows.map((row, index) => <tr key={row.store}><td>{row.store}</td><td>{money.format(row.revenue)}</td><td>{row.orders}</td><td>{totalRevenue ? Math.round((row.revenue / totalRevenue) * 100) : 0}%</td><td><i className={index === 0 ? 'green' : index === 1 ? 'gold' : 'red'}/>{index === 0 ? 'Excellent' : index === 1 ? 'Average' : 'Needs Attention'}</td></tr>)}</tbody></table><footer style={{cursor:'pointer'}} onClick={() => onNavigate?.('Stores')}>View all stores &nbsp; →</footer></section>
+        <section className="owner-panel sales-overview">
+          <header>
+            <span>Sales Overview</span>
+            <select value={salesPeriod} onChange={(event) => setSalesPeriod(event.target.value)} aria-label="Sales period">
+              {PERIOD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          </header>
+          <div className="sales-chart">
+            <div className="chart-bars">
+              {salesTrend.map((point, index) => (
+                <i style={{ height: `${point.height}%` }} key={index} title={money.format(point.value)} />
+              ))}
+            </div>
+          </div>
+          <footer>{[
+            [money.format(salesRevenue), 'Total Revenue'],
+            [salesInvoices.length, 'Total Orders'],
+            [salesInvoices.length ? money.format(salesRevenue / salesInvoices.length) : money.format(0), 'Avg. Order Value'],
+            [`${salesInvoices.filter((invoice) => isFullyPaid(invoice)).length}/${salesInvoices.length}`, 'Fully Paid'],
+          ].map(([value, label]) => <div key={label}><strong>{value}</strong><small>{label}</small></div>)}</footer>
+        </section>
+        <section className="owner-panel owner-production">
+          <header>
+            <span>Production Overview</span>
+            <select value={productionPeriod} onChange={(event) => setProductionPeriod(event.target.value)} aria-label="Production period">
+              {PERIOD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          </header>
+          <div>
+            <div className="owner-production-donut"><span><strong>{periodJobs.length}</strong>Total Jobs</span></div>
+            <div>{[
+              ['Completed', periodCompleted.length, 'green'],
+              ['In Progress', periodInProgress.length, 'gold'],
+              ['Pending', periodPending.length, 'blue'],
+              ['Delayed', periodDelayed.length, 'red'],
+            ].map(([label, value, tone]) => <article key={label}><i className={tone}/><span>{label}</span><strong>{value}</strong></article>)}</div>
+          </div>
+          <footer>
+            <div><strong>{periodCompleted.length}</strong><small>Ready for Collection</small></div>
+            <div><strong className="red">{periodDelayed.length}</strong><small>Delayed Jobs</small></div>
+            <div><strong className="green">{periodJobs.length ? Math.round((periodCompleted.length / periodJobs.length) * 100) : 0}%</strong><small>Completion Rate</small></div>
+          </footer>
+        </section>
+        <section className="owner-panel store-performance">
+          <header>
+            <span>Store Performance</span>
+            <select value={storePeriod} onChange={(event) => setStorePeriod(event.target.value)} aria-label="Store performance period">
+              {PERIOD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          </header>
+          <table>
+            <thead><tr><th>Store</th><th>Revenue</th><th>Orders</th><th>% Revenue</th><th>Status</th></tr></thead>
+            <tbody>{storeRows.map((row) => {
+              const share = storeRevenue ? Math.round((row.revenue / storeRevenue) * 100) : 0;
+              // Ranked on the actual share rather than row order, so the
+              // labels stay true when the period changes.
+              const tone = share >= 40 ? 'green' : share >= 15 ? 'gold' : 'red';
+              const label = share >= 40 ? 'Excellent' : share >= 15 ? 'Average' : 'Needs Attention';
+              return (
+                <tr key={row.store}>
+                  <td>{row.store}</td>
+                  <td>{money.format(row.revenue)}</td>
+                  <td>{row.orders}</td>
+                  <td>{share}%</td>
+                  <td><i className={tone}/>{label}</td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+          <footer style={{cursor:'pointer'}} onClick={() => onNavigate?.('Stores')}>View all stores &nbsp; →</footer>
+        </section>
       </section>
 
       <section className="owner-bottom-grid">
@@ -1409,6 +1494,21 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
     setSearchParams({}, { replace: true });
   }, [requestedInvoice, sentInvoices, setSearchParams]);
 
+  // Started from a customer profile: open the create screen with that
+  // customer already filled in.
+  const [prefillCustomer, setPrefillCustomer] = useState(null);
+  const requestedNew = searchParams.get('new');
+  useEffect(() => {
+    if (!requestedNew) return;
+    setPrefillCustomer({
+      fullName: searchParams.get('customer') || '',
+      phone: searchParams.get('phone') || '',
+      email: searchParams.get('email') || '',
+    });
+    setCreating(true);
+    setSearchParams({}, { replace: true });
+  }, [requestedNew, searchParams, setSearchParams]);
+
   const downloadInvoicePdf = async (invoice) => {
     setRowNotice('');
     try {
@@ -1456,9 +1556,10 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
         <div className="store-detail-toolbar">
           <button type="button" onClick={() => setCreating(false)}>← &nbsp; Back to Invoices</button>
         </div>
-        <NewInvoiceView currentRole={currentRole} onInvoiceSent={(invoice) => {
+        <NewInvoiceView currentRole={currentRole} prefillCustomer={prefillCustomer} onInvoiceSent={(invoice) => {
           onInvoiceSent?.(invoice);
           setCreating(false);
+          setPrefillCustomer(null);
         }} />
       </div>
     );
@@ -2332,16 +2433,17 @@ function CustomersView() {
   );
 }
 
-function NewInvoiceView({ currentRole, onInvoiceSent }) {
+function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   const [form, setForm] = useState({
     store: 'lekki',
     invoiceNumber: invoiceSeed(),
     trackingToken: trackingTokenSeed(),
     invoiceDate: todayIso(),
     dueDate: todayIso(),
-    customerName: '',
-    customerPhone: '',
-    customerEmail: '',
+    // Arrives filled in when the invoice was started from a customer profile.
+    customerName: prefillCustomer?.fullName || '',
+    customerPhone: prefillCustomer?.phone || '',
+    customerEmail: prefillCustomer?.email || '',
     paymentStatus: '',
     paymentMethod: '',
     eliteDiscountEnabled: false,
@@ -3439,6 +3541,7 @@ function ProductionView({ productionJobs, onUpdateJob }) {
   const [inventory, setInventory] = useState([]);
   const [tailors, setTailors] = useState([]);
   const [allocatingJobId, setAllocatingJobId] = useState(null);
+  const [confirmReady, setConfirmReady] = useState(null);
   const toastTimerRef = useRef(null);
   const filteredJobs = productionJobs.filter((job) => (
     (statusFilter === 'All' ? true : job.status === statusFilter)
@@ -3928,14 +4031,19 @@ function ProductionView({ productionJobs, onUpdateJob }) {
 
               {/* Action buttons */}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  disabled={jobModal.fabricAllocated || allocatingJobId === jobModal.id}
-                  onClick={() => allocateFabricForModal()}
-                  style={{ flex: 1, padding: '10px 14px', border: '1px solid', borderColor: jobModal.fabricAllocated ? '#c3e8d4' : '#ddd5c8', borderRadius: 8, background: jobModal.fabricAllocated ? '#f0faf4' : '#fff', color: jobModal.fabricAllocated ? '#2a7d4f' : '#5a4e42', fontSize: 13, fontWeight: 700, cursor: jobModal.fabricAllocated ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                >
-                  {jobModal.fabricAllocated ? <><CheckCircle size={14} /> Fabric Allocated</> : allocatingJobId === jobModal.id ? 'Allocating…' : <><Package size={14} /> Allocate Fabric</>}
-                </button>
+                {/* Once fabric is allocated the button had nothing left to do
+                    and simply restated the Fabric Status panel above, so it
+                    stands down rather than sitting there as a dead control. */}
+                {!jobModal.fabricAllocated ? (
+                  <button
+                    type="button"
+                    disabled={allocatingJobId === jobModal.id}
+                    onClick={() => allocateFabricForModal()}
+                    style={{ flex: 1, padding: '10px 14px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', color: '#5a4e42', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  >
+                    {allocatingJobId === jobModal.id ? 'Allocating…' : <><Package size={14} /> Allocate Fabric</>}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   disabled={jobModal.status === 'In Progress' || jobModal.status === 'Ready'}
@@ -3949,15 +4057,12 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                 >
                   {(jobModal.status === 'In Progress' || jobModal.status === 'Ready') ? <><CheckCircle size={14} /> In Progress</> : 'Set In Progress'}
                 </button>
+                {/* Marking a job Ready notifies the store that the customer can
+                    collect, so it asks first rather than firing on one tap. */}
                 <button
                   type="button"
                   disabled={jobModal.status === 'Ready'}
-                  onClick={() => {
-                    const updatedJob = { ...jobModal, status: 'Ready' };
-                    setJobModal(updatedJob);
-                    onUpdateJob(jobModal.id, { status: 'Ready' });
-                    notify('Job marked Ready for Collection!', 'success');
-                  }}
+                  onClick={() => setConfirmReady(jobModal)}
                   style={{ flex: 1, padding: '10px 14px', border: 'none', borderRadius: 8, background: jobModal.status === 'Ready' ? '#f0faf4' : '#1a1611', color: jobModal.status === 'Ready' ? '#2a7d4f' : '#fff', fontSize: 13, fontWeight: 700, cursor: jobModal.status === 'Ready' ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 >
                   {jobModal.status === 'Ready' ? <><CheckCircle size={14} /> Ready for Collection</> : 'Mark as Ready'}
@@ -3967,6 +4072,35 @@ function ProductionView({ productionJobs, onUpdateJob }) {
           </div>
         </div>
       )}
+
+      {confirmReady ? (
+        <div className="confirm-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-ready-title">
+          <div className="confirm-sheet">
+            <i className="confirm-sheet-icon"><CheckCircle size={22} strokeWidth={1.8} /></i>
+            <h2 id="confirm-ready-title">Mark this job as ready?</h2>
+            <p>
+              {confirmReady.customer}&apos;s {confirmReady.item || 'order'} ({confirmReady.invoiceNumber}) will be
+              marked ready for collection, and the store will be notified to contact the customer.
+            </p>
+            <footer>
+              <button type="button" className="confirm-cancel" onClick={() => setConfirmReady(null)}>No, go back</button>
+              <button
+                type="button"
+                className="confirm-submit"
+                onClick={() => {
+                  const job = confirmReady;
+                  setJobModal((current) => (current && current.id === job.id ? { ...current, status: 'Ready' } : current));
+                  onUpdateJob(job.id, { status: 'Ready' });
+                  notify('Job marked Ready for Collection', 'success');
+                  setConfirmReady(null);
+                }}
+              >
+                Yes, mark ready
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -5945,7 +6079,7 @@ function renderView(activeView, role, viewProps = {}) {
     return <OrdersView sentInvoices={viewProps.sentInvoices} />;
   }
   if (activeView === 'Orders') return role === 'store_manager' || role === 'owner' ? <StoreManagerOrdersPage sentInvoices={viewProps.sentInvoices} /> : <OrdersView sentInvoices={viewProps.sentInvoices} />;
-  if (activeView === 'Customers') return role === 'store_manager' || role === 'owner' ? <StoreManagerCustomersPage sentInvoices={viewProps.sentInvoices} /> : <CustomersView />;
+  if (activeView === 'Customers') return role === 'store_manager' || role === 'owner' ? <StoreManagerCustomersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} /> : <CustomersView />;
   if (activeView === 'New Invoice') return <NewInvoiceView currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
   if (activeView === 'Order Sheet') return <OrderSheetView sentInvoices={viewProps.sentInvoices} onCreateJob={viewProps.onCreateJob} />;
   if (activeView === 'Payments') return role === 'accounts' || role === 'owner'
@@ -5972,8 +6106,6 @@ function App() {
   const [role, setRole] = useState(restoredSession?.role || null);
   const visibleNav = navByRole[role];
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const userMenuRef = useRef(null);
   const [sentInvoices, setSentInvoices] = useState([]);
   const [productionJobs, setProductionJobs] = useState([]);
   const [signedInAccount, setSignedInAccount] = useState(restoredSession);
@@ -6038,6 +6170,8 @@ function App() {
 
   // Stacked table rows on mobile take their labels from the column headers.
   useLabelledTables(location.pathname);
+  // Horizontal card rows show how many cards there are and where you are.
+  useCarouselIndicators(location.pathname);
 
   // React Router keeps the previous scroll offset when the view changes, which
   // lands you part-way down — or at the bottom of — the page you just opened.
@@ -6126,7 +6260,6 @@ function App() {
     setSignedInAccount(null);
     setStaffProfile(null);
     setMobileMenuOpen(false);
-    setUserMenuOpen(false);
     setSignOutReason(reason);
     navigate('/login', { replace: true });
   };
@@ -6157,17 +6290,6 @@ function App() {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [signedIn]);
-
-  useEffect(() => {
-    if (!userMenuOpen) return;
-    const handleClickOutside = (event) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
-        setUserMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [userMenuOpen]);
 
   // `params` lets a dashboard tile land on a view with a filter already applied
   // — e.g. Awaiting Payment opens Invoices already narrowed to unpaid ones.
@@ -6235,8 +6357,15 @@ function App() {
             ))}
           </div>
         ) : null}
-        {role === 'accounts' ? <div className="accounts-sidebar-help"><strong>Need help?</strong><span>Chat with support</span><button type="button"><MessageCircle size={14} /> &nbsp; Start Chat</button></div> : null}
-        <Link className="portal-link" to={`/${roleSlug(role)}/portal-preview`} onClick={() => setMobileMenuOpen(false)}>Portal Preview</Link>
+        <div className="sidebar-footer">
+          <Link className="portal-link" to={`/${roleSlug(role)}/portal-preview`} onClick={() => setMobileMenuOpen(false)}>Portal Preview</Link>
+          {/* Logout lives with the navigation rather than behind the avatar
+              menu, where nobody thought to look for it. */}
+          <button type="button" className="sidebar-logout" onClick={() => handleLogout()}>
+            <LogOut size={16} strokeWidth={1.8} />
+            Log out
+          </button>
+        </div>
       </aside>
 
       <main className="workspace">
@@ -6274,18 +6403,15 @@ function App() {
           </div>
           <div className="topbar-actions">
             <NotificationBell role={role} currentRole={currentRole} onOpen={() => openView('Notifications')} />
-            <div className="user-chip" ref={userMenuRef}>
+            {/* The chevron opened a menu whose only item was Logout, which now
+                sits in the sidebar. The avatar remains as identity and as the
+                control for changing the profile photo. */}
+            <div className="user-chip">
               <ProfilePhotoControl
                 account={currentRole}
                 onProfileImageChange={(profileImageUrl) => setStaffProfile((current) => ({ ...current, profileImageUrl }))}
               />
               <span className="user-identity"><strong>{currentRole?.name?.split(' (')[0]}</strong><small>{accountTypeByRole[role]?.short || currentRole?.label}</small></span>
-              <button className="user-menu-button" onClick={() => setUserMenuOpen((prev) => !prev)} aria-label="Open account menu" aria-expanded={userMenuOpen}>⌄</button>
-              {userMenuOpen && (
-                <div className="user-menu-dropdown">
-                  <button type="button" onClick={() => handleLogout()}>← &nbsp; Logout</button>
-                </div>
-              )}
             </div>
           </div>
         </header>

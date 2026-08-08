@@ -6,17 +6,26 @@ import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirm
 
 export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
   const [pendingAction, setPendingAction] = useState(null);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+
+  // Everything below reads from the invoice. It previously applied a flat 5%
+  // discount to every invoice, invented a ₦25,000 part-payment, and listed
+  // three fixed garments — so Accounts were reviewing figures that had no
+  // relationship to the invoice in front of them.
   const total = Number(invoice.total || 0);
-  const discount = total * .05;
-  const payable = total - discount;
-  const paid = Number(invoice.paid || (invoice.paymentStatus === 'Partial Paid' ? 25000 : invoice.paymentStatus === 'Fully Paid' ? payable : 0));
+  const discount = Number(invoice.eliteDiscountAmount || 0);
+  const credit = Number(invoice.storeCreditApplied || 0);
+  const payable = Math.max(0, total - discount - credit);
+  const paid = Number(invoice.paid ?? (invoice.paymentStatus === 'Fully Paid' ? payable : 0));
   const balance = Math.max(0, payable - paid);
   const status = invoiceApprovalStatus(invoice) === 'Pending Accounts' ? 'Awaiting Review' : invoiceApprovalStatus(invoice);
-  const items = [
-    ['Green Senator (Kaftan)', 1, 23000],
-    ['Trouser (Green)', 1, 12000],
-    ['Embroidery (Gold)', 1, Math.max(0, total - 35000)],
-  ];
+  const evidence = invoice.paymentEvidence || null;
+  const storeNote = invoice.itemNote || (Array.isArray(invoice.notes) ? invoice.notes[0] : invoice.notes) || '';
+  const items = (invoice.items?.length ? invoice.items : []).map((line) => ([
+    line.description || line.name || 'Item',
+    Number(line.quantity || 1),
+    Number(line.amount ?? (Number(line.rate || 0) * Number(line.quantity || 1))),
+  ]));
 
   return (
     <div className="os-page" style={{ maxWidth: 1200 }}>
@@ -101,7 +110,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {[
                   ['Invoice Number', invoice.invoiceNumber],
-                  ['Invoice Date', '22 Jul 2026'],
+                  ['Invoice Date', invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'],
                   ['Store', invoice.store || 'Lekki'],
                 ].map(([label, val]) => (
                   <div key={label}>
@@ -119,12 +128,12 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, color: '#1a1611', fontSize: 14 }}>{invoice.customer}</div>
-                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', color: '#c97b08', background: '#fff8ee', padding: '1px 5px', borderRadius: 4, border: '1px solid #f0ddb0' }}>ELITE CUSTOMER</span>
+                  {discount ? <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', color: '#c97b08', background: '#fff8ee', padding: '1px 5px', borderRadius: 4, border: '1px solid #f0ddb0' }}>ELITE CUSTOMER</span> : null}
                 </div>
               </div>
               <div className="os-grid-2" style={{ gap: 10 }}>
                 {[
-                  ['Phone', invoice.phone || '0803 123 4567'],
+                  ['Phone', invoice.phone || '—'],
                   ['Email', invoice.customerEmail || 'jimmy.aki@gmail.com'],
                 ].map(([label, val]) => (
                   <div key={label}>
@@ -162,8 +171,9 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               <div style={{ background: '#faf7f3', borderRadius: 8, padding: '12px 14px' }}>
                 {[
                   ['Subtotal', money.format(total), false],
-                  ['Elite Discount (5%)', `− ${money.format(discount)}`, true],
-                  ['Store Credit Used', '− ₦0', true],
+                  // Discount and credit lines only appear when they apply.
+                  ...(discount ? [['Elite Discount', `− ${money.format(discount)}`, true]] : []),
+                  ...(credit ? [['Store Credit Used', `− ${money.format(credit)}`, true]] : []),
                   ['Total Amount', money.format(payable), false],
                 ].map(([label, val, isGreen]) => (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #eee5da', fontSize: 13 }}>
@@ -207,7 +217,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               <div style={{ borderTop: '1px solid #f3ede5' }} />
               <div style={{ fontSize: 12, fontWeight: 700, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Payment History</div>
               {[
-                ['22 Jul 2026, 10:32 AM', 'Payment evidence submitted', `by ${invoice.createdBy || 'Bola'} (Store Manager)`, money.format(paid), '#2a7d4f'],
+                [invoice.createdAt ? new Date(invoice.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—', 'Payment evidence submitted', `by ${invoice.createdBy || 'Bola'} (Store Manager)`, money.format(paid), '#2a7d4f'],
                 ['—', 'Pending', 'Balance outstanding', money.format(balance), '#8a3520'],
               ].map(([date, title, note, amount, color]) => (
                 <div key={title} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid #f3ede5' }}>
@@ -226,48 +236,62 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
 
         {/* Column 2: Payment Evidence */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* This panel used to render an invented GTBank transfer receipt —
+              fixed reference number, account numbers and a "Successful" badge —
+              regardless of what the Store Manager had actually attached, or
+              whether they had attached anything at all. Accounts would have
+              been confirming payments against a picture of nothing. */}
           <div className="os-card">
             <div className="os-card-head">
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#2a7d4f', flexShrink: 0 }} />
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: evidence ? '#2a7d4f' : '#c07a1e', flexShrink: 0 }} />
               <div>
                 <strong>Payment Evidence</strong>
-                <p style={{ color: '#2a7d4f' }}>Evidence Uploaded</p>
+                <p style={{ color: evidence ? '#2a7d4f' : '#c07a1e' }}>
+                  {evidence ? 'Uploaded by the Store Manager' : 'Nothing uploaded'}
+                </p>
               </div>
             </div>
             <div className="os-card-body">
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Uploaded Receipt</div>
-              {/* Receipt preview */}
-              <div style={{ border: '1px solid #eee5da', borderRadius: 10, overflow: 'hidden', position: 'relative' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#faf7f3', borderBottom: '1px solid #eee5da' }}>
-                  <strong style={{ fontSize: 13, color: '#1a1611' }}>GTBank</strong>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#2a7d4f', background: '#f0faf4', padding: '2px 8px', borderRadius: 10, border: '1px solid #b8e4cb' }}>Successful</span>
-                </div>
-                <div style={{ padding: '14px' }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1611', marginBottom: 12, textAlign: 'center' }}>Transfer Receipt</div>
-                  {[
-                    ['Reference Number', '0123045678'],
-                    ['Transaction Date', '22 Jul 2026, 10:28 AM'],
-                    ['Payer Name', invoice.customer],
-                    ['Payer Account', '0123456789'],
-                    ['Beneficiary', 'TWIF Collections'],
-                    ['Beneficiary Account', 'GTB 0234567890'],
-                    ['Amount', money.format(paid)],
-                    ['Narration', `Payment for ${invoice.invoiceNumber}`],
-                  ].map(([label, val]) => (
-                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '6px 0', borderBottom: '1px solid #f3ede5', fontSize: 12 }}>
-                      <span style={{ color: '#8a7a6a', minWidth: 120 }}>{label}</span>
-                      <span style={{ fontWeight: 600, color: '#1a1611', textAlign: 'right', wordBreak: 'break-all' }}>{val}</span>
-                    </div>
-                  ))}
-                  <div style={{ textAlign: 'center', fontSize: 11, color: '#8a7a6a', marginTop: 12 }}>Thank you for banking with us</div>
-                </div>
-                <button type="button" aria-label="Expand receipt" style={{ position: 'absolute', top: 10, right: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, border: '1px solid #ddd5c8', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#8a7a6a' }}>
-                  <Maximize2 size={12} />
-                </button>
-              </div>
-              <button type="button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', padding: '10px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#faf7f3', color: '#5a4e42', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                <Download size={14} /> Download Receipt
-              </button>
+              {evidence ? (
+                <>
+                  <dl className="review-evidence-meta">
+                    <div><dt>File</dt><dd>{evidence.name || 'Attachment'}</dd></div>
+                    {evidence.uploadedAt ? (
+                      <div><dt>Uploaded</dt><dd>{new Date(evidence.uploadedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</dd></div>
+                    ) : null}
+                    <div><dt>Amount recorded</dt><dd>{money.format(paid)}</dd></div>
+                  </dl>
+
+                  {evidence.dataUrl ? (
+                    <button
+                      type="button"
+                      className="review-evidence-frame"
+                      onClick={() => setEvidenceOpen(true)}
+                      aria-label="Open payment evidence full size"
+                    >
+                      <img src={evidence.dataUrl} alt={`Payment evidence for ${invoice.invoiceNumber}`} />
+                      <span className="review-evidence-zoom"><Maximize2 size={13} /></span>
+                    </button>
+                  ) : (
+                    <p className="review-evidence-empty">The attachment could not be previewed.</p>
+                  )}
+
+                  {evidence.dataUrl ? (
+                    <a
+                      className="review-evidence-download"
+                      href={evidence.dataUrl}
+                      download={evidence.name || `${invoice.invoiceNumber}-payment-evidence`}
+                    >
+                      <Download size={14} /> Download evidence
+                    </a>
+                  ) : null}
+                </>
+              ) : (
+                <p className="review-evidence-empty">
+                  No proof of payment was attached to this invoice. Flag it back to the Store Manager
+                  if evidence is required before you confirm.
+                </p>
+              )}
             </div>
           </div>
 
@@ -281,8 +305,8 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               </div>
             </div>
             <div className="os-card-body">
-              <p style={{ margin: 0, fontSize: 13, color: '#5a4e42', lineHeight: 1.6, background: '#faf7f3', padding: '10px 12px', borderRadius: 8, border: '1px solid #eee5da' }}>
-                Customer paid part amount. Balance will be settled before production.
+              <p style={{ margin: 0, fontSize: 13, color: storeNote ? '#5a4e42' : '#8a7a6a', lineHeight: 1.6, background: '#faf7f3', padding: '10px 12px', borderRadius: 8, border: '1px solid #eee5da' }}>
+                {storeNote || 'No note was left with this invoice.'}
               </p>
             </div>
           </div>
@@ -331,7 +355,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               <dt>Submitted By</dt>
               <dd>{invoice.createdBy || 'Bola'} (Store Mgr)</dd>
               <dt>Submitted On</dt>
-              <dd>22 Jul 2026, 10:32 AM</dd>
+              <dd>{invoice.createdAt ? new Date(invoice.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</dd>
               <dt>Store</dt>
               <dd>{invoice.store || 'Lekki'}</dd>
               <dt>Order Sheet</dt>
@@ -353,7 +377,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
             </div>
             <div className="os-card-body" style={{ gap: 0, padding: '14px' }}>
               {[
-                ['22 Jul 2026, 10:32 AM', 'Invoice submitted', `by ${invoice.createdBy || 'Bola'} (Store Manager)`, '#2a7d4f'],
+                [invoice.createdAt ? new Date(invoice.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—', 'Invoice submitted', `by ${invoice.createdBy || 'Bola'} (Store Manager)`, '#2a7d4f'],
                 ['—', 'Under review', 'Pending action', '#c97b08'],
                 ['—', 'Awaiting approval', 'Will be sent to production', '#8a7a6a'],
               ].map(([date, title, note, color], index) => (
@@ -393,6 +417,21 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
           }}
         />
       )}
+
+      {/* Proof of payment at full size — a thumbnail is not enough to check a
+          teller slip against an amount. */}
+      {evidenceOpen && evidence?.dataUrl ? (
+        <div
+          className="review-evidence-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Payment evidence"
+          onClick={() => setEvidenceOpen(false)}
+        >
+          <button type="button" className="review-evidence-close" onClick={() => setEvidenceOpen(false)} aria-label="Close">×</button>
+          <img src={evidence.dataUrl} alt={`Payment evidence for ${invoice.invoiceNumber}`} onClick={(event) => event.stopPropagation()} />
+        </div>
+      ) : null}
 
       <style>{`
         @media (max-width: 860px) {

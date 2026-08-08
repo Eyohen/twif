@@ -12,7 +12,7 @@ const KPI_COUNT = 4;
 
 const SORT_OPTIONS = ['Name (A–Z)', 'Name (Z–A)', 'Newest first', 'Oldest first'];
 
-export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
+export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigate }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [customers, setCustomers] = useState([]);
   const [search, setSearch] = useState('');
@@ -96,7 +96,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
   }, [customers, search, segment, sortOrder]);
 
   if (editingCustomer) {
-    return <EditCustomerPage customer={editingCustomer} onCancel={() => setEditingCustomer(null)} onSave={(updated) => {
+    return <EditCustomerPage customer={editingCustomer} onCancel={() => setEditingCustomer(null)} onViewMeasurements={() => setMeasurementCustomer(editingCustomer)} onSave={(updated) => {
       setCustomers((current) => current.map((customer) => customer.id === updated.id ? updated : customer));
       setSelectedCustomer(updated);
       setEditingCustomer(null);
@@ -124,6 +124,12 @@ export default function StoreManagerCustomersPage({ sentInvoices = [] }) {
         onEdit={() => setEditingCustomer(selectedCustomer)}
         onViewOrders={() => setOrdersCustomer(selectedCustomer)}
         onOpenOrder={(invoice) => setOpenOrder(invoice)}
+        onNewInvoice={onNavigate ? (person) => onNavigate('Invoices', {
+          new: '1',
+          customer: person.fullName || '',
+          phone: person.phone || '',
+          email: person.email || '',
+        }) : undefined}
       />
     );
   }

@@ -51,8 +51,6 @@ export default function LoginPage({ onLogin, notice = '' }) {
               <div className="login-form-options"><label><input type="checkbox" defaultChecked />Remember me on this device</label><button type="button">Forgot PIN?</button></div>
               <button className="login-submit" type="submit">Continue <span>→</span></button>
             </form>
-            <div className="login-divider"><span>or</span></div>
-            <button className="login-sso" type="button">◇ &nbsp; Sign in with company SSO</button>
             <p className="login-terms">By continuing, you agree to our <b>Terms of Use</b> and <b>Privacy Policy.</b></p>
           </section>
           <footer className="login-support"><div><strong>Need help signing in?</strong><span>Contact IT support or your system administrator.</span></div><div><strong>● &nbsp; All systems operational</strong><span>Last updated: 22 Jul 2026, 14:30</span></div></footer>

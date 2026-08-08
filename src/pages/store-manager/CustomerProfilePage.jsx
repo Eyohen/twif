@@ -4,15 +4,17 @@ import { money, invoiceApprovalStatus } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import { api } from '../../lib/api';
 
-export default function CustomerProfilePage({ customer, sentInvoices = [], onBack, onEdit, onViewOrders, onOpenOrder }) {
+export default function CustomerProfilePage({ customer, sentInvoices = [], onBack, onEdit, onViewOrders, onOpenOrder, onNewInvoice }) {
   const invoices = sentInvoices.filter((invoice) => invoice.customer === customer.fullName);
   const measurements = customer.measurements || {};
+  // These fell back to invented figures — 178 cm, 42 in and so on — which a
+  // tailor could easily have cut against. An empty value is shown as empty.
   const measurementRows = [
-    ['Height', measurements.height || '178 cm'], ['Chest', measurements.chest || '42 in'],
-    ['Waist', measurements.waist || '34 in'], ['Hip', measurements.hip || '41 in'],
-    ['Shoulder', measurements.shoulder || '18 in'], ['Sleeve', measurements.sleeve || '24 in'],
-    ['Neck', measurements.neck || '16 in'], ['Trouser', measurements.trouser || '31 in'],
-  ];
+    ['Height', measurements.height], ['Chest', measurements.chest],
+    ['Waist', measurements.waist], ['Hip', measurements.hip],
+    ['Shoulder', measurements.shoulder], ['Sleeve', measurements.sleeve],
+    ['Neck', measurements.neck], ['Trouser', measurements.trouser],
+  ].map(([label, value]) => [label, value || '—']);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState(customer.notes || '');
   const [notesDraft, setNotesDraft] = useState(customer.notes || '');
@@ -97,16 +99,22 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
             <Edit2 size={13} strokeWidth={1.8} />
             Edit Customer
           </button>
+          {/* An order always begins as an invoice in this system — there is no
+              way to raise one without it — so a single action says so plainly
+              rather than offering "New Order" and "New Invoice" side by side. */}
           <button
             type="button"
+            onClick={() => onNewInvoice?.(customer)}
+            disabled={!onNewInvoice}
             style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px',
               border: 'none', borderRadius: 8, fontSize: 13,
-              fontWeight: 700, background: '#1a1611', color: '#fff', cursor: 'pointer',
+              fontWeight: 700, background: '#1a1611', color: '#fff',
+              cursor: onNewInvoice ? 'pointer' : 'not-allowed', opacity: onNewInvoice ? 1 : 0.5,
             }}
           >
             <Plus size={14} strokeWidth={2} />
-            New Order
+            New Invoice
           </button>
         </div>
       </div>

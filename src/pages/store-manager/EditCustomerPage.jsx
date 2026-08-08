@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ArrowLeft, Save, X, User, Settings, Star, Ruler, StickyNote, Edit2, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react';
 import { money } from '../../utils/oms';
 import { api } from '../../lib/api';
 
-export default function EditCustomerPage({ customer, onCancel, onSave }) {
+export default function EditCustomerPage({ customer, onCancel, onSave, onViewMeasurements }) {
+  const notesFieldRef = useRef(null);
   const [form, setForm] = useState({
     fullName: customer.fullName || '',
     phone: customer.phone || '',
@@ -159,7 +160,12 @@ export default function EditCustomerPage({ customer, onCancel, onSave }) {
                       {options.map((option) => <option key={option}>{option}</option>)}
                     </select>
                   ) : type === 'textarea' ? (
-                    <textarea rows={3} value={form[field]} onChange={(event) => update(field, event.target.value)} />
+                    <textarea
+                      ref={field === 'notes' ? notesFieldRef : undefined}
+                      rows={3}
+                      value={form[field]}
+                      onChange={(event) => update(field, event.target.value)}
+                    />
                   ) : (
                     <input type={type} value={form[field]} onChange={(event) => update(field, event.target.value)} />
                   )}
@@ -307,10 +313,13 @@ export default function EditCustomerPage({ customer, onCancel, onSave }) {
             </dl>
             <button
               type="button"
+              onClick={() => onViewMeasurements?.()}
+              disabled={!onViewMeasurements}
               style={{
                 width: '100%', padding: '8px 12px', marginTop: 8,
                 border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
-                fontSize: 12, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
+                fontSize: 12, color: '#5a4e42', cursor: onViewMeasurements ? 'pointer' : 'not-allowed',
+                fontWeight: 500, opacity: onViewMeasurements ? 1 : 0.5,
               }}
             >View Measurements</button>
           </div>
@@ -321,14 +330,23 @@ export default function EditCustomerPage({ customer, onCancel, onSave }) {
               <StickyNote size={14} strokeWidth={1.5} />
               <h3>Notes (Internal)</h3>
             </header>
-            <ul style={{ margin: '6px 0', padding: '0 0 0 16px', fontSize: 13, color: '#5a4e42', lineHeight: 1.7 }}>
-              <li>Likes slim fit</li>
-              <li>Usually requests French cuffs</li>
-              <li>Prefers WhatsApp updates</li>
-              <li>Sensitive to wool fabrics</li>
-            </ul>
+            {/* These were four hardcoded lines shown against every customer,
+                regardless of what had actually been recorded. */}
+            {form.notes.trim() ? (
+              <ul style={{ margin: '6px 0', padding: '0 0 0 16px', fontSize: 13, color: '#5a4e42', lineHeight: 1.7 }}>
+                {form.notes.split('\n').filter((note) => note.trim()).map((note, index) => (
+                  <li key={`${note}-${index}`}>{note}</li>
+                ))}
+              </ul>
+            ) : (
+              <p style={{ margin: '6px 0', fontSize: 13, color: '#8a7a6a' }}>No notes recorded for this customer yet.</p>
+            )}
             <button
               type="button"
+              onClick={() => {
+                notesFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                notesFieldRef.current?.focus({ preventScroll: true });
+              }}
               style={{
                 width: '100%', padding: '8px 12px', marginTop: 4,
                 border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
