@@ -312,7 +312,7 @@ export default function UserManagementPage({ currentRole }) {
                       onMouseEnter={e => e.currentTarget.style.background = '#faf7f3'}
                       onMouseLeave={e => e.currentTarget.style.background = ''}
                     >
-                      <td style={{ padding: '12px 14px' }}>
+                      <td data-label="Staff Member" style={{ padding: '12px 14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <Avatar name={person.displayName} size="sm" />
                           <div>
@@ -321,10 +321,10 @@ export default function UserManagementPage({ currentRole }) {
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: '12px 14px' }}><RoleBadge role={person.role} /></td>
-                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#8a7a6a' }}>{person.store}</td>
-                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#8a7a6a' }}>{person.phone}</td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td data-label="Role" style={{ padding: '12px 14px' }}><RoleBadge role={person.role} /></td>
+                      <td data-label="Store" style={{ padding: '12px 14px', fontSize: 13, color: '#8a7a6a' }}>{person.store}</td>
+                      <td data-label="Phone" style={{ padding: '12px 14px', fontSize: 13, color: '#8a7a6a' }}>{person.phone}</td>
+                      <td data-label="Tailor Grade" style={{ padding: '12px 14px' }}>
                         {person.role === 'tailor' ? (
                           <span style={{
                             display: 'inline-block', padding: '3px 10px', borderRadius: 20,
@@ -334,7 +334,7 @@ export default function UserManagementPage({ currentRole }) {
                           <span style={{ color: '#b0a090', fontSize: 13 }}>—</span>
                         )}
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td data-label="Last Login" style={{ padding: '12px 14px' }}>
                         <span style={{ display: 'block', fontSize: 13, color: '#5a4e42' }}>
                           {person.lastLoginAt ? new Date(person.lastLoginAt).toLocaleDateString('en-GB') : 'Never'}
                         </span>
@@ -342,8 +342,8 @@ export default function UserManagementPage({ currentRole }) {
                           {person.device || ['Chrome on Windows', 'Safari on iPhone', 'Android App'][index % 3]}
                         </small>
                       </td>
-                      <td style={{ padding: '12px 14px' }}><Status>{person.status}</Status></td>
-                      <td style={{ padding: '12px 14px' }} onClick={(e) => e.stopPropagation()}>
+                      <td data-label="Status" style={{ padding: '12px 14px' }}><Status>{person.status}</Status></td>
+                      <td data-label="Actions" style={{ padding: '12px 14px' }} onClick={(e) => e.stopPropagation()}>
                         <button
                           style={{
                             width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -935,14 +935,14 @@ function LoginHistory({ person, onBack }) {
                   onMouseEnter={e => e.currentTarget.style.background = '#faf7f3'}
                   onMouseLeave={e => e.currentTarget.style.background = ''}
                 >
-                  <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{22 - index} May 2024, 09:25 AM</td>
-                  <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{index % 2 ? 'Android 13' : 'Windows 10'}</td>
-                  <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{index % 2 ? 'TWIF Android App' : 'Chrome 124'}</td>
-                  <td style={{ padding: '12px 14px', fontSize: 12, fontFamily: 'monospace', color: '#8a7a6a' }}>197.210.45.{12 + index}</td>
-                  <td style={{ padding: '12px 14px' }}>
+                  <td data-label="Date & Time" style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{22 - index} May 2024, 09:25 AM</td>
+                  <td data-label="Device" style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{index % 2 ? 'Android 13' : 'Windows 10'}</td>
+                  <td data-label="Browser / App" style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{index % 2 ? 'TWIF Android App' : 'Chrome 124'}</td>
+                  <td data-label="IP Address" style={{ padding: '12px 14px', fontSize: 12, fontFamily: 'monospace', color: '#8a7a6a' }}>197.210.45.{12 + index}</td>
+                  <td data-label="Status" style={{ padding: '12px 14px' }}>
                     <Status>{index === 2 || index === 5 ? 'Failed' : index === 3 ? 'Blocked' : 'Success'}</Status>
                   </td>
-                  <td style={{ padding: '12px 14px', fontSize: 13, color: '#8a7a6a' }}>Lagos, Nigeria</td>
+                  <td data-label="Location" style={{ padding: '12px 14px', fontSize: 13, color: '#8a7a6a' }}>Lagos, Nigeria</td>
                 </tr>
               ))}
             </tbody>

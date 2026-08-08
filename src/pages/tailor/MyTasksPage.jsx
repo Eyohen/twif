@@ -53,7 +53,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
       </div>
 
       {/* KPI Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      <div className="os-kpi-row os-kpi-row-3" style={{ gap: 12 }}>
         {[
           { label: 'In Queue', value: inQueue, bg: '#fffbf0', color: '#7a6030', icon: Clock },
           { label: 'In Progress', value: inProgress, bg: '#eff6ff', color: '#1d4ed8', icon: ArrowRight },

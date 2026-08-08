@@ -9636,3 +9636,8 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   .weekly-stat-body small,
   .weekly-table th { font-size: 12px; }
 }
+
+/* Three-across summary rows: two-up on tablets, a scrolling row on phones so
+   values like "Lekki" stop wrapping one character per line. */
+.os-kpi-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1000px) { .os-kpi-row-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

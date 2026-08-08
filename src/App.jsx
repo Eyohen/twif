@@ -16,6 +16,7 @@ import InventoryManagerOverviewPage from './pages/inventory/OverviewPage';
 import InventoryListPage from './pages/inventory/InventoryListPage';
 import { roles, demoCredentials, inventoryCategories, navByRole, accountTypeByRole } from './config/oms';
 import { Stat, Status, SectionHeader } from './components/oms/Common';
+import useLabelledTables from './hooks/useLabelledTables';
 import InvoiceActionConfirmModal from './components/oms/InvoiceActionConfirmModal';
 import {
   money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
@@ -3591,7 +3592,9 @@ function ProductionView({ productionJobs, onUpdateJob }) {
         ))}
       </div>
 
-      <div className="os-layout" style={{ gridTemplateColumns: '1fr 260px' }}>
+      {/* Columns come from .os-layout so the sidebar can stack on a phone; an
+          inline grid-template-columns here left the job list 86px wide. */}
+      <div className="os-layout">
         {/* Main: Active Jobs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="os-card">
@@ -3646,7 +3649,7 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                     <tr key={order.id} style={{ borderBottom: idx < filteredJobs.length - 1 ? '1px solid #f3ede5' : 'none', background: 'white' }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = '#faf7f3'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td data-label="Customer" style={{ padding: '12px 14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1a1611', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                             {order.customer.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()}
@@ -3657,29 +3660,29 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#1a1611' }}>
+                      <td data-label="Item" style={{ padding: '12px 14px', fontSize: 13, color: '#1a1611' }}>
                         <div style={{ fontWeight: 600 }}>{order.item}</div>
                         <div style={{ fontSize: 11, color: '#8a7a6a' }}>{order.pieces} {order.pieces === 1 ? 'piece' : 'pieces'}</div>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42', whiteSpace: 'nowrap' }}>
+                      <td data-label="Delivery" style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Calendar size={12} style={{ color: '#b0a090' }} />
                           {order.delivery ? new Date(`${order.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No date'}
                         </div>
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td data-label="Tailor" style={{ padding: '12px 14px' }}>
                         <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: (!order.tailor || order.tailor === 'Unassigned') ? '#fffbf0' : '#f0faf4', color: (!order.tailor || order.tailor === 'Unassigned') ? '#7a6030' : '#2a7d4f', border: '1px solid', borderColor: (!order.tailor || order.tailor === 'Unassigned') ? '#e8d9a0' : '#c3e8d4' }}>
                           {order.tailor || 'Unassigned'}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: 12, color: order.fabricConfirmed ? '#2a7d4f' : '#7a6030' }}>
+                      <td data-label="Fabric" style={{ padding: '12px 14px', fontSize: 12, color: order.fabricConfirmed ? '#2a7d4f' : '#7a6030' }}>
                         <div style={{ fontWeight: 600 }}>{order.fabric || 'Not selected'}</div>
                         <div style={{ fontSize: 11 }}>{order.fabricConfirmed ? 'Confirmed' : 'Pending'}</div>
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td data-label="Status" style={{ padding: '12px 14px' }}>
                         <Status>{order.status === 'Order Sheet Confirmed' ? 'Ready to Assign' : order.status === 'Ready' ? 'Ready for Collection' : order.status}</Status>
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td data-label="Actions" style={{ padding: '12px 14px' }}>
                         <button
                           type="button"
                           onClick={() => setJobModal(order)}
@@ -4713,7 +4716,7 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      <div className="os-kpi-row os-kpi-row-3" style={{ gap: 12 }}>
         {kpiCards.map(({ label, value, detail, color, bg, icon, trending }) => (
           <div key={label} style={{ background: '#fff', border: '1px solid #eee5da', borderRadius: 12, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{ width: 42, height: 42, borderRadius: 10, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>{icon}</div>
@@ -5056,7 +5059,7 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
       </div>
 
       {/* Bottom row: Inventory Summary + Store Performance + Top Customers */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      <div className="os-kpi-row os-kpi-row-3" style={{ gap: 16 }}>
         {/* Inventory Reconciliation Summary */}
         <div className="os-card">
           <div className="os-card-head" style={{ padding: '12px 16px' }}>
@@ -5447,10 +5450,12 @@ const notificationDestination = (item, role) => {
 
 // Older rows predate server-side titles, and slicing the message at its first
 // full stop just reproduced the message, so fall back to the channel instead.
-const notificationTitle = (item) => item.metadata?.title
+const notificationTitle = (item, category) => item.metadata?.title
   || item.title
   || item.subject
-  || (item.channel ? `${item.channel} update` : 'Notification');
+  // Rows written before the API sent titles fall back to the category shown on
+  // the row, so the headline and the chip never contradict each other.
+  || (category ? `${category} update` : 'Notification');
 
 const notificationTimestamp = (value) => {
   const when = new Date(value);
@@ -5466,13 +5471,17 @@ function NotificationPanel({ role, currentRole, onNavigate }) {
   const [category, setCategory] = useState('All');
   const [sortOrder, setSortOrder] = useState('Newest first');
   const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const displayName = currentRole?.name?.split(' (')[0] || '';
   const visibleNavForRole = navByRole[role] || [];
 
   useEffect(() => {
+    setLoadFailed(false);
     api.get('/oms/notifications', { params: { role, name: displayName } })
       .then((response) => setItems(response.data?.data?.notifications || []))
-      .catch(() => setItems([]))
+      // A failed request must not look like an empty inbox — reading "0
+      // notifications" when the server is unreachable is worse than an error.
+      .catch(() => { setItems([]); setLoadFailed(true); })
       .finally(() => setLoading(false));
   }, [role, displayName]);
 
@@ -5523,7 +5532,7 @@ function NotificationPanel({ role, currentRole, onNavigate }) {
 
     return (
       <section className="store-notifications">
-        <header><div><span>Inbox</span><h2>You have {counts.Unread} unread notifications</h2></div><button type="button" onClick={markAllRead}>✓ &nbsp; Mark all as read</button></header>
+        <header><div><span>Inbox</span><h2>{loadFailed ? 'Notifications unavailable' : `You have ${counts.Unread} unread notifications`}</h2></div><button type="button" onClick={markAllRead}>✓ &nbsp; Mark all as read</button></header>
         {error ? <div className="os-row-notice" role="status"><span>{error}</span></div> : null}
         <div className="store-notification-filters">
           <nav>{categories.map((name) => <button type="button" className={category === name ? 'active' : ''} onClick={() => setCategory(name)} key={name}>{name} <span>{counts[name]}</span></button>)}</nav>
@@ -5543,13 +5552,17 @@ function NotificationPanel({ role, currentRole, onNavigate }) {
             >
               <i className="unread-dot"/><span className={`notification-type-icon type-${itemCategory.toLowerCase()}`}>{iconFor(itemCategory)}</span>
               <div>
-                <strong>{notificationTitle(item)}</strong>
+                <strong>{notificationTitle(item, itemCategory)}</strong>
                 <p>{item.message}</p>
                 <time dateTime={item.createdAt}>{notificationTimestamp(item.createdAt)}</time>
               </div>
               <b className={`notification-category type-${itemCategory.toLowerCase()}`}>{itemCategory === 'Orders' ? 'Order' : itemCategory === 'Payments' ? 'Payment' : itemCategory === 'Invoices' ? 'Invoice' : itemCategory}</b>
             </article>;
-          }) : <div className="invoice-preview-empty">No notifications in this category.</div>}
+          }) : (
+            <div className="invoice-preview-empty">
+              {loadFailed ? 'Notifications could not be loaded. Check your connection and refresh.' : 'No notifications in this category.'}
+            </div>
+          )}
         </div>
       </section>
     );
@@ -5574,12 +5587,16 @@ function NotificationPanel({ role, currentRole, onNavigate }) {
               onKeyDown={actionable ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openNotification(item); } } : undefined}
             >
               <span>{item.channel}</span>
-              <strong>{notificationTitle(item)}</strong>
+              <strong>{notificationTitle(item, item.channel)}</strong>
               <p>{item.message}</p>
               <small>{notificationTimestamp(item.createdAt)}</small>
             </article>
           );
-        }) : <div className="invoice-preview-empty">No notifications for this account yet.</div>}
+        }) : (
+          <div className="invoice-preview-empty">
+            {loadFailed ? 'Notifications could not be loaded. Check your connection and refresh.' : 'No notifications for this account yet.'}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -6018,6 +6035,9 @@ function App() {
       })
       .catch(() => {});
   }, [signedIn, signedInAccount]);
+
+  // Stacked table rows on mobile take their labels from the column headers.
+  useLabelledTables(location.pathname);
 
   // React Router keeps the previous scroll offset when the view changes, which
   // lands you part-way down — or at the bottom of — the page you just opened.
