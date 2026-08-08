@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="TWIF">
+  <!-- The sidebar mark: a dark square with a gold rule and gold TW. -->
+  <rect width="64" height="64" rx="12" fill="#141110"/>
+  <rect x="6.5" y="6.5" width="51" height="51" rx="8" fill="none" stroke="#e7a22d" stroke-width="3"/>
+  <text
+    x="32" y="43.5"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="26"
+    font-weight="700"
+    letter-spacing="-0.5"
+    fill="#e7a22d"
+  >TW</text>
+</svg>

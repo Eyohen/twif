@@ -1,9 +1,13 @@
-const CACHE_NAME = 'twif-oms-v3';
+// Bumped so the shell is refetched: the icons it used to pre-cache were the
+// blue mark from another project, and addAll rejects if any entry 404s.
+const CACHE_NAME = 'twif-oms-v4';
 const APP_SHELL = [
   '/',
   '/manifest.webmanifest',
-  '/favicon.png',
-  '/Logomark.png'
+  '/favicon.svg',
+  '/favicon-32.png',
+  '/apple-touch-icon.png',
+  '/icon-192.png'
 ];
 
 self.addEventListener('install', (event) => {
