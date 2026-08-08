@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { CheckSquare, Clock, User, Package, ArrowRight, Play, CheckCircle, ChevronDown, ChevronUp, Calendar, Ruler, Image, Scissors, MessageSquare, HelpCircle, Filter } from 'lucide-react';
+import { CheckSquare, Clock, User, Package, ArrowRight, Play, CheckCircle, ChevronDown, ChevronUp, Calendar, Ruler, Image, Scissors, Filter } from 'lucide-react';
 import { classNames } from '../../utils/oms';
 
 export default function MyTasksPage({ compact = false, currentRole, productionJobs = [], onUpdateJob }) {
   const tailorName = currentRole?.name?.split(' (')[0] || '';
-  const assignedJobs = productionJobs.filter((order) => order.tailor === tailorName);
+  const allAssigned = productionJobs.filter((order) => order.tailor === tailorName);
   const [expandedId, setExpandedId] = useState(null);
+  const [filter, setFilter] = useState('All tasks');
+  const [viewingImage, setViewingImage] = useState(null);
   const [confirm, setConfirm] = useState(null);
 
   const getStatus = (order) => {
@@ -26,9 +28,14 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
     ready:       { label: 'Ready',       bg: '#f0faf4', color: '#2a7d4f', border: '#a7f3d0' },
   };
 
-  const inQueue = assignedJobs.filter(j => getStatus(j) === 'in_queue').length;
-  const inProgress = assignedJobs.filter(j => getStatus(j) === 'in_progress').length;
-  const ready = assignedJobs.filter(j => getStatus(j) === 'ready').length;
+  const inQueue = allAssigned.filter(j => getStatus(j) === 'in_queue').length;
+  const inProgress = allAssigned.filter(j => getStatus(j) === 'in_progress').length;
+  const ready = allAssigned.filter(j => getStatus(j) === 'ready').length;
+
+  const FILTER_STATUS = { 'In Queue': 'in_queue', 'In Progress': 'in_progress', Ready: 'ready' };
+  const assignedJobs = filter === 'All tasks'
+    ? allAssigned
+    : allAssigned.filter((order) => getStatus(order) === FILTER_STATUS[filter]);
 
   return (
     <div className="os-page">
@@ -42,14 +49,12 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
             <p>Your assigned production jobs and their current status</p>
           </div>
         </div>
-        <button type="button" style={{
-          display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-          border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
-          fontSize: 13, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
-        }}>
-          <Filter size={13} />
-          Filter
-        </button>
+        <label className="os-field tailor-filter">
+          <Filter size={13} strokeWidth={1.8} />
+          <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filter tasks">
+            {['All tasks', 'In Queue', 'In Progress', 'Ready'].map((option) => <option key={option}>{option}</option>)}
+          </select>
+        </label>
       </div>
 
       {/* KPI Row */}
@@ -81,6 +86,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
           const canReady = status === 'in_progress';
           const { label, bg, color, border } = statusConfig[status];
           const initials = order.customer.split(' ').map(p => p[0]).join('').slice(0, 2);
+          const styleImages = Array.isArray(order.styleImages) ? order.styleImages : [];
 
           return (
             <div
@@ -144,8 +150,8 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                 {[
                   { icon: Package, label: 'Product', value: order.item || 'Not specified' },
                   { icon: Scissors, label: 'Fabric', value: order.fabric || 'Not specified' },
-                  { icon: Ruler, label: 'Measurements', value: order.measurements ? 'Included' : 'Not included' },
-                  { icon: Image, label: 'Ref Images', value: `${order.images || 0} Photos` },
+                  { icon: Ruler, label: 'Measurements', value: order.measurements ? 'Included' : 'Not taken' },
+                  { icon: Image, label: 'Ref Images', value: `${styleImages.length} ${styleImages.length === 1 ? 'Photo' : 'Photos'}` },
                   { icon: User, label: 'Pieces', value: order.pieces || 1 },
                 ].map(({ icon: Icon, label, value }, i) => (
                   <div key={label} style={{
@@ -209,54 +215,54 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                     </section>
                     <section>
                       <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Measurements</h4>
-                      {order.measurementDetails ? (
-                        <>
-                          <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
-                            {Object.entries(order.measurementDetails).slice(0, 6).map(([k, v]) => (
-                              <li key={k} style={{ marginBottom: 4 }}>{k}: {v}</li>
+                      {/* The figures themselves, not a note saying they exist.
+                          A tailor cannot cut to "Measurements on file". */}
+                      {order.measurementDetails || order.measurements ? (
+                        <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                          {order.measurementDetails
+                            ? Object.entries(order.measurementDetails).map(([key, value]) => (
+                              <li key={key} style={{ marginBottom: 4 }}><strong style={{ fontWeight: 600 }}>{key}:</strong> {value}</li>
+                            ))
+                            : String(order.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line, index) => (
+                              <li key={`${line}-${index}`} style={{ marginBottom: 4 }}>{line}</li>
                             ))}
-                          </ul>
-                          <button type="button" style={{
-                            marginTop: 6, fontSize: 12, color: '#c97b08', background: 'none',
-                            border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline',
-                          }}>View all measurements</button>
-                        </>
+                        </ul>
                       ) : (
-                        <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>
-                          {order.measurements ? 'Measurements on file' : 'No measurements attached'}
-                        </p>
+                        <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>
                       )}
                     </section>
                     <section>
                       <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Images ({order.images || 0})</h4>
-                      {order.imageUrls?.length ? (
-                        <>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
-                            {order.imageUrls.slice(0, 4).map((url, i) => (
-                              <img key={i} src={url} alt={`Ref ${i + 1}`} style={{ width: '100%', borderRadius: 6, aspectRatio: '1', objectFit: 'cover' }} />
-                            ))}
-                          </div>
-                          {order.images > 4 && (
-                            <button type="button" style={{
-                              marginTop: 6, fontSize: 12, color: '#c97b08', background: 'none',
-                              border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline',
-                            }}>View all images</button>
-                          )}
-                        </>
+                      {styleImages.length ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          {styleImages.map((image, index) => (
+                            image.dataUrl ? (
+                              <button
+                                key={`${image.label}-${index}`}
+                                type="button"
+                                className="tailor-style-image"
+                                onClick={() => setViewingImage(image)}
+                                title={image.label}
+                              >
+                                <img src={image.dataUrl} alt={image.label || `Reference ${index + 1}`} />
+                                <span>{image.label || `Image ${index + 1}`}</span>
+                              </button>
+                            ) : (
+                              // Older order sheets recorded a filename rather
+                              // than an upload; naming it still helps.
+                              <span key={`${image.label}-${index}`} className="tailor-style-ref">
+                                <strong>{image.label || `Image ${index + 1}`}</strong>
+                                <small>{image.name}</small>
+                              </span>
+                            )
+                          ))}
+                        </div>
                       ) : (
                         <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No reference images uploaded</p>
                       )}
                     </section>
                   </div>
 
-                  <button type="button" style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px',
-                    border: '1px solid #ddd5c8', borderRadius: 8, background: '#faf7f3',
-                    fontSize: 12, color: '#5a4e42', cursor: 'pointer',
-                  }}>
-                    <MessageSquare size={13} />
-                    Add Note
-                  </button>
                 </div>
               )}
 
@@ -265,20 +271,24 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                 display: 'flex', gap: 10, padding: '12px 18px',
                 borderTop: '1px solid #f3ede5', background: '#fff',
               }}>
+                {/* Once work has started the button says so, rather than
+                    still reading "Start Work" while greyed out. */}
                 <button
                   type="button"
                   disabled={!canStart}
                   onClick={() => canStart && setConfirm({ jobId: order.id, action: 'start', order })}
                   style={{
                     flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: canStart ? 'pointer' : 'not-allowed',
-                    background: canStart ? '#eff6ff' : '#f5f0e8', color: canStart ? '#1d4ed8' : '#b0a090',
-                    border: `1px solid ${canStart ? '#bfdbfe' : '#eee5da'}`,
+                    padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: canStart ? 'pointer' : 'default',
+                    background: canStart ? '#eff6ff' : status === 'in_queue' ? '#f5f0e8' : '#eef4ff',
+                    color: canStart ? '#1d4ed8' : status === 'in_queue' ? '#b0a090' : '#4a6fb5',
+                    border: `1px solid ${canStart ? '#bfdbfe' : status === 'in_queue' ? '#eee5da' : '#d5e3fb'}`,
                     transition: 'all 0.15s',
                   }}
                 >
-                  <Play size={13} />
-                  Start Work
+                  {canStart ? <><Play size={13} /> Start Work</>
+                    : status === 'in_progress' ? <><Clock size={13} /> Work in progress</>
+                    : <><CheckCircle size={13} /> Work completed</>}
                 </button>
                 <button
                   type="button"
@@ -293,7 +303,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                   }}
                 >
                   <CheckCircle size={13} />
-                  Mark Ready
+                  {status === 'ready' ? 'Marked ready' : 'Mark Ready'}
                 </button>
               </div>
             </div>
@@ -311,27 +321,18 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
         )}
       </div>
 
-      {/* Help Banner */}
-      <div style={{
-        background: '#faf7f3', border: '1px solid #eee5da', borderRadius: 12,
-        padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14,
-      }}>
-        <HelpCircle size={20} strokeWidth={1.5} style={{ color: '#c97b08', flexShrink: 0 }} />
-        <div style={{ flex: 1 }}>
-          <strong style={{ fontSize: 14, color: '#1a1611' }}>Need help?</strong>
-          <span style={{ fontSize: 13, color: '#8a7a6a', marginLeft: 8 }}>
-            Contact your Production Manager if you have any questions.
-          </span>
+      {viewingImage?.dataUrl ? (
+        <div
+          className="review-evidence-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={viewingImage.label || 'Style reference'}
+          onClick={() => setViewingImage(null)}
+        >
+          <button type="button" className="review-evidence-close" onClick={() => setViewingImage(null)} aria-label="Close">×</button>
+          <img src={viewingImage.dataUrl} alt={viewingImage.label || 'Style reference'} onClick={(event) => event.stopPropagation()} />
         </div>
-        <button type="button" style={{
-          display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-          background: '#1a1611', color: '#fff', border: 'none', borderRadius: 8,
-          fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
-        }}>
-          <MessageSquare size={13} />
-          Send Message
-        </button>
-      </div>
+      ) : null}
 
       {/* Confirm Modal */}
       {confirm && (

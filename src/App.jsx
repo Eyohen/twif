@@ -3130,7 +3130,7 @@ const emptyOrderItem = () => ({
   fabricUnit: '',
   measurements: '',
   designNotes: '',
-  styleImages: ['', '', '', '', ''],
+  styleImages: [null, null, null, null, null],
 });
 
 const emptySheetForm = () => ({
@@ -3178,6 +3178,23 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     ...current,
     items: current.items.length > 1 ? current.items.filter((_, itemIndex) => itemIndex !== index) : current.items,
   }));
+
+  // Images are held as data URLs, matching how payment evidence is carried,
+  // so they survive the invoice payload without a separate upload endpoint.
+  const readStyleImage = (index, imageIndex, file) => {
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) {
+      setMessage('Style images need to be under 4 MB each.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => updateStyleImage(index, imageIndex, {
+      label: `Image ${imageIndex + 1}`,
+      name: file.name,
+      dataUrl: reader.result,
+    });
+    reader.readAsDataURL(file);
+  };
 
   const updateStyleImage = (index, imageIndex, value) => {
     setSheetForm((current) => ({
@@ -3254,8 +3271,8 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     }
 
     const styleImagesFor = (item) => item.styleImages
-      .map((image, index) => ({ label: `Image ${index + 1}`, name: image }))
-      .filter((image) => image.name);
+      .map((image, index) => (image ? { ...image, label: image.label || `Image ${index + 1}` } : null))
+      .filter(Boolean);
 
     const [firstItem] = items;
     const orderSheet = {
@@ -3449,13 +3466,34 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
                   <textarea value={orderItem.designNotes} onChange={(event) => updateItem(index, { designNotes: event.target.value })} placeholder="Internal notes for the Production team — style, finishing, special instructions…" rows={3} />
                 </label>
                 <div className="os-field os-field-full">
-                  <span className="os-field-label">Style Images <em>(optional — filenames or reference notes)</em></span>
+                  {/* These were free-text boxes for a filename, so Production
+                      and the Tailor received the name of a photo they could
+                      not see. They take the photo itself. */}
+                  <span className="os-field-label">Style Images <em>(up to 5 — the Tailor sees these on the job sheet)</em></span>
                   <div className="os-image-grid">
                     {orderItem.styleImages.map((image, imageIndex) => (
-                      <label key={`style-image-${index}-${imageIndex}`} className={`os-image-slot ${image ? 'os-image-slot-filled' : ''}`}>
-                        <Plus size={16} strokeWidth={1.5} />
-                        <span>Image {imageIndex + 1}</span>
-                        <input value={image} onChange={(event) => updateStyleImage(index, imageIndex, event.target.value)} placeholder="Filename or note" />
+                      <label key={`style-image-${index}-${imageIndex}`} className={`os-image-slot ${image?.dataUrl ? 'os-image-slot-filled' : ''}`}>
+                        {image?.dataUrl ? (
+                          <>
+                            <img src={image.dataUrl} alt={`Style reference ${imageIndex + 1}`} />
+                            <button
+                              type="button"
+                              className="os-image-remove"
+                              aria-label={`Remove image ${imageIndex + 1}`}
+                              onClick={(event) => { event.preventDefault(); updateStyleImage(index, imageIndex, null); }}
+                            >×</button>
+                          </>
+                        ) : (
+                          <>
+                            <Plus size={16} strokeWidth={1.5} />
+                            <span>Image {imageIndex + 1}</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(event) => readStyleImage(index, imageIndex, event.target.files?.[0])}
+                        />
                       </label>
                     ))}
                   </div>
@@ -6429,8 +6467,14 @@ function App() {
           <Route path="*" element={<Navigate to={`/${roleSlug(role)}/${viewSlug(visibleNav?.[0] || 'Overview')}`} replace />} />
         </Routes>
       </main>
-      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-        {visibleNav.slice(0, 4).map((item) => {
+      {/* A role with few enough views shows them all, so More is dropped —
+          for a Tailor it opened a drawer holding nothing new. */}
+      <nav
+        className="mobile-bottom-nav"
+        aria-label="Mobile navigation"
+        style={{ gridTemplateColumns: `repeat(${Math.min(visibleNav.length, 5)}, minmax(0, 1fr))` }}
+      >
+        {visibleNav.slice(0, visibleNav.length > 5 ? 4 : 5).map((item) => {
           const IconComp = NAV_ICONS[item];
           return (
             <NavLink key={item} to={`/${roleSlug(role)}/${viewSlug(item)}`} onClick={() => setMobileMenuOpen(false)}>
@@ -6439,9 +6483,11 @@ function App() {
             </NavLink>
           );
         })}
-        <button type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Open all navigation">
-          <MoreHorizontal size={21} strokeWidth={1.7} /><span>More</span>
-        </button>
+        {visibleNav.length > 5 ? (
+          <button type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Open all navigation">
+            <MoreHorizontal size={21} strokeWidth={1.7} /><span>More</span>
+          </button>
+        ) : null}
       </nav>
     </div>
   );
