@@ -27,6 +27,7 @@ import {
   isInvoiceApproved, canShowJobInProduction, productionJobFromInvoice,
   mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid,
   invoiceDocumentPayload, printInvoiceHtml, PERIOD_OPTIONS, filterByPeriod, periodTrend,
+  amountReceived, invoicePayable, formatMoment,
 } from './utils/oms';
 
 const trackingBaseUrl = (
@@ -1524,28 +1525,39 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
   if (selectedInvoice) {
     const invoice = selectedInvoice;
     const job = invoice.orderSheet || {};
-    const paidAmount = toNumber(invoice.paid || invoice.amountPaid || (invoice.paymentStatus === 'Fully Paid' ? invoice.total : invoice.paymentStatus === 'Partial Paid' ? toNumber(invoice.total) / 2 : 0));
-    const balance = Math.max(0, toNumber(invoice.total) - paidAmount);
+    // A part payment was shown as exactly half the invoice, which is a number
+    // nobody entered. Nothing records how much was handed over, so it says so.
+    const paidAmount = amountReceived(invoice);
+    const balance = paidAmount === null ? null : Math.max(0, invoicePayable(invoice) - paidAmount);
+    const asMoney = (value) => (value === null ? 'Not recorded' : money.format(value));
+    const dueDate = invoice.dueDate || invoice.deliveryDate || job.delivery;
     return (
       <div className="store-order-detail">
-        <div className="store-detail-toolbar"><button type="button" onClick={() => setSelectedInvoice(null)}>← &nbsp; Back to Invoices</button><div><button>▣ &nbsp; Print</button></div></div>
+        <div className="store-detail-toolbar"><button type="button" onClick={() => setSelectedInvoice(null)}>← &nbsp; Back to Invoices</button><div><button type="button" onClick={() => downloadInvoicePdf(invoice)}>▣ &nbsp; Print</button></div></div>
         <section className="store-order-hero">
           <div><span>{invoice.invoiceNumber}</span><h2>{invoice.customer}</h2><p>{invoice.item || 'Custom Order'} · {invoice.pieces || job.pieces || 1} pieces · {invoice.store}</p></div>
           <Status>{invoice.paymentStatus}</Status>
-          <dl><div><dt>▣ &nbsp; Invoice Date</dt><dd>{invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</dd></div><div><dt>▣ &nbsp; Due Date</dt><dd>{job.delivery ? new Date(`${job.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</dd></div><div><dt>▱ &nbsp; Store</dt><dd>{invoice.store} Store</dd></div></dl>
+          <dl><div><dt>▣ &nbsp; Invoice Date</dt><dd>{formatMoment(invoice.invoiceDate || invoice.createdAt)}</dd></div><div><dt>▣ &nbsp; Due Date</dt><dd>{formatMoment(dueDate)}</dd></div><div><dt>▱ &nbsp; Store</dt><dd>{invoice.store} Store</dd></div></dl>
         </section>
-        <nav className="store-detail-tabs">{['Invoice Details', 'Payments', 'Notes & History'].map((tab, index) => <button className={index === 0 ? 'active' : ''} key={tab}>{tab}</button>)}</nav>
+        {/* Payments and Notes & History were tabs that could be clicked and
+            changed nothing — there was only ever one panel behind them. */}
         <div className="store-detail-grid">
           <div className="store-detail-main">
             <section className="store-detail-panel order-information"><h3>Invoice Information</h3><dl>
-              <div><dt>Payment Status</dt><dd><Status>{invoice.paymentStatus}</Status></dd><dt>Payment Method</dt><dd>{invoice.paymentMethod || 'Bank Transfer'}</dd><dt>Store</dt><dd>{invoice.store} Store</dd><dt>Customer Phone</dt><dd>{invoice.phone || job.phone || '—'}</dd></div>
-              <div><dt>Invoice Number</dt><dd><strong>{invoice.invoiceNumber}</strong></dd><dt>Sales Person</dt><dd>{invoice.createdBy || 'Bola'}</dd><dt>Customer Email</dt><dd>{invoice.email || '—'}</dd></div>
+              <div><dt>Payment Status</dt><dd><Status>{invoice.paymentStatus}</Status></dd><dt>Payment Method</dt><dd>{invoice.paymentMethod || '—'}</dd><dt>Store</dt><dd>{invoice.store} Store</dd><dt>Customer Phone</dt><dd>{invoice.phone || job.phone || '—'}</dd></div>
+              <div><dt>Invoice Number</dt><dd><strong>{invoice.invoiceNumber}</strong></dd><dt>Sales Person</dt><dd>{invoice.createdBy || '—'}</dd><dt>Customer Email</dt><dd>{invoice.email || '—'}</dd></div>
             </dl></section>
-            <section className="store-detail-panel order-timeline"><h3>Timeline</h3><div><article className="done"><i>✓</i><span><strong>Invoice Created</strong><small>by {invoice.createdBy || 'Bola'}</small></span><time>{invoice.createdAt || 'Recently'}</time></article><article className="paid"><i>●</i><span><strong>Payment Made ({invoice.paymentStatus})</strong><small>{money.format(paidAmount)} received via {invoice.paymentMethod || 'Bank Transfer'}</small></span><time>Recently</time></article><article><i>○</i><span><strong>{invoiceApprovalStatus(invoice) === 'Approved' ? 'Accounts Approved' : 'Awaiting Approval'}</strong><small>{invoiceApprovalStatus(invoice) === 'Approved' ? 'Invoice approved by accounts' : 'Waiting for accounts approval'}</small></span><time>Recently</time></article></div></section>
+            <section className="store-detail-panel order-timeline"><h3>Timeline</h3><div><article className="done"><i>✓</i><span><strong>Invoice Created</strong><small>{invoice.createdBy ? `by ${invoice.createdBy}` : `${invoice.store} store`}</small></span><time>{formatMoment(invoice.createdAt)}</time></article>{isAwaitingPayment(invoice) ? null : <article className="paid"><i>●</i><span><strong>Payment Recorded ({invoice.paymentStatus})</strong><small>{paidAmount === null ? 'Amount not recorded' : `${money.format(paidAmount)} received`}{invoice.paymentMethod ? ` · ${invoice.paymentMethod}` : ''}</small></span><time>—</time></article>}<article><i>○</i><span><strong>{invoiceApprovalStatus(invoice) === 'Approved' ? 'Accounts Approved' : 'Awaiting Approval'}</strong><small>{invoiceApprovalStatus(invoice) === 'Approved' ? 'Invoice approved by accounts' : 'Waiting for accounts approval'}</small></span><time>—</time></article></div></section>
           </div>
           <aside className="store-detail-rail">
-            <section className="store-detail-panel order-summary"><h3>Invoice Summary</h3><dl><div><dt>Invoice Total</dt><dd>{money.format(invoice.total)}</dd></div><div><dt>Amount Paid</dt><dd className="green">{money.format(paidAmount)}</dd></div><div><dt>Balance Due</dt><dd className="red">{money.format(balance)}</dd></div></dl><div><span>Balance Due</span><strong>{money.format(balance)}</strong></div></section>
-            <section className="store-detail-panel detail-documents"><h3>Documents</h3>{[['▤', 'Invoice PDF', 'Download'], ['▤', 'Order Sheet', 'Download']].map(([icon, label, action]) => <article key={label}><i>{icon}</i><span><strong>{label}</strong><small>{action}</small></span></article>)}</section>
+            <section className="store-detail-panel order-summary"><h3>Invoice Summary</h3><dl><div><dt>Invoice Total</dt><dd>{money.format(invoice.total)}</dd></div><div><dt>Amount Paid</dt><dd className={paidAmount === null ? '' : 'green'}>{asMoney(paidAmount)}</dd></div><div><dt>Balance Due</dt><dd className={balance === null ? '' : 'red'}>{asMoney(balance)}</dd></div></dl><div><span>Balance Due</span><strong>{asMoney(balance)}</strong></div></section>
+            {/* Both rows here looked like downloads and neither was clickable. The
+                invoice can be produced on demand; an order sheet only exists
+                once production has raised one. */}
+            <section className="store-detail-panel detail-documents"><h3>Documents</h3>
+              <article role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => downloadInvoicePdf(invoice)} onKeyDown={(event) => { if (event.key === 'Enter') downloadInvoicePdf(invoice); }}><i>▤</i><span><strong>Invoice PDF</strong><small>Download</small></span></article>
+              {invoice.orderSheet ? <article><i>▤</i><span><strong>Order Sheet</strong><small>Attached to this invoice</small></span></article> : <article><i>▤</i><span><strong>Order Sheet</strong><small>Not raised yet</small></span></article>}
+            </section>
           </aside>
         </div>
       </div>
