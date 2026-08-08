@@ -5,36 +5,38 @@ import { useEffect } from 'react';
 // looked cropped. Rather than add dots to each component by hand, any row that
 // actually overflows gets an indicator attached here, which also covers rows
 // added later.
-const CAROUSEL_SELECTORS = [
-  '.os-kpi-row',
-  '.metrics-grid',
-  '.store-overview-kpis',
-  '.orders-table-kpis',
-  '.store-customer-kpis',
-  '.store-invoice-kpis',
-  '.store-order-kpis',
-  '.owner-kpis',
-  '.accounts-kpis',
-].join(', ');
+// Carousels are found by behaviour rather than by class name. Listing classes
+// meant every new KPI row had to be remembered, and several were not — so some
+// scrolled with an indicator and some without.
+const isCardCarousel = (el) => {
+  if (el.scrollWidth <= el.clientWidth + 8) return false;
+
+  const overflowX = getComputedStyle(el).overflowX;
+  if (overflowX !== 'auto' && overflowX !== 'scroll') return false;
+
+  // A row of filter pills or a scrolling table is not a card carousel; dots
+  // would describe neither of them usefully.
+  if (el.tagName === 'NAV' || el.closest('nav')) return false;
+  if (el.querySelector('table') || el.tagName === 'TABLE') return false;
+  if (el.classList.contains('os-filter-pills')) return false;
+  if (el.children.length < 2) return false;
+
+  // Cards sit side by side; a single long line of text is not a carousel.
+  return [...el.children].every((child) => child.getBoundingClientRect().width > 80);
+};
+
+const findCarousels = () => [...document.querySelectorAll('.workspace *')].filter(isCardCarousel);
 
 const DOTS_CLASS = 'os-carousel-dots';
 const MOBILE_QUERY = '(max-width: 900px)';
 
 const syncDots = (row) => {
-  const overflowing = row.scrollWidth > row.clientWidth + 8;
   let dots = row.nextElementSibling;
   const isOurs = dots && dots.classList?.contains(DOTS_CLASS);
 
-  if (!overflowing) {
+  if (!isCardCarousel(row)) {
     if (isOurs) dots.remove();
     row.classList.remove('os-carousel-scrollable');
-    return;
-  }
-
-  // A component that already ships its own indicator keeps it.
-  const existing = row.parentElement?.querySelector('.kpi-scroll-dots, .os-kpi-dots');
-  if (existing && !isOurs) {
-    row.classList.add('os-carousel-scrollable');
     return;
   }
 
@@ -72,7 +74,15 @@ export default function useCarouselIndicators(dependency) {
 
     const run = () => {
       if (!media.matches) { teardown(); return; }
-      document.querySelectorAll(CAROUSEL_SELECTORS).forEach((row) => {
+      // Rows that no longer scroll drop their indicator on the next pass.
+      listeners.forEach((handler, row) => {
+        if (!document.contains(row)) {
+          row.removeEventListener('scroll', handler);
+          listeners.delete(row);
+        }
+      });
+
+      findCarousels().forEach((row) => {
         syncDots(row);
         if (listeners.has(row)) return;
         const handler = () => syncDots(row);

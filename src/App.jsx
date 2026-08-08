@@ -268,9 +268,6 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate }) {
             </article>
           ))}
         </section>
-        <div className="kpi-scroll-dots">
-          {Array.from({ length: KPI_COUNT }, (_, i) => <span key={i} className={activeKpiDot === i ? 'dot-active' : ''} />)}
-        </div>
       </div>
 
       <section className="accounts-primary-grid">
@@ -462,9 +459,6 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
           ['Low Stock Items', lowStock.length, '↓ 14.3% vs last 30 days', 'red', '△'],
           ['Outstanding Payments', money.format(outstanding), '↓ 6.7% vs last 30 days', 'red', '▣'],
         ].map(([label, value, change, tone, icon], index) => <article className={`owner-kpi tone-${tone}`} key={label}><span>{label}</span><strong>{value}</strong><small>{change}</small><i>{icon}</i>{index < 5 ? <div className="owner-sparkline"><b/><b/><b/><b/><b/><b/><b/></div> : null}</article>)}</section>
-        <div className="kpi-scroll-dots">
-          {Array.from({ length: OWNER_KPI_COUNT }, (_, i) => <span key={i} className={activeKpiDot === i ? 'dot-active' : ''} />)}
-        </div>
       </div>
 
       <section className="owner-action-row">
@@ -1646,11 +1640,6 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
             </article>
           ))}
         </section>
-        <div className="kpi-scroll-dots os-kpi-dots">
-          {Array.from({ length: INVOICE_KPI_COUNT }, (_, i) => (
-            <span key={i} className={activeInvoiceKpiDot === i ? 'dot-active' : ''} />
-          ))}
-        </div>
       </div>
 
       {rowNotice ? (
@@ -2046,11 +2035,6 @@ function StoreOrdersView({ sentInvoices = [] }) {
             </article>
           ))}
         </section>
-        <div className="kpi-scroll-dots">
-          {Array.from({ length: ORDERS_KPI_COUNT }, (_, i) => (
-            <span key={i} className={activeOrdersKpiDot === i ? 'dot-active' : ''} />
-          ))}
-        </div>
       </div>
 
       <div className="os-card" style={{ overflow: 'visible' }}>
@@ -6361,10 +6345,9 @@ function App() {
             ))}
           </div>
         ) : null}
+        {/* Logout sits at the foot of the navigation, where an account action
+            is looked for, rather than behind the avatar in the top bar. */}
         <div className="sidebar-footer">
-          <Link className="portal-link" to={`/${roleSlug(role)}/portal-preview`} onClick={() => setMobileMenuOpen(false)}>Portal Preview</Link>
-          {/* Logout lives with the navigation rather than behind the avatar
-              menu, where nobody thought to look for it. */}
           <button type="button" className="sidebar-logout" onClick={() => handleLogout()}>
             <LogOut size={16} strokeWidth={1.8} />
             Log out
@@ -6387,7 +6370,12 @@ function App() {
           </button>
           <div>
             <span className="eyebrow">Operations Management System</span>
-            <span className="mobile-app-label">TWIF OMS</span>
+            {/* On a phone the wordmark told the user nothing they did not
+                already know; their own name and role is worth the line. */}
+            <span className="mobile-app-label">
+              {currentRole?.name?.split(' (')[0] || 'TWIF OMS'}
+              {accountTypeByRole[role]?.short ? <em> · {accountTypeByRole[role].short}</em> : null}
+            </span>
             <h1>{activeView === 'Portal Preview' ? 'Customer Tracking Preview' : role === 'accounts' && activeView === 'Overview' ? 'Account Dashboard' : role === 'accounts' && activeView === 'Inventory' ? 'Inventory Reconciliation' : role === 'inventory_manager' && activeView === 'Overview' ? 'Inventory Dashboard' : (role === 'inventory_manager' || role === 'owner') && activeView === 'Inventory' ? 'Inventory List' : activeView}</h1>
             {role === 'production_manager' && activeView === 'Production' ? <p className="topbar-subtitle">Manage active jobs, assign tailors, confirm fabric and track production progress.</p> : null}
             {role === 'accounts' && activeView === 'Overview' ? <p className="topbar-subtitle">Review, approve and reconcile with confidence.</p> : null}

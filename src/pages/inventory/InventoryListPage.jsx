@@ -129,11 +129,6 @@ export default function InventoryListPage({ currentRole, ownerMode = false }) {
             </article>
           ))}
         </section>
-        <div className="kpi-scroll-dots">
-          {kpis.map((_, i) => (
-            <span key={i} className={i === activeDot ? 'dot-active' : ''} />
-          ))}
-        </div>
       </div>
 
       {/* Filter Bar */}

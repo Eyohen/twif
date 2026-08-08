@@ -89,16 +89,6 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
         ))}
       </div>
 
-      {/* Scroll dots for mobile */}
-      <div className="os-kpi-dots" style={{ gap: 5, justifyContent: 'center' }}>
-        {Array.from({ length: KPI_COUNT }, (_, i) => (
-          <span key={i} style={{
-            width: 6, height: 6, borderRadius: '50%',
-            background: activeKpiDot === i ? '#1a1611' : '#ddd5c8',
-          }} />
-        ))}
-      </div>
-
       {/* Filter bar */}
       <div className="os-card">
         <div className="os-card-body" style={{ gap: 10 }}>

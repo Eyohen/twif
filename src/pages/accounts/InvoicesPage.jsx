@@ -91,9 +91,6 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
             </article>
           ))}
         </section>
-        <div className="kpi-scroll-dots">
-          {Array.from({ length: KPI_COUNT }, (_, i) => <span key={i} className={activeKpiDot === i ? 'dot-active' : ''} />)}
-        </div>
       </div>
 
       <section className="accounts-invoice-register">

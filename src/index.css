@@ -10027,3 +10027,36 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   .membership-form > footer { grid-template-columns: 1fr; }
   .membership-form > footer .confirm-cancel { order: 2; }
 }
+
+/* Ten components each drew their own scroll dots, in three different shapes —
+   including one set styled inline, which no stylesheet could reach. They are
+   all gone; useCarouselIndicators injects one indicator for every carousel, so
+   the affordance is identical wherever a row scrolls. */
+.kpi-scroll-dots { display: none !important; }
+
+/* The greeting and each view's description were hidden on phones, and the
+   signed-in name with them, so a shared shop-floor device gave no clue who was
+   using it. Both are back, sized for the smaller bar. */
+@media (max-width: 780px) {
+  .topbar-subtitle {
+    display: block;
+    margin: 3px 0 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #7b6f62;
+    /* Two lines at most, so a long description cannot push the page down. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .mobile-app-label { color: #8a6410; }
+  .mobile-app-label em { font-style: normal; font-weight: 600; color: #a0917f; letter-spacing: .04em; }
+}
+
+/* Room is tightest here, so the role drops away and the name stays. */
+@media (max-width: 380px) {
+  .mobile-app-label { display: block; }
+  .mobile-app-label em { display: none; }
+}

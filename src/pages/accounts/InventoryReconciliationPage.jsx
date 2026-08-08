@@ -87,11 +87,6 @@ export default function AccountsInventoryReconciliationPage() {
             </article>
           ))}
         </section>
-        <div className="kpi-scroll-dots">
-          {Array.from({ length: KPI_COUNT }, (_, i) => (
-            <span key={i} className={activeKpiDot === i ? 'dot-active' : ''} />
-          ))}
-        </div>
       </div>
 
       {/* Main Layout */}
