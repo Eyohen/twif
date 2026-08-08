@@ -96,7 +96,13 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
   }, [customers, search, segment, sortOrder]);
 
   if (editingCustomer) {
-    return <EditCustomerPage customer={editingCustomer} onCancel={() => setEditingCustomer(null)} onViewMeasurements={() => setMeasurementCustomer(editingCustomer)} onSave={(updated) => {
+    return <EditCustomerPage
+      customer={editingCustomer}
+      onCancel={() => setEditingCustomer(null)}
+      // The edit screen is checked first below, so it has to stand down or
+      // setting the measurement customer changes nothing on screen.
+      onViewMeasurements={() => { setMeasurementCustomer(editingCustomer); setEditingCustomer(null); }}
+      onSave={(updated) => {
       setCustomers((current) => current.map((customer) => customer.id === updated.id ? updated : customer));
       setSelectedCustomer(updated);
       setEditingCustomer(null);

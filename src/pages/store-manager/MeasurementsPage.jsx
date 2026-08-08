@@ -1,12 +1,16 @@
-import { ArrowLeft, Printer, Edit2, Plus, Ruler, ChevronRight, User, Phone, Mail, Clock } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, Printer, Edit2, Save, X, Ruler, ChevronRight, User, Phone, Mail, Clock } from 'lucide-react';
+import { api } from '../../lib/api';
 
-const defaultMeasurements = [
-  ['Neck', '16', 'Comfort fit'], ['Shoulder', '18', '–'], ['Chest', '42', '–'],
-  ['Waist', '34', '–'], ['Hip / Seat', '41', '–'], ['Sleeve Length', '24', '–'],
-  ['Bicep', '15', '–'], ['Wrist', '7.5', '–'], ['Back Length', '17', '–'],
-  ['Front Length', '28', '–'], ['Top Length', '29', '–'], ['Trouser Waist', '34', '–'],
-  ['Trouser Hip', '41', '–'], ['Trouser Length (Outseam)', '42', '–'],
+// The measurements a tailor takes. Every one starts empty: a chart that
+// arrives pre-filled with 16in neck and 42in chest is a garment cut wrong.
+const MEASUREMENT_FIELDS = [
+  'Neck', 'Shoulder', 'Chest', 'Waist', 'Hip / Seat', 'Sleeve Length',
+  'Bicep', 'Wrist', 'Back Length', 'Front Length', 'Top Length',
+  'Trouser Waist', 'Trouser Hip', 'Trouser Length (Outseam)',
 ];
+
+const fieldKey = (label) => label.toLowerCase().replaceAll(' ', '');
 
 function BodyFigure({ back = false }) {
   return (
@@ -38,13 +42,45 @@ function BodyFigure({ back = false }) {
   );
 }
 
-export default function MeasurementsPage({ customer, onBack }) {
+export default function MeasurementsPage({ customer, onBack, onSaved }) {
   const stored = customer.measurements || {};
-  const rows = defaultMeasurements.map(([label, fallback, note]) => [
-    label,
-    stored[label.toLowerCase().replaceAll(' ', '')] || fallback,
-    note,
-  ]);
+  const [editing, setEditing] = useState(false);
+  const [values, setValues] = useState(() => Object.fromEntries(
+    MEASUREMENT_FIELDS.map((label) => [fieldKey(label), stored[fieldKey(label)] ?? ''])
+  ));
+  const [draft, setDraft] = useState(values);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const recorded = MEASUREMENT_FIELDS.filter((label) => String(values[fieldKey(label)] ?? '').trim()).length;
+
+  const save = async () => {
+    if (String(customer.id || '').startsWith('sent-')) {
+      setMessage('Save this customer with Edit Customer first, then measurements can be stored.');
+      return;
+    }
+    setSaving(true);
+    setMessage('');
+    try {
+      // Only the profile block is carried over; the rest of `measurements`
+      // holds unrelated profile fields that must not be flattened away.
+      await api.patch(`/oms/customers/${customer.id}`, {
+        fullName: customer.fullName,
+        phone: customer.phone,
+        email: customer.email,
+        ...(stored.profile || {}),
+        measurements: draft,
+      });
+      setValues(draft);
+      setEditing(false);
+      setMessage('Measurements saved.');
+      onSaved?.(draft);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Measurements could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const initials = customer.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2);
   const isReturning = Number(customer.totalOrders) > 1;
@@ -80,27 +116,42 @@ export default function MeasurementsPage({ customer, onBack }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-            border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
-            fontSize: 13, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
-          }}>
+          {/* Print / PDF, Edit Measurements and Use for New Order were all
+              inert, and there was no way to record a measurement at all. */}
+          <button
+            type="button"
+            className="measurement-action"
+            onClick={() => window.print()}
+          >
             <Printer size={13} /> Print / PDF
           </button>
-          <button style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-            border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
-            fontSize: 13, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
-          }}>
-            <Edit2 size={13} /> Edit Measurements
-          </button>
-          <button style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px',
-            border: 'none', borderRadius: 8, background: '#1a1611',
-            fontSize: 13, color: '#fff', cursor: 'pointer', fontWeight: 700,
-          }}>
-            <Plus size={14} /> Use for New Order
-          </button>
+          {editing ? (
+            <>
+              <button
+                type="button"
+                className="measurement-action"
+                onClick={() => { setDraft(values); setEditing(false); setMessage(''); }}
+              >
+                <X size={13} /> Cancel
+              </button>
+              <button
+                type="button"
+                className="measurement-action is-primary"
+                onClick={save}
+                disabled={saving}
+              >
+                <Save size={13} /> {saving ? 'Saving…' : 'Save measurements'}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="measurement-action is-primary"
+              onClick={() => { setDraft(values); setEditing(true); setMessage(''); }}
+            >
+              <Edit2 size={13} /> {recorded ? 'Edit measurements' : 'Add measurements'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -201,27 +252,45 @@ export default function MeasurementsPage({ customer, onBack }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(([label, value, note], index) => (
-                  <tr
-                    key={label}
-                    style={{ borderBottom: '1px solid #f3ede5' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#faf7f3'}
-                    onMouseLeave={e => e.currentTarget.style.background = ''}
-                  >
-                    <td style={{ padding: '11px 14px', fontSize: 12, color: '#b0a090', width: 40 }}>{index + 1}</td>
-                    <td style={{ padding: '11px 14px' }}>
-                      <strong style={{ fontSize: 13, color: '#1a1611' }}>{label}</strong>
-                    </td>
-                    <td style={{ padding: '11px 14px' }}>
-                      <span style={{
-                        display: 'inline-block', padding: '3px 10px', borderRadius: 20,
-                        background: '#fff0df', color: '#c06a00', fontSize: 13, fontWeight: 700,
-                      }}>{value}</span>
-                    </td>
-                    <td style={{ padding: '11px 14px', fontSize: 12, color: '#8a7a6a' }}>in</td>
-                    <td style={{ padding: '11px 14px', fontSize: 12, color: '#5a4e42' }}>{note}</td>
-                  </tr>
-                ))}
+                {MEASUREMENT_FIELDS.map((label, index) => {
+                  const key = fieldKey(label);
+                  const value = String(values[key] ?? '').trim();
+                  return (
+                    <tr
+                      key={label}
+                      style={{ borderBottom: '1px solid #f3ede5' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#faf7f3'}
+                      onMouseLeave={e => e.currentTarget.style.background = ''}
+                    >
+                      <td data-label="#" style={{ padding: '11px 14px', fontSize: 12, color: '#b0a090', width: 40 }}>{index + 1}</td>
+                      <td data-label="Measurement" style={{ padding: '11px 14px' }}>
+                        <strong style={{ fontSize: 13, color: '#1a1611' }}>{label}</strong>
+                      </td>
+                      <td data-label="Value" style={{ padding: '11px 14px' }}>
+                        {editing ? (
+                          <input
+                            className="measurement-input"
+                            inputMode="decimal"
+                            value={draft[key] ?? ''}
+                            onChange={(event) => setDraft((current) => ({ ...current, [key]: event.target.value }))}
+                            placeholder="—"
+                            aria-label={label}
+                          />
+                        ) : (
+                          <span style={{
+                            display: 'inline-block', padding: '3px 10px', borderRadius: 20,
+                            background: value ? '#fff0df' : '#f2efe9',
+                            color: value ? '#c06a00' : '#a0917f', fontSize: 13, fontWeight: 700,
+                          }}>{value || '—'}</span>
+                        )}
+                      </td>
+                      <td data-label="Unit" style={{ padding: '11px 14px', fontSize: 12, color: '#8a7a6a' }}>in</td>
+                      <td data-label="Notes" style={{ padding: '11px 14px', fontSize: 12, color: '#5a4e42' }}>
+                        {value ? '' : 'Not measured'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -263,7 +332,7 @@ export default function MeasurementsPage({ customer, onBack }) {
                 <BodyFigure back />
               </div>
               <ol style={{ margin: 0, padding: '0 0 0 18px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {defaultMeasurements.map(([label], index) => (
+                {MEASUREMENT_FIELDS.map((label, index) => (
                   <li key={label} style={{ fontSize: 11, color: '#5a4e42' }}>
                     <strong style={{ color: '#c97b08', marginRight: 4 }}>{index + 1}</strong>
                     {label.replace(' (Outseam)', '')}
@@ -282,7 +351,7 @@ export default function MeasurementsPage({ customer, onBack }) {
               <dt>Posture</dt><dd>Normal</dd>
               <dt>Body Build</dt><dd>Average</dd>
               <dt>Preferred Fit</dt><dd>{customer.preferredFit || 'Regular Fit'}</dd>
-              <dt>Remarks</dt><dd style={{ fontSize: 12, lineHeight: 1.5 }}>{customer.notes || 'Prefers slim fit for pants. Likes comfortable chest fit.'}</dd>
+              <dt>Remarks</dt><dd style={{ fontSize: 12, lineHeight: 1.5 }}>{customer.notes || 'No remarks recorded.'}</dd>
             </dl>
           </div>
 

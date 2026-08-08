@@ -10060,3 +10060,43 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   .mobile-app-label { display: block; }
   .mobile-app-label em { display: none; }
 }
+
+/* ── MEASUREMENTS ────────────────────────────────────────────────────
+   The chart is filled in by the person taking the measurements; every value
+   starts empty rather than arriving with a stock body already entered.
+   ─────────────────────────────────────────────────────────────────── */
+.measurement-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #ddd5c8;
+  border-radius: 8px;
+  background: #fff;
+  color: #5a4e42;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.measurement-action:hover { background: #faf8f5; }
+.measurement-action.is-primary { border-color: #1a1611; background: #1a1611; color: #fff; }
+.measurement-action.is-primary:hover { background: #2b241c; }
+.measurement-action:disabled { opacity: .6; cursor: not-allowed; }
+
+.measurement-input {
+  width: 92px;
+  padding: 6px 10px;
+  border: 1px solid #ddd5c8;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #c06a00;
+  background: #fff;
+}
+.measurement-input:focus { outline: none; border-color: #c97b08; box-shadow: 0 0 0 3px rgba(201,123,8,.1); }
+
+@media print {
+  .sidebar, .topbar, .mobile-bottom-nav, .measurement-action, .os-page-header button { display: none !important; }
+  .workspace { padding: 0 !important; }
+}

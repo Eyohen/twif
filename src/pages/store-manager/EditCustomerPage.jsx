@@ -66,7 +66,7 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
     ['Date of Birth', 'dateOfBirth', 'date'], ['Preferred Store', 'preferredStore', 'select', ['Lekki', 'Ikeja', 'Surulere']],
     ['Gender', 'gender', 'select', ['Male', 'Female', 'Other']], ['Communication Preference', 'communicationPreference', 'select', ['WhatsApp', 'Phone', 'Email']],
     ['Occupation', 'occupation', 'input'], ['Preferred Contact Time', 'preferredContactTime', 'select', ['Anytime', 'Morning', 'Afternoon', 'Evening']],
-    ['Address', 'address', 'textarea'], ['Special Notes', 'notes', 'textarea'],
+    ['Address', 'address', 'textarea'],
     ['Preferred Contact Method', 'preferredContactMethod', 'select', ['WhatsApp', 'Phone', 'Email']],
   ];
 
@@ -330,29 +330,16 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
               <StickyNote size={14} strokeWidth={1.5} />
               <h3>Notes (Internal)</h3>
             </header>
-            {/* These were four hardcoded lines shown against every customer,
-                regardless of what had actually been recorded. */}
-            {form.notes.trim() ? (
-              <ul style={{ margin: '6px 0', padding: '0 0 0 16px', fontSize: 13, color: '#5a4e42', lineHeight: 1.7 }}>
-                {form.notes.split('\n').filter((note) => note.trim()).map((note, index) => (
-                  <li key={`${note}-${index}`}>{note}</li>
-                ))}
-              </ul>
-            ) : (
-              <p style={{ margin: '6px 0', fontSize: 13, color: '#8a7a6a' }}>No notes recorded for this customer yet.</p>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                notesFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                notesFieldRef.current?.focus({ preventScroll: true });
-              }}
-              style={{
-                width: '100%', padding: '8px 12px', marginTop: 4,
-                border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
-                fontSize: 12, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
-              }}
-            >Edit Notes</button>
+            <label className="os-field" style={{ padding: '4px 0 8px' }}>
+              <textarea
+                ref={notesFieldRef}
+                rows={5}
+                value={form.notes}
+                onChange={(event) => update('notes', event.target.value)}
+                placeholder="One note per line — fit preferences, fabric sensitivities, how they like to be contacted."
+              />
+              <small className="settings-hint">Saved with the rest of the profile.</small>
+            </label>
           </div>
 
         </aside>
