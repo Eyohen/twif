@@ -219,7 +219,6 @@ function OperationsOverview({ role, sentInvoices = [], productionJobs = [] }) {
 function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate }) {
   const [inventory, setInventory] = useState([]);
   const [pendingInvoiceAction, setPendingInvoiceAction] = useState(null);
-  const [invoiceDetail, setInvoiceDetail] = useState(null);
   const [activeKpiDot, setActiveKpiDot] = useState(0);
   const kpiScrollRef = useRef(null);
   const KPI_COUNT = 6;
@@ -278,7 +277,7 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate }) {
             <tbody>{queue.map((invoice) => <tr key={invoice.invoiceNumber}>
               <td><strong>{invoice.invoiceNumber}</strong></td><td>{invoice.customer}</td><td>{invoice.store}</td><td><strong>{money.format(invoice.total)}</strong></td>
               <td><Status>{invoice.orderStatus || 'Unpaid'}</Status></td><td><Status>{invoice.paymentStatus}</Status></td>
-              <td><div className="accounts-row-actions"><button title="Approve" onClick={() => setPendingInvoiceAction({ invoice, status: 'Approved' })}>✓</button><button title="Reject" onClick={() => setPendingInvoiceAction({ invoice, status: 'Rejected' })}>×</button><button title="Flag" onClick={() => setPendingInvoiceAction({ invoice, status: 'Flagged' })}>⚑</button><button title="View details" onClick={() => setInvoiceDetail(invoice)}>•••</button></div></td>
+              <td><div className="accounts-row-actions"><button title="Approve" onClick={() => setPendingInvoiceAction({ invoice, status: 'Approved' })}>✓</button><button title="Reject" onClick={() => setPendingInvoiceAction({ invoice, status: 'Rejected' })}>×</button><button title="Flag" onClick={() => setPendingInvoiceAction({ invoice, status: 'Flagged' })}>⚑</button><button title="Open full invoice" onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>•••</button></div></td>
             </tr>)}</tbody></table>
             {!queue.length ? <div className="accounts-empty">No invoices are awaiting review.</div> : null}
           </div>
@@ -312,45 +311,6 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate }) {
         {!sentInvoices.length ? <div className="accounts-empty">Account activity will appear here.</div> : null}
         <button onClick={() => onNavigate?.('Invoices')}>View full activity →</button>
       </div></section>
-      {invoiceDetail && (
-        <div className="receive-stock-backdrop" onClick={e => e.target === e.currentTarget && setInvoiceDetail(null)}>
-          <div className="accounts-invoice-detail-modal">
-            <button className="modal-close" type="button" onClick={() => setInvoiceDetail(null)}>×</button>
-            <div className="aidm-header">
-              <div>
-                <small>{invoiceDetail.invoiceNumber}</small>
-                <h2>{invoiceDetail.customer}</h2>
-                <p>{invoiceDetail.store || 'Lekki'} Store · Submitted {invoiceDetail.submitted || 'Recently'} by {invoiceDetail.createdBy || 'Staff'}</p>
-              </div>
-              <Status>{invoiceApprovalStatus(invoiceDetail)}</Status>
-            </div>
-            <div className="aidm-body">
-              <section>
-                <h4>Invoice Summary</h4>
-                <dl>
-                  <div><dt>Total Amount</dt><dd><strong>{money.format(invoiceDetail.total)}</strong></dd></div>
-                  <div><dt>Payment Status</dt><dd><Status>{invoiceDetail.paymentStatus}</Status></dd></div>
-                  <div><dt>Amount Paid</dt><dd>{money.format(invoiceDetail.paid || 0)}</dd></div>
-                  <div><dt>Outstanding</dt><dd className={Math.max(0, toNumber(invoiceDetail.total) - toNumber(invoiceDetail.paid)) > 0 ? 'red' : ''}>{money.format(Math.max(0, toNumber(invoiceDetail.total) - toNumber(invoiceDetail.paid)))}</dd></div>
-                </dl>
-              </section>
-              <section>
-                <h4>Status</h4>
-                <dl>
-                  <div><dt>Approval</dt><dd><Status>{invoiceApprovalStatus(invoiceDetail)}</Status></dd></div>
-                  <div><dt>Order Status</dt><dd><Status>{invoiceDetail.orderStatus || 'Pending'}</Status></dd></div>
-                  <div><dt>Payment Evidence</dt><dd>{invoiceDetail.paymentEvidence ? '✓ Uploaded' : 'Not uploaded'}</dd></div>
-                </dl>
-              </section>
-            </div>
-            <div className="aidm-actions">
-              <button type="button" onClick={() => { setPendingInvoiceAction({ invoice: invoiceDetail, status: 'Approved' }); setInvoiceDetail(null); }}>✓ &nbsp; Approve</button>
-              <button type="button" onClick={() => { setPendingInvoiceAction({ invoice: invoiceDetail, status: 'Flagged' }); setInvoiceDetail(null); }}>⚑ &nbsp; Flag</button>
-              <button type="button" className="danger-action" onClick={() => { setPendingInvoiceAction({ invoice: invoiceDetail, status: 'Rejected' }); setInvoiceDetail(null); }}>× &nbsp; Reject</button>
-            </div>
-          </div>
-        </div>
-      )}
       {pendingInvoiceAction && <InvoiceActionConfirmModal
         invoice={pendingInvoiceAction.invoice}
         status={pendingInvoiceAction.status}

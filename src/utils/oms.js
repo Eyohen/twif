@@ -38,6 +38,45 @@ export const isPartiallyPaid = (invoice) => invoice?.paymentStatus === 'Partial 
 
 const PAYMENT_STATUS_KEYS = { 'Fully Paid': 'fully_paid', Paid: 'fully_paid', Unpaid: 'unpaid', 'Not Paid': 'unpaid', 'Awaiting Payment': 'unpaid' };
 
+// Invoice dates arrive either as a full timestamp or as a plain calendar date.
+// Formatting the second kind with a time prints a midnight that nobody entered
+// — and, once the timezone is applied, one that reads as 01:00.
+export const formatMoment = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  const dateOnly = typeof value === 'string' && !/\d:\d/.test(value);
+  return date.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    ...(dateOnly ? {} : { hour: '2-digit', minute: '2-digit' }),
+  });
+};
+
+// What the invoice is actually payable at, once its discounts are applied.
+export const invoicePayable = (invoice) => Math.max(
+  0,
+  toNumber(invoice?.total) - toNumber(invoice?.eliteDiscountAmount) - toNumber(invoice?.storeCreditApplied),
+);
+
+// An invoice carries a payment status but no figure for what was handed over,
+// so a part payment's amount is genuinely unknown — null says so rather than
+// letting the screens fill the gap with a number nobody recorded.
+export const amountReceived = (invoice) => {
+  if (invoice?.paid !== undefined && invoice?.paid !== null && invoice.paid !== '') return toNumber(invoice.paid);
+  if (isFullyPaid(invoice)) return invoicePayable(invoice);
+  if (isAwaitingPayment(invoice)) return 0;
+  return null;
+};
+
+// Outstanding is only certain when the received amount is; a part-paid invoice
+// owes somewhere between everything and nothing.
+export const amountOutstanding = (invoice) => {
+  const received = amountReceived(invoice);
+  return received === null ? null : Math.max(0, invoicePayable(invoice) - received);
+};
+
 // Rebuilds the request body the invoice HTML endpoint expects from a row in the
 // sent-invoice list, so the document can be re-rendered away from the create screen.
 export const invoiceDocumentPayload = (invoice) => ({

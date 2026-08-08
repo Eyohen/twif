@@ -1,30 +1,20 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Clock, CheckCircle, Flag, DollarSign } from 'lucide-react';
 import { money, invoiceApprovalStatus } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 import ReviewInvoicePage from './ReviewInvoicePage';
 
-const demoInvoices = [
-  ['INV30659', 'Jimmy Aki', 'Lekki', 43000, 'Partial Paid', 'Pending Accounts', 'Today, 10:32 AM', 'Bola'],
-  ['INV65761', 'Henry Eyo', 'Lekki', 15000, 'Fully Paid', 'Approved', 'Today, 9:15 AM', 'Bola'],
-  ['INV74120', 'Olive Lawrence', 'Ikoyi', 82000, 'Unpaid', 'Awaiting Payment', 'Yesterday, 4:20 PM', 'Grace'],
-  ['INV35943', 'Bola Adebayo', 'VI', 64000, 'Partial Paid', 'Flagged', 'Yesterday, 2:10 PM', 'Tunde'],
-  ['INV12890', 'Kelechi Okafor', 'Lekki', 25000, 'Unpaid', 'Awaiting Payment', '21 Jul 2026, 6:30 PM', 'Bola'],
-  ['INV99320', 'David Martins', 'Ikeja', 103000, 'Fully Paid', 'Approved', '21 Jul 2026, 11:05 AM', 'Grace'],
-  ['INV55678', 'Aisha Bello', 'Lekki', 37400, 'Partial Paid', 'Pending Accounts', '20 Jul 2026, 3:45 PM', 'Bola'],
-  ['INV44321', 'Tomi Ajayi', 'Ikoyi', 18000, 'Unpaid', 'Awaiting Payment', '20 Jul 2026, 9:00 AM', 'Tunde'],
-].map(([invoiceNumber, customer, store, total, paymentStatus, approvalStatus, submitted, createdBy]) => ({
-  invoiceNumber, customer, store, total, paymentStatus, accountApprovalStatus: approvalStatus,
-  submitted, createdBy, paid: paymentStatus === 'Partial Paid' ? Math.round(total * .58) : paymentStatus === 'Fully Paid' ? total : 0,
-}));
-
 const KPI_COUNT = 4;
+const PAGE_SIZE = 8;
 
 export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoice }) {
-  const invoices = sentInvoices.length >= 5 ? sentInvoices : demoInvoices;
+  const invoices = sentInvoices;
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('All Invoices');
+  const [currentPage, setCurrentPage] = useState(1);
   const [selected, setSelected] = useState(invoices[0] || null);
   const [reviewInvoice, setReviewInvoice] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
@@ -45,10 +35,32 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
     const matchesTab = tab === 'All Invoices' || status === tab || invoice.paymentStatus === tab;
     return matchesSearch && matchesTab;
   }), [invoices, search, tab]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = Math.min(currentPage, pageCount);
+  const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const awaiting = invoices.filter((invoice) => statusOf(invoice) === 'Awaiting Review');
   const approved = invoices.filter((invoice) => statusOf(invoice) === 'Approved');
   const flagged = invoices.filter((invoice) => statusOf(invoice) === 'Flagged');
   const outstanding = invoices.reduce((sum, invoice) => sum + Math.max(0, Number(invoice.total || 0) - Number(invoice.paid || 0)), 0);
+
+  // The overview queue links straight to one invoice's review page, so the
+  // invoice number arrives as `?review=`. Invoices load after the first render,
+  // so this waits for the list rather than reading it once.
+  const requestedReview = searchParams.get('review');
+  useEffect(() => {
+    if (!requestedReview) return;
+    const match = invoices.find((invoice) => invoice.invoiceNumber === requestedReview);
+    if (match) setReviewInvoice(match);
+  }, [invoices, requestedReview]);
+
+  const closeReview = () => {
+    setReviewInvoice(null);
+    if (!requestedReview) return;
+    // Left in place, the parameter would reopen the page the moment it closed.
+    const next = new URLSearchParams(searchParams);
+    next.delete('review');
+    setSearchParams(next, { replace: true });
+  };
 
   const review = (invoice, status) => {
     onApproveInvoice?.(invoice.invoiceNumber, status);
@@ -56,7 +68,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
   };
 
   if (reviewInvoice) {
-    return <ReviewInvoicePage invoice={reviewInvoice} onBack={() => setReviewInvoice(null)} onReview={(invoice, status) => {
+    return <ReviewInvoicePage invoice={reviewInvoice} onBack={closeReview} onReview={(invoice, status) => {
       review(invoice, status);
       setReviewInvoice({ ...invoice, accountApprovalStatus: status });
     }} />;
@@ -95,7 +107,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
 
       <section className="accounts-invoice-register">
         <header>
-          <label>⌕<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search invoice or customer..." /></label>
+          <label>⌕<input value={search} onChange={(event) => { setSearch(event.target.value); setCurrentPage(1); }} placeholder="Search invoice or customer..." /></label>
           <select><option>Payment Status</option></select>
           <select><option>Store</option></select>
           <select><option>▣ &nbsp; All Dates</option></select>
@@ -112,7 +124,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
             ['Flagged', flagged.length],
             ['Rejected', invoices.filter((i) => statusOf(i) === 'Rejected').length],
           ].map(([label, count]) => (
-            <button className={tab === label ? 'active' : ''} onClick={() => setTab(label)} key={label}>
+            <button className={tab === label ? 'active' : ''} onClick={() => { setTab(label); setCurrentPage(1); }} key={label}>
               {label}<b>{count}</b>
             </button>
           ))}
@@ -132,7 +144,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
               </tr>
             </thead>
             <tbody>
-              {filtered.slice(0, 8).map((invoice) => {
+              {visible.map((invoice) => {
                 const status = statusOf(invoice);
                 return (
                   <tr
@@ -142,7 +154,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
                     <td><strong>{invoice.invoiceNumber}</strong></td>
                     <td>
                       <strong>{invoice.customer}</strong>
-                      {['Jimmy Aki', 'Henry Eyo'].includes(invoice.customer) && <small>ELITE</small>}
+                      {Number(invoice.eliteDiscountAmount || 0) > 0 && <small>ELITE</small>}
                     </td>
                     <td>{invoice.store || 'Lekki'}</td>
                     <td><strong>{money.format(invoice.total)}</strong></td>
@@ -166,7 +178,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
         </div>
 
         <div className="owner-mobile-invoice-list">
-          {filtered.slice(0, 8).map((invoice) => {
+          {visible.map((invoice) => {
             const status = statusOf(invoice);
             return (
               <article key={invoice.invoiceNumber}>
@@ -197,15 +209,15 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
         </div>
 
         <footer>
-          <span>Showing {filtered.length ? 1 : 0} to {Math.min(8, filtered.length)} of {invoices.length} invoices</span>
+          <span>
+            Showing {filtered.length ? (page - 1) * PAGE_SIZE + 1 : 0} to {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} invoices
+          </span>
           <div>
-            <button>‹</button>
-            <button className="active">1</button>
-            <button>2</button>
-            <button>3</button>
-            <button>…</button>
-            <button>6</button>
-            <button>›</button>
+            <button type="button" disabled={page <= 1} onClick={() => setCurrentPage(page - 1)}>‹</button>
+            {Array.from({ length: pageCount }, (_, index) => index + 1).map((number) => (
+              <button type="button" key={number} className={number === page ? 'active' : ''} onClick={() => setCurrentPage(number)}>{number}</button>
+            ))}
+            <button type="button" disabled={page >= pageCount} onClick={() => setCurrentPage(page + 1)}>›</button>
           </div>
         </footer>
       </section>

@@ -1,34 +1,49 @@
 import { useMemo, useRef, useState } from 'react';
-import { Banknote, CheckCircle, Layers, CreditCard, Building2, Search, Download, MoreHorizontal } from 'lucide-react';
-import { money } from '../../utils/oms';
+import { Banknote, CheckCircle, Layers, CreditCard, Building2, Search, Download, Eye } from 'lucide-react';
+import { money, amountReceived, invoicePayable } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
-
-const demoPayments = [
-  ['22 Jul 2026', '10:28 AM', 'INV30659', 'Jimmy Aki', 'Lekki', 25000, 43000, 'Bank Transfer', 'Partial Paid', 'GTBank – 0123045678'],
-  ['22 Jul 2026', '09:15 AM', 'INV65761', 'Henry Eyo', 'Lekki', 15000, 15000, 'Bank Transfer', 'Paid', 'GTB – 0234567890'],
-  ['21 Jul 2026', '06:30 PM', 'INV74120', 'Olive Lawrence', 'Ikoyi', 0, 82000, 'Card', 'Unpaid', '—'],
-  ['21 Jul 2026', '02:10 PM', 'INV35943', 'Bola Adebayo', 'VI', 30000, 64000, 'Cash', 'Partial Paid', '—'],
-  ['21 Jul 2026', '02:16 PM', 'INV99320', 'David Martins', 'Ikeja', 103000, 103000, 'Bank Transfer', 'Paid', 'Access – 0987654321'],
-  ['20 Jul 2026', '03:45 PM', 'INV55678', 'Aisha Bello', 'Lekki', 18700, 37400, 'Cash', 'Partial Paid', '—'],
-  ['20 Jul 2026', '09:00 AM', 'INV44321', 'Tomi Ajayi', 'Ikoyi', 0, 18000, 'Bank Transfer', 'Unpaid', '—'],
-  ['19 Jul 2026', '04:20 PM', 'INV22110', 'Kelechi Okafor', 'Lekki', 25000, 25000, 'Cash', 'Paid', '—'],
-].map(([date, time, invoiceNumber, customer, store, received, total, method, status, reference]) => ({ date, time, invoiceNumber, customer, store, received, total, method, status, reference }));
+import PaymentDetailPage from './PaymentDetailPage';
 
 const KPI_COUNT = 5;
+const PAGE_SIZE = 8;
+const METHODS = ['Bank Transfer', 'Cash', 'Card', 'Check'];
+
+// A part payment's amount is never recorded, so it counts as nothing received
+// rather than as a guess — the row itself says "not recorded".
+const totalReceived = (rows) => rows.reduce((sum, row) => sum + (row.received || 0), 0);
+
+const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
 export default function AccountsPaymentsPage({ sentInvoices = [] }) {
-  const generated = sentInvoices.map((invoice) => ({
-    date: invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '22 Jul 2026',
-    time: '10:28 AM', invoiceNumber: invoice.invoiceNumber, customer: invoice.customer, store: invoice.store || 'Lekki',
-    received: Number(invoice.paid || (invoice.paymentStatus === 'Fully Paid' ? invoice.total : 0)), total: Number(invoice.total || 0),
-    method: invoice.paymentMethod || 'Bank Transfer', status: invoice.paymentStatus === 'Fully Paid' ? 'Paid' : invoice.paymentStatus || 'Unpaid',
-    reference: invoice.paymentReference || '—',
-  }));
-  const payments = generated.length >= 8 ? generated : demoPayments;
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('All Payments');
+  const [methodFilter, setMethodFilter] = useState('Payment Method');
+  const [statusFilter, setStatusFilter] = useState('Payment Status');
+  const [storeFilter, setStoreFilter] = useState('Store');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [openPayment, setOpenPayment] = useState(null);
   const [activeKpiDot, setActiveKpiDot] = useState(0);
   const kpiScrollRef = useRef(null);
+
+  const payments = useMemo(() => sentInvoices.map((invoice) => {
+    const when = invoice.invoiceDate || invoice.createdAt;
+    const at = when ? new Date(when) : null;
+    return {
+      invoice,
+      at: at && !Number.isNaN(at.getTime()) ? at : null,
+      date: at && !Number.isNaN(at.getTime()) ? at.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+      invoiceNumber: invoice.invoiceNumber,
+      customer: invoice.customer,
+      store: invoice.store || '—',
+      // null means the system holds no figure for this invoice; it is shown as
+      // "Not recorded" instead of being counted as money in the bank.
+      received: amountReceived(invoice),
+      total: invoicePayable(invoice),
+      method: invoice.paymentMethod || '—',
+      status: invoice.paymentStatus === 'Fully Paid' ? 'Paid' : invoice.paymentStatus || 'Unpaid',
+      elite: Number(invoice.eliteDiscountAmount || 0) > 0,
+    };
+  }), [sentInvoices]);
 
   const handleKpiScroll = () => {
     if (!kpiScrollRef.current) return;
@@ -37,26 +52,77 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
     setActiveKpiDot(Math.round(scrollLeft / cardWidth));
   };
 
+  const stores = useMemo(() => [...new Set(payments.map((payment) => payment.store).filter((store) => store !== '—'))], [payments]);
+
+  const today = startOfDay(new Date());
+  const weekStart = today - 6 * 86400000;
+  const inTab = (payment) => {
+    if (tab === 'All Payments') return true;
+    if (tab === 'Today') return payment.at ? startOfDay(payment.at) === today : false;
+    if (tab === 'This Week') return payment.at ? startOfDay(payment.at) >= weekStart : false;
+    if (tab === 'Full Payments') return payment.status === 'Paid';
+    if (tab === 'Partial Payments') return payment.status === 'Partial Paid';
+    if (tab === 'Unpaid') return payment.status === 'Unpaid';
+    return true;
+  };
+
   const filtered = useMemo(() => payments.filter((payment) => {
-    const queryMatch = `${payment.customer} ${payment.invoiceNumber} ${payment.reference}`.toLowerCase().includes(search.toLowerCase());
-    const tabMatch = tab === 'All Payments' || (tab === 'Full Payments' && payment.status === 'Paid') || (tab === 'Partial Payments' && payment.status === 'Partial Paid') || (tab === 'Unpaid' && payment.status === 'Unpaid') || ['Today', 'This Week'].includes(tab);
-    return queryMatch && tabMatch;
-  }), [payments, search, tab]);
+    const queryMatch = `${payment.customer} ${payment.invoiceNumber}`.toLowerCase().includes(search.toLowerCase());
+    const methodMatch = methodFilter === 'Payment Method' || payment.method === methodFilter;
+    const statusMatch = statusFilter === 'Payment Status' || payment.status === statusFilter;
+    const storeMatch = storeFilter === 'Store' || payment.store === storeFilter;
+    return queryMatch && methodMatch && statusMatch && storeMatch && inTab(payment);
+  }), [payments, search, tab, methodFilter, statusFilter, storeFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = Math.min(currentPage, pageCount);
+  const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const paid = payments.filter((item) => item.status === 'Paid');
   const partial = payments.filter((item) => item.status === 'Partial Paid');
   const unpaid = payments.filter((item) => item.status === 'Unpaid');
-  const cash = payments.filter((item) => item.method === 'Cash');
-  const bank = payments.filter((item) => item.method === 'Bank Transfer');
-  const received = payments.reduce((sum, item) => sum + item.received, 0);
-  const outstanding = payments.reduce((sum, item) => sum + Math.max(0, item.total - item.received), 0);
+  const todayCount = payments.filter((payment) => payment.at && startOfDay(payment.at) === today).length;
+  const weekCount = payments.filter((payment) => payment.at && startOfDay(payment.at) >= weekStart).length;
+  const byMethod = METHODS.map((name) => payments.filter((item) => item.method === name));
+  const bank = byMethod[0];
+  const received = totalReceived(payments);
+  const outstanding = payments.reduce((sum, item) => sum + Math.max(0, item.total - (item.received || 0)), 0);
+
+  const exportCsv = () => {
+    const header = ['Date', 'Invoice', 'Customer', 'Store', 'Amount', 'Received', 'Balance', 'Method', 'Status'];
+    const rows = filtered.map((payment) => [
+      payment.date, payment.invoiceNumber, payment.customer, payment.store, payment.total,
+      payment.received === null ? 'Not recorded' : payment.received,
+      payment.received === null ? 'Not recorded' : Math.max(0, payment.total - payment.received),
+      payment.method, payment.status,
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `twif-payments-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const kpis = [
-    { icon: <Banknote size={18} />, label: 'Total Received', value: money.format(received), detail: `${payments.length} payments`, tone: 'purple' },
+    { icon: <Banknote size={18} />, label: 'Total Received', value: money.format(received), detail: `${payments.length} invoice${payments.length === 1 ? '' : 's'}`, tone: 'purple' },
     { icon: <CheckCircle size={18} />, label: 'Fully Paid', value: paid.length, detail: `${payments.length ? Math.round(paid.length / payments.length * 100) : 0}% of total`, tone: 'green' },
-    { icon: <Layers size={18} />, label: 'Partial Paid', value: partial.length, detail: money.format(partial.reduce((sum, item) => sum + item.received, 0)), tone: 'orange' },
+    { icon: <Layers size={18} />, label: 'Partial Paid', value: partial.length, detail: 'Amounts not recorded', tone: 'orange' },
     { icon: <CreditCard size={18} />, label: 'Outstanding', value: money.format(outstanding), detail: `${unpaid.length} unpaid`, tone: 'red' },
-    { icon: <Building2 size={18} />, label: 'Bank Transfers', value: bank.length, detail: money.format(bank.reduce((sum, item) => sum + item.received, 0)), tone: 'blue' },
+    { icon: <Building2 size={18} />, label: 'Bank Transfers', value: bank.length, detail: money.format(totalReceived(bank)), tone: 'blue' },
   ];
+
+  const selectProps = {
+    className: 'os-field',
+    style: { padding: '9px 32px 9px 12px', border: '1px solid #ddd5c8', borderRadius: 8, fontSize: 13, color: '#5a4e42', background: '#fff', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23998877' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', cursor: 'pointer' },
+  };
+
+  if (openPayment) {
+    return <PaymentDetailPage invoice={openPayment} onBack={() => setOpenPayment(null)} />;
+  }
 
   return (
     <div className="os-page">
@@ -69,7 +135,13 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
             <p>Track and manage all customer payment records</p>
           </div>
         </div>
-        <button style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', background: '#1a1611', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={!filtered.length}
+          title={filtered.length ? 'Download these payments as a CSV' : 'Nothing to export'}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', background: filtered.length ? '#1a1611' : '#ddd5c8', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: filtered.length ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+        >
           <Download size={14} /> Export
         </button>
       </div>
@@ -102,44 +174,41 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
                   <Search size={14} style={{ color: '#b0a090', flexShrink: 0 }} />
                   <input
                     value={search}
-                    onChange={(event) => setSearch(event.target.value)}
+                    onChange={(event) => { setSearch(event.target.value); setCurrentPage(1); }}
                     placeholder="Search by customer, invoice or reference..."
                     style={{ border: 'none', outline: 'none', fontSize: 13, color: '#1a1611', background: 'transparent', flex: 1 }}
                   />
                 </label>
-                <select className="os-field" style={{ padding: '9px 32px 9px 12px', border: '1px solid #ddd5c8', borderRadius: 8, fontSize: 13, color: '#5a4e42', background: '#fff', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23998877' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', cursor: 'pointer' }}>
+                <select {...selectProps} value={methodFilter} onChange={(event) => { setMethodFilter(event.target.value); setCurrentPage(1); }}>
                   <option>Payment Method</option>
-                  <option>Bank Transfer</option>
-                  <option>Cash</option>
-                  <option>Card</option>
+                  {METHODS.map((name) => <option key={name}>{name}</option>)}
                 </select>
-                <select className="os-field" style={{ padding: '9px 32px 9px 12px', border: '1px solid #ddd5c8', borderRadius: 8, fontSize: 13, color: '#5a4e42', background: '#fff', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23998877' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', cursor: 'pointer' }}>
+                <select {...selectProps} value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setCurrentPage(1); }}>
                   <option>Payment Status</option>
                   <option>Paid</option>
                   <option>Partial Paid</option>
                   <option>Unpaid</option>
                 </select>
-                <select className="os-field" style={{ padding: '9px 32px 9px 12px', border: '1px solid #ddd5c8', borderRadius: 8, fontSize: 13, color: '#5a4e42', background: '#fff', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23998877' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', cursor: 'pointer' }}>
+                {/* Stores come from the invoices on hand, so the list can never
+                    offer a store that has no payments behind it. */}
+                <select {...selectProps} value={storeFilter} onChange={(event) => { setStoreFilter(event.target.value); setCurrentPage(1); }}>
                   <option>Store</option>
-                  <option>Lekki</option>
-                  <option>Ikoyi</option>
-                  <option>VI</option>
-                  <option>Ikeja</option>
+                  {stores.map((name) => <option key={name}>{name}</option>)}
                 </select>
               </div>
               {/* Tab Nav */}
               <nav style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {[
                   ['All Payments', payments.length],
-                  ['Today', 6],
-                  ['This Week', 18],
+                  ['Today', todayCount],
+                  ['This Week', weekCount],
                   ['Full Payments', paid.length],
                   ['Partial Payments', partial.length],
                   ['Unpaid', unpaid.length],
                 ].map(([label, count]) => (
                   <button
                     key={label}
-                    onClick={() => setTab(label)}
+                    onClick={() => { setTab(label); setCurrentPage(1); }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
                       borderRadius: 20, border: '1px solid', fontSize: 13, fontWeight: 500,
@@ -167,7 +236,7 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  {['Date', 'Invoice', 'Customer', 'Amount', 'Received', 'Balance', 'Method', 'Status', 'Reference', ''].map((col) => (
+                  {['Date', 'Invoice', 'Customer', 'Amount', 'Received', 'Balance', 'Method', 'Status', 'Store', ''].map((col) => (
                     <th key={col} style={{ textTransform: 'uppercase', fontSize: 10, color: '#8a7a6a', letterSpacing: '0.08em', padding: '11px 14px', background: '#faf7f3', fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '1px solid #eee5da' }}>{col}</th>
                   ))}
                 </tr>
@@ -180,18 +249,17 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
                       No payments found
                     </td>
                   </tr>
-                ) : filtered.slice(0, 8).map((payment) => (
+                ) : visible.map((payment) => (
                   <tr key={payment.invoiceNumber} style={{ cursor: 'default' }} onMouseEnter={(e) => e.currentTarget.style.background = '#faf7f3'} onMouseLeave={(e) => e.currentTarget.style.background = ''}>
                     <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5', whiteSpace: 'nowrap' }}>
                       <div style={{ fontWeight: 500, color: '#1a1611' }}>{payment.date}</div>
-                      <div style={{ fontSize: 11, color: '#8a7a6a', marginTop: 2 }}>{payment.time}</div>
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5' }}>
                       <strong style={{ fontFamily: 'monospace', fontSize: 12, color: '#5a4e42' }}>{payment.invoiceNumber}</strong>
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5' }}>
                       <div style={{ fontWeight: 600, color: '#1a1611' }}>{payment.customer}</div>
-                      {['Jimmy Aki', 'Henry Eyo', 'Bola Adebayo'].includes(payment.customer) && (
+                      {payment.elite && (
                         <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', color: '#c97b08', background: '#fff8ee', padding: '1px 5px', borderRadius: 4, border: '1px solid #f0ddb0' }}>ELITE</span>
                       )}
                     </td>
@@ -199,11 +267,13 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
                       <strong style={{ color: '#1a1611' }}>{money.format(payment.total)}</strong>
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5' }}>
-                      <strong style={{ color: '#2a7d4f' }}>{money.format(payment.received)}</strong>
+                      <strong style={{ color: payment.received === null ? '#8a7a6a' : '#2a7d4f', fontWeight: payment.received === null ? 500 : 700, fontSize: payment.received === null ? 12 : 13 }}>
+                        {payment.received === null ? 'Not recorded' : money.format(payment.received)}
+                      </strong>
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5' }}>
-                      <strong style={{ color: payment.total - payment.received > 0 ? '#8a3520' : '#2a7d4f' }}>
-                        {money.format(Math.max(0, payment.total - payment.received))}
+                      <strong style={{ color: payment.received === null ? '#8a7a6a' : payment.total - payment.received > 0 ? '#8a3520' : '#2a7d4f', fontWeight: payment.received === null ? 500 : 700, fontSize: payment.received === null ? 12 : 13 }}>
+                        {payment.received === null ? 'Not recorded' : money.format(Math.max(0, payment.total - payment.received))}
                       </strong>
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5' }}>
@@ -215,10 +285,14 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
                     <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5' }}>
                       <Status>{payment.status}</Status>
                     </td>
-                    <td style={{ padding: '12px 14px', fontSize: 12, borderBottom: '1px solid #f3ede5', color: '#8a7a6a' }}>{payment.reference}</td>
+                    <td style={{ padding: '12px 14px', fontSize: 12, borderBottom: '1px solid #f3ede5', color: '#8a7a6a' }}>{payment.store}</td>
                     <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5' }}>
-                      <button style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, border: '1px solid #ddd5c8', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#8a7a6a' }}>
-                        <MoreHorizontal size={14} />
+                      <button
+                        type="button"
+                        onClick={() => setOpenPayment(payment.invoice)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', border: '1px solid #ddd5c8', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#5a4e42', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                      >
+                        <Eye size={13} /> View
                       </button>
                     </td>
                   </tr>
@@ -227,11 +301,25 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
             </table>
             {filtered.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid #f3ede5', background: '#faf7f3' }}>
-                <span style={{ fontSize: 12, color: '#8a7a6a' }}>Showing {filtered.length ? 1 : 0}–{Math.min(8, filtered.length)} of {payments.length} payments</span>
+                <span style={{ fontSize: 12, color: '#8a7a6a' }}>
+                  Showing {filtered.length ? (page - 1) * PAGE_SIZE + 1 : 0}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} payments
+                </span>
                 <div style={{ display: 'flex', gap: 4 }}>
-                  {['‹', '1', '2', '3', '›'].map((label, i) => (
-                    <button key={i} style={{ minWidth: 30, height: 30, border: '1px solid #ddd5c8', borderRadius: 6, background: label === '1' ? '#1a1611' : '#fff', color: label === '1' ? '#fff' : '#5a4e42', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{label}</button>
-                  ))}
+                  {['‹', ...Array.from({ length: pageCount }, (_, index) => String(index + 1)), '›'].map((label) => {
+                    const isArrow = label === '‹' || label === '›';
+                    const target = label === '‹' ? page - 1 : label === '›' ? page + 1 : Number(label);
+                    const disabled = target < 1 || target > pageCount;
+                    const active = !isArrow && target === page;
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => setCurrentPage(target)}
+                        style={{ minWidth: 30, height: 30, border: '1px solid #ddd5c8', borderRadius: 6, background: active ? '#1a1611' : '#fff', color: active ? '#fff' : disabled ? '#c7bcae' : '#5a4e42', fontSize: 12, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                      >{label}</button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -239,7 +327,7 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
 
           {/* Mobile Card List */}
           <div className="payments-mobile-cards" style={{ display: 'none', flexDirection: 'column', gap: 10 }}>
-            {filtered.slice(0, 8).map((payment) => (
+            {visible.map((payment) => (
               <div key={payment.invoiceNumber} className="os-card" style={{ padding: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #f3ede5' }}>
                   <div>
@@ -251,15 +339,31 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
                   <div style={{ padding: '10px 16px', borderRight: '1px solid #f3ede5' }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Received</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#2a7d4f', marginTop: 3 }}>{money.format(payment.received)}</div>
+                    <div style={{ fontSize: payment.received === null ? 12 : 14, fontWeight: 700, color: payment.received === null ? '#8a7a6a' : '#2a7d4f', marginTop: 3 }}>
+                      {payment.received === null ? 'Not recorded' : money.format(payment.received)}
+                    </div>
                   </div>
                   <div style={{ padding: '10px 16px' }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Balance</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: payment.total - payment.received > 0 ? '#8a3520' : '#2a7d4f', marginTop: 3 }}>{money.format(Math.max(0, payment.total - payment.received))}</div>
+                    <div style={{ fontSize: payment.received === null ? 12 : 14, fontWeight: 700, color: payment.received === null ? '#8a7a6a' : payment.total - payment.received > 0 ? '#8a3520' : '#2a7d4f', marginTop: 3 }}>
+                      {payment.received === null ? 'Not recorded' : money.format(Math.max(0, payment.total - payment.received))}
+                    </div>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setOpenPayment(payment.invoice)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', padding: '10px 16px', borderTop: '1px solid #f3ede5', border: 'none', borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: '#f3ede5', background: '#faf7f3', color: '#5a4e42', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', borderRadius: '0 0 12px 12px' }}
+                >
+                  <Eye size={14} /> View payment
+                </button>
               </div>
             ))}
+            {!filtered.length ? (
+              <div className="os-card" style={{ padding: '28px 16px', textAlign: 'center', color: '#8a7a6a', fontSize: 13 }}>
+                No payments found
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -273,13 +377,11 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
             </header>
             <dl>
               <dt>Paid in Full</dt>
-              <dd style={{ color: '#2a7d4f', fontWeight: 700 }}>{paid.length} · {money.format(paid.reduce((sum, item) => sum + item.received, 0))}</dd>
+              <dd style={{ color: '#2a7d4f', fontWeight: 700 }}>{paid.length} · {money.format(totalReceived(paid))}</dd>
               <dt>Partial Paid</dt>
-              <dd style={{ color: '#c97b08', fontWeight: 700 }}>{partial.length} · {money.format(partial.reduce((sum, item) => sum + item.received, 0))}</dd>
+              <dd style={{ color: '#c97b08', fontWeight: 700 }}>{partial.length} · amounts not recorded</dd>
               <dt>Unpaid</dt>
               <dd style={{ color: '#8a3520', fontWeight: 700 }}>{unpaid.length} · {money.format(unpaid.reduce((sum, item) => sum + item.total, 0))}</dd>
-              <dt>Overdue</dt>
-              <dd style={{ color: '#8a3520', fontWeight: 700 }}>2 · ₦94,000</dd>
               <dt>Total Received</dt>
               <dd style={{ color: '#1a1611', fontWeight: 800, fontSize: 14 }}>{money.format(received)}</dd>
             </dl>
@@ -295,11 +397,14 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
               </div>
             </div>
             <div className="os-card-body" style={{ gap: 12 }}>
-              {[
-                ['Bank Transfer', bank.length, bank.reduce((sum, item) => sum + item.received, 0), 82],
-                ['Cash', cash.length, cash.reduce((sum, item) => sum + item.received, 0), 28],
-                ['Card', 0, 0, 0],
-              ].map(([label, count, amount, barWidth]) => (
+              {/* The bars used to be fixed widths that had nothing to do with
+                  the payments below them. */}
+              {METHODS.map((name, index) => [
+                name,
+                byMethod[index].length,
+                totalReceived(byMethod[index]),
+                payments.length ? Math.round((byMethod[index].length / payments.length) * 100) : 0,
+              ]).map(([label, count, amount, barWidth]) => (
                 <div key={label}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: '#5a4e42' }}>{label}</span>
@@ -316,34 +421,6 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="os-card">
-            <div className="os-card-head">
-              <div>
-                <strong>Quick Actions</strong>
-              </div>
-            </div>
-            <div className="os-card-body" style={{ gap: 8, padding: '12px' }}>
-              {[
-                [<Banknote size={14} />, 'Record Manual Payment', 'Add payment not from store'],
-                [<Layers size={14} />, 'Match Payment to Invoice', 'Link unallocated payments'],
-                [<Building2 size={14} />, 'Generate Payment Report', 'Download payments summary'],
-                [<CheckCircle size={14} />, 'Bulk Upload Payments', 'Upload payment records (CSV)'],
-              ].map(([icon, title, detail]) => (
-                <button key={title} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: '#faf7f3', border: '1px solid #eee5da', borderRadius: 8, cursor: 'pointer', width: '100%', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.15s' }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = '#f3ede5'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = '#faf7f3'}
-                >
-                  <span style={{ color: '#c97b08', flexShrink: 0 }}>{icon}</span>
-                  <span style={{ flex: 1 }}>
-                    <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#1a1611' }}>{title}</span>
-                    <span style={{ display: 'block', fontSize: 11, color: '#8a7a6a', marginTop: 1 }}>{detail}</span>
-                  </span>
-                  <span style={{ fontSize: 14, color: '#b0a090' }}>›</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </aside>
       </div>
 

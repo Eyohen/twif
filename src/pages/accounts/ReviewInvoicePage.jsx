@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle, Flag, XCircle, HelpCircle, MoreHorizontal, Download, Maximize2, User, Calendar, MapPin, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
-import { money, invoiceApprovalStatus } from '../../utils/oms';
+import { ArrowLeft, CheckCircle, Flag, XCircle, HelpCircle, Download, Maximize2, User, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
+import { money, invoiceApprovalStatus, amountReceived, invoicePayable, formatMoment } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 
@@ -15,9 +15,16 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
   const total = Number(invoice.total || 0);
   const discount = Number(invoice.eliteDiscountAmount || 0);
   const credit = Number(invoice.storeCreditApplied || 0);
-  const payable = Math.max(0, total - discount - credit);
-  const paid = Number(invoice.paid ?? (invoice.paymentStatus === 'Fully Paid' ? payable : 0));
-  const balance = Math.max(0, payable - paid);
+  const payable = invoicePayable(invoice);
+  // A part payment's amount is never recorded anywhere, so it is shown as
+  // unrecorded rather than guessed at.
+  const paid = amountReceived(invoice);
+  const balance = paid === null ? null : Math.max(0, payable - paid);
+  const asMoney = (value) => (value === null ? 'Not recorded' : money.format(value));
+  const submittedOn = formatMoment(invoice.createdAt);
+  const daysSince = invoice.createdAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(invoice.createdAt).getTime()) / 86400000))
+    : null;
   const status = invoiceApprovalStatus(invoice) === 'Pending Accounts' ? 'Awaiting Review' : invoiceApprovalStatus(invoice);
   const evidence = invoice.paymentEvidence || null;
   const storeNote = invoice.itemNote || (Array.isArray(invoice.notes) ? invoice.notes[0] : invoice.notes) || '';
@@ -55,9 +62,6 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
           </div>
           <p style={{ margin: 0, fontSize: 13, color: '#8a7a6a' }}>Review payment evidence and invoice details before approving.</p>
         </div>
-        <button type="button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#5a4e42', flexShrink: 0 }}>
-          <MoreHorizontal size={16} />
-        </button>
       </div>
 
       {/* Action Bar */}
@@ -110,7 +114,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {[
                   ['Invoice Number', invoice.invoiceNumber],
-                  ['Invoice Date', invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'],
+                  ['Invoice Date', formatMoment(invoice.invoiceDate || invoice.createdAt)],
                   ['Store', invoice.store || 'Lekki'],
                 ].map(([label, val]) => (
                   <div key={label}>
@@ -134,7 +138,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               <div className="os-grid-2" style={{ gap: 10 }}>
                 {[
                   ['Phone', invoice.phone || '—'],
-                  ['Email', invoice.customerEmail || 'jimmy.aki@gmail.com'],
+                  ['Email', invoice.email || '—'],
                 ].map(([label, val]) => (
                   <div key={label}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
@@ -170,7 +174,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               {/* Totals */}
               <div style={{ background: '#faf7f3', borderRadius: 8, padding: '12px 14px' }}>
                 {[
-                  ['Subtotal', money.format(total), false],
+                  ['Subtotal', money.format(Number(invoice.subtotal || total)), false],
                   // Discount and credit lines only appear when they apply.
                   ...(discount ? [['Elite Discount', `− ${money.format(discount)}`, true]] : []),
                   ...(credit ? [['Store Credit Used', `− ${money.format(credit)}`, true]] : []),
@@ -202,11 +206,10 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               <div className="os-grid-2" style={{ gap: 10 }}>
                 {[
                   ['Payment Status', <Status>{invoice.paymentStatus}</Status>],
-                  ['Amount Received', <span style={{ fontWeight: 700, color: '#2a7d4f' }}>{money.format(paid)}</span>],
-                  ['Balance Outstanding', <span style={{ fontWeight: 700, color: '#8a3520' }}>{money.format(balance)}</span>],
-                  ['Payment Method', 'Bank Transfer'],
-                  ['Reference', 'GTBank – 0123045678'],
-                  ['Submitted By', `${invoice.createdBy || 'Bola'} (Store Manager)`],
+                  ['Amount Received', <span style={{ fontWeight: 700, color: paid === null ? '#8a7a6a' : '#2a7d4f' }}>{asMoney(paid)}</span>],
+                  ['Balance Outstanding', <span style={{ fontWeight: 700, color: balance === null ? '#8a7a6a' : '#8a3520' }}>{asMoney(balance)}</span>],
+                  ['Payment Method', invoice.paymentMethod || '—'],
+                  ['Submitted By', invoice.createdBy ? `${invoice.createdBy} (Store Manager)` : '—'],
                 ].map(([label, val]) => (
                   <div key={label}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
@@ -217,8 +220,8 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               <div style={{ borderTop: '1px solid #f3ede5' }} />
               <div style={{ fontSize: 12, fontWeight: 700, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Payment History</div>
               {[
-                [invoice.createdAt ? new Date(invoice.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—', 'Payment evidence submitted', `by ${invoice.createdBy || 'Bola'} (Store Manager)`, money.format(paid), '#2a7d4f'],
-                ['—', 'Pending', 'Balance outstanding', money.format(balance), '#8a3520'],
+                [submittedOn, evidence ? 'Payment evidence submitted' : 'Invoice submitted', invoice.createdBy ? `by ${invoice.createdBy} (Store Manager)` : 'Store', asMoney(paid), '#2a7d4f'],
+                ['—', 'Pending', 'Balance outstanding', asMoney(balance), '#8a3520'],
               ].map(([date, title, note, amount, color]) => (
                 <div key={title} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid #f3ede5' }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, marginTop: 4, flexShrink: 0 }} />
@@ -257,9 +260,9 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
                   <dl className="review-evidence-meta">
                     <div><dt>File</dt><dd>{evidence.name || 'Attachment'}</dd></div>
                     {evidence.uploadedAt ? (
-                      <div><dt>Uploaded</dt><dd>{new Date(evidence.uploadedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</dd></div>
+                      <div><dt>Uploaded</dt><dd>{formatMoment(evidence.uploadedAt)}</dd></div>
                     ) : null}
-                    <div><dt>Amount recorded</dt><dd>{money.format(paid)}</dd></div>
+                    <div><dt>Amount recorded</dt><dd>{asMoney(paid)}</dd></div>
                   </dl>
 
                   {evidence.dataUrl ? (
@@ -353,17 +356,17 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
             </header>
             <dl>
               <dt>Submitted By</dt>
-              <dd>{invoice.createdBy || 'Bola'} (Store Mgr)</dd>
+              <dd>{invoice.createdBy ? `${invoice.createdBy} (Store Mgr)` : '—'}</dd>
               <dt>Submitted On</dt>
-              <dd>{invoice.createdAt ? new Date(invoice.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</dd>
+              <dd>{submittedOn}</dd>
               <dt>Store</dt>
-              <dd>{invoice.store || 'Lekki'}</dd>
+              <dd>{invoice.store || '—'}</dd>
               <dt>Order Sheet</dt>
-              <dd style={{ color: '#2a7d4f' }}>Attached</dd>
+              <dd style={{ color: invoice.orderSheet ? '#2a7d4f' : '#8a7a6a' }}>{invoice.orderSheet ? 'Attached' : 'Not attached'}</dd>
               <dt>Production Status</dt>
-              <dd style={{ color: '#8a3520' }}>Not Released</dd>
+              <dd style={{ color: invoice.orderStatus === 'Approved' ? '#2a7d4f' : '#8a3520' }}>{invoice.orderStatus || 'Not released'}</dd>
               <dt>Days Since Submitted</dt>
-              <dd>0 days</dd>
+              <dd>{daysSince === null ? '—' : `${daysSince} day${daysSince === 1 ? '' : 's'}`}</dd>
             </dl>
           </div>
 
@@ -377,9 +380,11 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
             </div>
             <div className="os-card-body" style={{ gap: 0, padding: '14px' }}>
               {[
-                [invoice.createdAt ? new Date(invoice.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—', 'Invoice submitted', `by ${invoice.createdBy || 'Bola'} (Store Manager)`, '#2a7d4f'],
-                ['—', 'Under review', 'Pending action', '#c97b08'],
-                ['—', 'Awaiting approval', 'Will be sent to production', '#8a7a6a'],
+                [submittedOn, 'Invoice submitted', invoice.createdBy ? `by ${invoice.createdBy} (Store Manager)` : `${invoice.store || 'Store'} store`, '#2a7d4f'],
+                // The last two steps describe where the invoice actually stands
+                // rather than always reading as though nobody had looked at it.
+                ['—', status === 'Awaiting Review' ? 'Under review' : `Marked ${status}`, status === 'Awaiting Review' ? 'Pending your action' : 'Decision recorded', status === 'Awaiting Review' ? '#c97b08' : '#2a7d4f'],
+                ['—', status === 'Approved' ? 'Released to production' : 'Awaiting approval', status === 'Approved' ? 'Order sheet can be raised' : 'Will be sent to production', '#8a7a6a'],
               ].map(([date, title, note, color], index) => (
                 <div key={title} style={{ display: 'flex', gap: 10, paddingBottom: index < 2 ? 14 : 0, position: 'relative' }}>
                   {index < 2 && (
@@ -402,7 +407,9 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 14px', background: '#fffbf0', border: '1px solid #f0ddb0', borderRadius: 10, color: '#7a6030' }}>
         <AlertCircle size={14} style={{ color: '#c97b08', flexShrink: 0, marginTop: 1 }} />
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>
-          This invoice is currently awaiting your review. Once approved, it will be automatically sent to Production.
+          {status === 'Awaiting Review'
+            ? 'This invoice is currently awaiting your review. Once approved, it will be automatically sent to Production.'
+            : `This invoice has been marked ${status}. Choosing another action below will replace that decision.`}
         </p>
       </div>
 
