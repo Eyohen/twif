@@ -6092,14 +6092,14 @@ function CustomerPortalPage({ token, sentInvoices = [] }) {
   return (
     <main className="client-portal-shell">
       <aside className="client-portal-nav"><div className="brand-lockup tracking-brand"><div className="mark">TW</div><div><strong>TWIF</strong><span>The Way It Fits</span></div></div><nav>{[['⌂','Dashboard'],['▣','My Orders'],['▤','Invoices'],['⌕','Measurements'],['♙','Profile & Contacts'],['♧','Membership'],['⌖','Address Book'],['♡','Saved Styles'],['⚙','Preferences']].map(([icon,label],index)=><a className={index===0?'active':''} href={`#${label.toLowerCase().replaceAll(' ','-')}`} key={label}><i>{icon}</i>{label}</a>)}</nav><section><strong>Need help?</strong><small>Chat with us on WhatsApp</small><a href="https://wa.me/2347056336710">◉ &nbsp; Chat Now</a></section><a className="portal-logout" href={`/c/${encodeURIComponent(token)}`}>← &nbsp; Back to tracking</a></aside>
-      <section className="client-portal-workspace"><header><div><span>Client Portal</span><strong>{profile.name}</strong></div><a href={`/c/${encodeURIComponent(token)}`}>← Tracking</a></header><div className="client-portal-welcome"><p>Welcome back,</p><h1>{profile.name}</h1><span>⌕ &nbsp; {profile.phone || 'Phone not added'} &nbsp;&nbsp;·&nbsp;&nbsp; ✉ &nbsp; {profile.email}</span></div>
+      <section className="client-portal-workspace"><header><div><span>Client Portal</span><strong>{profile.name}</strong></div><a className="client-portal-back" href={`/c/${encodeURIComponent(token)}`}>← &nbsp;Back to tracking</a></header><div className="client-portal-welcome"><p>Welcome back,</p><h1>{profile.name}</h1><span>⌕ &nbsp; {profile.phone || 'Phone not added'} &nbsp;&nbsp;·&nbsp;&nbsp; ✉ &nbsp; {profile.email}</span></div>
         <div className="client-portal-dashboard">
           <main>
-            <article className="client-current-order"><header><div><h2>Your Current Order</h2><strong>{currentOrder?.items?.map((item)=>item.description).join(', ') || 'No active order'}</strong><p>Order No. {currentOrder?.invoiceNumber || '—'} &nbsp; • &nbsp; {currentOrder?.items?.reduce((sum,item)=>sum+toNumber(item.quantity),0)||0} pieces &nbsp; • &nbsp; {currentOrder?.store || '—'} Store</p></div><Status>{currentOrder?.orderStatus || 'No order'}</Status></header><div className="client-order-progress"><i>1</i><span/><i>2</i><small>In Progress</small><small>Ready for Collection</small></div><dl><div><dt>Delivery Date</dt><dd>{currentOrder?.deliveryDate ? new Date(`${String(currentOrder.deliveryDate).slice(0,10)}T00:00:00`).toLocaleDateString('en-GB') : 'To be confirmed'}</dd></div><div><dt>Tailor</dt><dd>{currentOrder?.tailor || 'To be assigned'}</dd></div><div><dt>Fabric</dt><dd>{currentOrder?.fabric || 'To be confirmed'}</dd></div><div><dt>Style Images</dt><dd>{currentOrder?.styleImages?.length || 0} uploaded</dd></div></dl><a href="#order-history">View Order Details &nbsp;›</a></article>
-            <section className="client-portal-triple" id="order-history"><article><header><h2>Order History</h2><span>View all</span></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{invoice.items.map((item)=>item.description).join(', ')}</strong><small>{invoice.items.reduce((sum,item)=>sum+toNumber(item.quantity),0)} pieces &nbsp; • &nbsp; {invoice.store} Store</small></span><Status>{invoice.orderStatus}</Status></div>)}</article><article><header><h2>Invoices</h2><span>View all</span></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{money.format(invoice.total)}</strong><small>{invoice.paymentStatus}</small></span><time>{new Date(invoice.invoiceDate).toLocaleDateString('en-GB')}</time></div>)}</article><article><header><h2>Measurements</h2><span>View all</span></header><div className="client-measure-card"><i>⌁</i><strong>Your measurements</strong><p>{Object.keys(measurements).filter((key)=>key!=='profile').length ? 'We have your latest measurements saved.' : 'Measurements have not been saved yet.'}</p><button>View Measurements</button></div></article></section>
-            <section className="client-portal-bottom"><article><header><h2>Contact Details</h2><span>Edit</span></header><p>⌕ &nbsp; {profile.phone || 'Not provided'}</p><p>✉ &nbsp; {profile.email}</p><p>⌖ &nbsp; {details.address || 'Address not provided'}</p></article><article><header><h2>Saved Styles</h2><span>View all</span></header><div className="client-saved-styles">{savedStyles.length ? savedStyles.map((image,index)=><img src={image.url || image.dataUrl || image} alt={`Saved style ${index+1}`} key={image.url || image.dataUrl || index}/>) : <p>Your saved style references will appear here.</p>}</div></article><article><header><h2>Address Book</h2><span>View all</span></header><p><strong>⌖ &nbsp; Home</strong><br/>{details.address || 'No saved address'}</p><p><strong>⌖ &nbsp; Preferred Store</strong><br/>{details.preferredStore || currentOrder?.store || 'Lekki'} Store</p></article></section>
+            <article className="client-current-order"><header><div><h2>Your Current Order</h2><strong>{currentOrder?.items?.map((item)=>item.description).join(', ') || 'No active order'}</strong><p>Order No. {currentOrder?.invoiceNumber || '—'} &nbsp; • &nbsp; {currentOrder?.items?.reduce((sum,item)=>sum+toNumber(item.quantity),0)||0} pieces &nbsp; • &nbsp; {currentOrder?.store || '—'} Store</p></div><Status>{currentOrder?.orderStatus || 'No order'}</Status></header><div className="client-portal-steps">{CUSTOMER_TRACKING_STEPS.map((step,index)=>{const current=Math.max(0,CUSTOMER_TRACKING_STEPS.indexOf(customerStatus(currentOrder?.orderStatus)));return <div className={classNames('tracking-step',index===current&&'active',index<current&&'done')} key={step}><span>{index<current?'✓':index+1}</span><strong>{step}</strong></div>;})}</div><dl><div><dt>Delivery Date</dt><dd>{currentOrder?.deliveryDate ? new Date(`${String(currentOrder.deliveryDate).slice(0,10)}T00:00:00`).toLocaleDateString('en-GB') : 'To be confirmed'}</dd></div><div><dt>Tailor</dt><dd>{currentOrder?.tailor || 'To be assigned'}</dd></div><div><dt>Fabric</dt><dd>{currentOrder?.fabric || 'To be confirmed'}</dd></div><div><dt>Style Images</dt><dd>{currentOrder?.styleImages?.length || 0} uploaded</dd></div></dl><a href="#order-history">View Order Details &nbsp;›</a></article>
+            <section className="client-portal-triple" id="order-history"><article><header><h2>Order History</h2></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{invoice.items.map((item)=>item.description).join(', ')}</strong><small>{invoice.items.reduce((sum,item)=>sum+toNumber(item.quantity),0)} pieces &nbsp; • &nbsp; {invoice.store} Store</small></span><Status>{invoice.orderStatus}</Status></div>)}</article><article><header><h2>Invoices</h2></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{money.format(invoice.total)}</strong><small>{invoice.paymentStatus}</small></span><time>{new Date(invoice.invoiceDate).toLocaleDateString('en-GB')}</time></div>)}</article><article><header><h2>Measurements</h2></header><div className="client-measure-card"><i>⌁</i><strong>Your measurements</strong><p>{Object.keys(measurements).filter((key)=>key!=='profile').length ? 'We have your latest measurements saved.' : 'Measurements have not been saved yet.'}</p></div></article></section>
+            <section className="client-portal-bottom"><article><header><h2>Contact Details</h2></header><p>⌕ &nbsp; {profile.phone || 'Not provided'}</p><p>✉ &nbsp; {profile.email}</p><p>⌖ &nbsp; {details.address || 'Address not provided'}</p></article><article><header><h2>Saved Styles</h2></header><div className="client-saved-styles">{savedStyles.length ? savedStyles.map((image,index)=><img src={image.url || image.dataUrl || image} alt={`Saved style ${index+1}`} key={image.url || image.dataUrl || index}/>) : <p>Your saved style references will appear here.</p>}</div></article><article><header><h2>Address Book</h2></header><p><strong>⌖ &nbsp; Home</strong><br/>{details.address || 'No saved address'}</p><p><strong>⌖ &nbsp; Preferred Store</strong><br/>{details.preferredStore || currentOrder?.store || 'Lekki'} Store</p></article></section>
           </main>
-          <aside className="client-membership"><header>♕ &nbsp; Your membership — Regular</header><p>Here’s where you stand this year:</p><label>Spend <strong>{money.format(profile.totalSpend)} of {money.format(spendGoal)}</strong><span><i style={{width:`${spendProgress}%`}}/></span><b>{spendProgress}%</b></label><label>Purchases <strong>{profile.totalOrders} of {purchaseGoal}</strong><span><i style={{width:`${purchaseProgress}%`}}/></span><b>{purchaseProgress}%</b></label><p>You need both <strong>{money.format(Math.max(0,spendGoal-profile.totalSpend))}</strong> more in spend and <strong>{Math.max(0,purchaseGoal-profile.totalOrders)} more purchases</strong> to qualify for Elite membership.</p><a href="#membership">→ &nbsp; See Elite benefits</a></aside>
+          <aside className="client-membership"><header>♕ &nbsp; Your membership — Regular</header><p>Here’s where you stand this year:</p><label>Spend <strong>{money.format(profile.totalSpend)} of {money.format(spendGoal)}</strong><span><i style={{width:`${spendProgress}%`}}/></span><b>{spendProgress}%</b></label><label>Purchases <strong>{profile.totalOrders} of {purchaseGoal}</strong><span><i style={{width:`${purchaseProgress}%`}}/></span><b>{purchaseProgress}%</b></label><p>You need both <strong>{money.format(Math.max(0,spendGoal-profile.totalSpend))}</strong> more in spend and <strong>{Math.max(0,purchaseGoal-profile.totalOrders)} more purchases</strong> to qualify for Elite membership.</p></aside>
         </div>
       </section>
     </main>
@@ -6413,9 +6413,21 @@ function App() {
             ))}
           </div>
         ) : null}
-        {/* Logout sits at the foot of the navigation, where an account action
-            is looked for, rather than behind the avatar in the top bar. */}
+        {/* Who is signed in, and the account actions, both live at the foot of
+            the navigation — where they are looked for — rather than in the
+            corner of the top bar. The avatar is still the control for changing
+            the profile photo. */}
         <div className="sidebar-footer">
+          <div className="sidebar-identity">
+            <ProfilePhotoControl
+              account={currentRole}
+              onProfileImageChange={(profileImageUrl) => setStaffProfile((current) => ({ ...current, profileImageUrl }))}
+            />
+            <span className="user-identity">
+              <strong>{currentRole?.name?.split(' (')[0]}</strong>
+              <small>{accountTypeByRole[role]?.short || currentRole?.label}</small>
+            </span>
+          </div>
           <button type="button" className="sidebar-logout" onClick={() => handleLogout()}>
             <LogOut size={16} strokeWidth={1.8} />
             Log out
@@ -6462,17 +6474,9 @@ function App() {
             {role === 'store_manager' && activeView === 'Customers' ? <p className="topbar-subtitle">Manage customer profiles and create new orders.</p> : null}
           </div>
           <div className="topbar-actions">
+            {/* Identity sits at the foot of the sidebar with the account
+                actions; the bell is the only thing left up here. */}
             <NotificationBell role={role} currentRole={currentRole} onOpen={() => openView('Notifications')} />
-            {/* The chevron opened a menu whose only item was Logout, which now
-                sits in the sidebar. The avatar remains as identity and as the
-                control for changing the profile photo. */}
-            <div className="user-chip">
-              <ProfilePhotoControl
-                account={currentRole}
-                onProfileImageChange={(profileImageUrl) => setStaffProfile((current) => ({ ...current, profileImageUrl }))}
-              />
-              <span className="user-identity"><strong>{currentRole?.name?.split(' (')[0]}</strong><small>{accountTypeByRole[role]?.short || currentRole?.label}</small></span>
-            </div>
           </div>
         </header>
 

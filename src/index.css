@@ -10286,3 +10286,144 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
   color: #a3998c; text-align: center;
 }
+
+/* ---------------------------------------------------------------------------
+   Order details quick facts
+   Six equal columns fitted a desktop and nothing else: on a phone the headings
+   ran into each other ("PRODUCTIONPAYMENT"), two status pills overlapped, and
+   the last column was cut off past the right edge.
+--------------------------------------------------------------------------- */
+.order-facts-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border-top: 1px solid #f3ede5;
+}
+
+.order-fact {
+  min-width: 0;
+  padding: 12px 14px;
+  text-align: center;
+  border-right: 1px solid #f3ede5;
+}
+
+.order-fact:last-child { border-right: 0; }
+
+@media (max-width: 900px) {
+  .order-facts-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .order-fact:nth-child(3n) { border-right: 0; }
+  .order-fact:nth-child(n + 4) { border-top: 1px solid #f3ede5; }
+}
+
+@media (max-width: 620px) {
+  /* Two per row, read left to right like a list rather than centred columns. */
+  .order-facts-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .order-fact { text-align: left; }
+  .order-fact:nth-child(3n) { border-right: 1px solid #f3ede5; }
+  .order-fact:nth-child(2n) { border-right: 0; }
+  .order-fact:nth-child(n + 3) { border-top: 1px solid #f3ede5; }
+}
+
+/* ---------------------------------------------------------------------------
+   Who is signed in, at the foot of the sidebar
+   The name and role used to sit in the top-right corner, furthest from the
+   account actions it belongs with. It now sits above Log out.
+--------------------------------------------------------------------------- */
+.sidebar-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-identity .user-identity {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sidebar-identity .user-identity strong {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-identity .user-identity small {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.sidebar-identity .profile-photo-button {
+  position: relative;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  place-items: center;
+  border: 2px solid rgba(231, 162, 45, 0.55);
+  border-radius: 50%;
+  background: #f8dfaa;
+  color: #171717;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+/* ---------------------------------------------------------------------------
+   Client portal: back to tracking
+   In the portal's dark header this was bare white text, indistinguishable from
+   the heading beside it, so it did not read as something to tap. It now has a
+   border and a tap target of its own.
+--------------------------------------------------------------------------- */
+.client-portal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 140ms var(--ease), border-color 140ms var(--ease);
+}
+
+.client-portal-back:hover {
+  border-color: rgba(231, 162, 45, 0.75);
+  background: rgba(231, 162, 45, 0.18);
+}
+
+/* The mobile rule above styles `header a` generically, so it is restated here
+   to keep the border on a phone — which is where it is read. */
+@media (max-width: 780px) {
+  .client-portal-workspace > header .client-portal-back {
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0 12px;
+    min-height: 34px;
+    font-size: 12px;
+  }
+}
+
+/* The client portal shows the same three steps as the tracking page, so the
+   customer is told one story in both places. It used to be two fixed steps with
+   the first always lit, whatever the order was actually doing. */
+.client-portal-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 18px 0 4px;
+}

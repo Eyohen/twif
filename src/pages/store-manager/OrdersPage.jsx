@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock, Package, CheckCircle, AlertCircle, Search, ChevronRight, Eye } from 'lucide-react';
-import { money, invoiceApprovalStatus } from '../../utils/oms';
+import { money, invoiceApprovalStatus, amountReceived, formatMoment, daysUntilDue, dueDateLabel } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import OrderDetailsPage from './OrderDetailsPage';
 
@@ -146,7 +146,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.slice(0, 10).map((order, index) => {
+            {filtered.slice(0, 10).map((order) => {
               const delivery = order.job.delivery || order.deliveryDate;
               const status = productionStatus(order);
               const custInitials = order.customer?.split(' ').map((part) => part[0]).join('').slice(0, 2);
@@ -160,7 +160,9 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
                 >
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ fontWeight: 800, fontSize: 14, color: '#0f0b06' }}>{order.invoiceNumber}</div>
-                    <div style={{ fontSize: 11, color: '#8a7a6a' }}>Order #{1256 - index * 15}</div>
+                    {/* An "Order #" was printed here, counted down from 1256 by
+                        the row's position — a number that existed nowhere. */}
+                    <div style={{ fontSize: 11, color: '#8a7a6a' }}>{order.store || ''}</div>
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -183,15 +185,20 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
                   <td style={{ padding: '12px 14px' }} onClick={(e) => e.stopPropagation()}>
                     <Status>{order.paymentStatus}</Status>
                     <div style={{ fontSize: 11, color: '#8a7a6a', marginTop: 3 }}>
-                      {order.paymentStatus === 'Fully Paid' ? 'Paid in Full' : `${money.format(order.paid || 0)} paid`}
+                      {order.paymentStatus === 'Fully Paid'
+                        ? 'Paid in Full'
+                        : amountReceived(order) === null ? 'Amount not recorded' : `${money.format(amountReceived(order))} paid`}
                     </div>
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ fontSize: 13, color: '#5a4e42' }}>
-                      {delivery ? new Date(`${String(delivery).slice(0, 10)}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Not set'}
+                      {delivery ? formatMoment(delivery) : 'Not set'}
                     </div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: index > 2 ? '#8a3520' : '#2a7d4f', marginTop: 2 }}>
-                      {index > 2 ? 'Overdue' : `${4 - index} days left`}
+                    {/* This read "Overdue" for every row past the third, and
+                        counted 4, 3, 2 days left for the first three — from the
+                        row's position, not the delivery date. */}
+                    <div style={{ fontSize: 11, fontWeight: 600, color: daysUntilDue(delivery) !== null && daysUntilDue(delivery) < 0 ? '#8a3520' : '#2a7d4f', marginTop: 2 }}>
+                      {dueDateLabel(delivery)}
                     </div>
                   </td>
                   <td style={{ padding: '12px 14px' }} onClick={(e) => e.stopPropagation()}>

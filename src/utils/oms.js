@@ -61,6 +61,25 @@ export const formatMoment = (value) => {
   });
 };
 
+// Whole days between now and a delivery date. Order lists were labelling rows
+// from their position in the table — the fourth row and beyond read "Overdue"
+// whatever its date said, and the first three counted down 4, 3, 2 days.
+export const daysUntilDue = (value) => {
+  if (!value) return null;
+  const raw = String(value);
+  const due = new Date(raw.length <= 10 ? `${raw.slice(0, 10)}T23:59:59` : raw);
+  if (Number.isNaN(due.getTime())) return null;
+  return Math.ceil((due.getTime() - Date.now()) / 86400000);
+};
+
+export const dueDateLabel = (value) => {
+  const days = daysUntilDue(value);
+  if (days === null) return '';
+  if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`;
+  if (days === 0) return 'Due today';
+  return `${days} day${days === 1 ? '' : 's'} left`;
+};
+
 // What the invoice is actually payable at, once its discounts are applied.
 export const invoicePayable = (invoice) => Math.max(
   0,

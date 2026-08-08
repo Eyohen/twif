@@ -24,7 +24,10 @@ export const inventoryCategories = [
 ];
 
 export const navByRole = {
-  owner: ['Overview', 'Orders', 'Customers', 'Invoices', 'Payments', 'Production', 'Inventory', 'User Management', 'Stores', 'Memberships', 'Reports', 'Settings'],
+  // Notifications was missing here, and the route guard only allows a view
+  // that appears in the role's navigation — so the Owner's bell navigated to
+  // /owner/notifications and was redirected straight back to the overview.
+  owner: ['Overview', 'Orders', 'Customers', 'Invoices', 'Payments', 'Production', 'Inventory', 'User Management', 'Stores', 'Memberships', 'Reports', 'Settings', 'Notifications'],
   admin: ['Overview', 'Orders', 'Customers', 'Payments', 'Production', 'Inventory', 'Staff', 'Memberships', 'Reports', 'Settings', 'Notifications'],
   store_manager: ['Overview', 'Customers', 'Orders', 'Invoices', 'Order Sheet', 'Notifications'],
   accounts: ['Overview', 'Invoices', 'Payments', 'Reports', 'Inventory', 'Notifications'],
