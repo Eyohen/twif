@@ -5923,6 +5923,10 @@ function App() {
     };
   }, [role, signedInAccount, staffProfile]);
 
+  // Refetched whenever the view changes, so the dashboard counts and lists
+  // reflect what other staff have added rather than a snapshot taken at login.
+  // Keyed on the view rather than the full path, so drilling into a record
+  // does not re-request.
   useEffect(() => {
     if (!signedIn) return;
 
@@ -5942,7 +5946,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [signedIn]);
+  }, [signedIn, activeView]);
 
   useEffect(() => {
     if (!signedIn || !signedInAccount?.phone) return;
