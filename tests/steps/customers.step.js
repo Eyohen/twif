@@ -12,11 +12,13 @@ Then('the email field should be required', async function () {
 
 When('I try to save a customer using an address already on file', async function () {
   // Whichever customer is first on the list is the one whose address is reused.
+  // A real customer record, not one the list synthesises from an invoice —
+  // only the first kind is checked for a duplicate address.
   const existing = await this.page.evaluate(async () => {
-    const base = document.querySelector('meta[name="api-base"]')?.content;
-    const response = await fetch(`${base || 'http://localhost:8084/api'}/oms/customers`);
+    const response = await fetch('http://localhost:8084/api/oms/customers');
     const body = await response.json();
-    return (body?.data?.customers || []).find((customer) => customer.email)?.email || '';
+    return (body?.data?.customers || [])
+      .find((customer) => customer.email && !String(customer.id).startsWith('sent-'))?.email || '';
   });
   if (!existing) throw new Error('No customer with an email address to duplicate');
   this.duplicateEmail = existing;

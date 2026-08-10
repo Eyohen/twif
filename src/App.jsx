@@ -25,7 +25,7 @@ import JobCommentThread from './components/oms/JobCommentThread';
 import {
   money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
   dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
-  isInvoiceApproved, canShowJobInProduction, productionJobFromInvoice,
+  isInvoiceApproved, canShowJobInProduction, productionBlockReason, productionJobFromInvoice,
   mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid,
   invoiceDocumentPayload, PERIOD_OPTIONS, filterByPeriod, periodTrend,
   amountReceived, invoicePayable, formatMoment, CUSTOMER_TRACKING_STEPS,
@@ -3259,7 +3259,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
   );
 }
 
-function ProductionView({ productionJobs, onUpdateJob, currentRole }) {
+function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, currentRole }) {
   const [statusFilter, setStatusFilter] = useState('All');
   const [query, setQuery] = useState('');
   const [jobModal, setJobModal] = useState(null);
@@ -3277,13 +3277,27 @@ function ProductionView({ productionJobs, onUpdateJob, currentRole }) {
   const readyToAssign = productionJobs.filter((job) => job.status === 'Order Sheet Confirmed').length;
   const inProgress = productionJobs.filter((job) => ['Assigned', 'In Progress'].includes(job.status)).length;
   const readyForCollection = productionJobs.filter((job) => job.status === 'Ready').length;
+  // Held jobs, grouped by what is holding them. A job that cannot be worked is
+  // now kept out of the queue rather than counted on a card while sitting in
+  // it, so this is the one place to look for what is stuck.
+  const blockedByReason = blockedJobs.reduce((groups, entry) => {
+    groups[entry.reason] = [...(groups[entry.reason] || []), entry.job];
+    return groups;
+  }, {});
+
   const exceptionCards = [
-    ['⚠', 'Fabric Discrepancy', productionJobs.filter((job) => job.fabric && !job.fabricConfirmed && job.fabric !== 'Client supplied').length, 'Stock issues', 'High Priority'],
-    ['✂', 'Missing Measurements', productionJobs.filter((job) => !job.measurements).length, 'Cannot proceed', 'Medium Priority'],
-    ['▧', 'Missing Style Images', productionJobs.filter((job) => !job.images).length, 'References incomplete', 'Medium Priority'],
-    ['◇', 'Awaiting Client Fabric', productionJobs.filter((job) => job.fabric === 'Client supplied' && !job.fabricConfirmed).length, 'Not yet received', 'Medium Priority'],
-    ['♙', 'Reassignment / Quality Hold', productionJobs.filter((job) => job.status === 'Quality Hold').length, 'Action required', 'Low Priority'],
-  ];
+    ...Object.entries(blockedByReason).map(([reason, jobs]) => [
+      reason === 'Invoice unpaid' ? '₦' : reason === 'Measurements missing' ? '✂' : '⏳',
+      reason,
+      jobs.length,
+      reason === 'Awaiting Accounts approval' ? 'With Accounts' : 'Cannot start',
+      reason === 'Awaiting Accounts approval' ? 'Waiting' : 'Blocked',
+    ]),
+    // Fabric is a warning rather than a block: the job can be assigned and the
+    // cloth confirmed before cutting.
+    ['⚠', 'Fabric not confirmed', productionJobs.filter((job) => job.fabric && !job.fabricConfirmed && job.fabric !== 'Client supplied').length, 'Stock to confirm', 'Warning'],
+    ['◇', 'Awaiting client fabric', productionJobs.filter((job) => job.fabric === 'Client supplied' && !job.fabricConfirmed).length, 'Not yet received', 'Warning'],
+  ].filter((card) => card[2] > 0);
   const exceptionTotal = exceptionCards.reduce((total, card) => total + card[2], 0);
 
   useEffect(() => {
@@ -3426,6 +3440,40 @@ function ProductionView({ productionJobs, onUpdateJob, currentRole }) {
       <div className="os-layout">
         {/* Main: Active Jobs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Held jobs. The Exceptions figure used to be a count with nothing
+              behind it — no list, nothing to click. These are the orders that
+              cannot be worked, each saying what is holding it. */}
+          {blockedJobs.length ? (
+            <div className="os-card" style={{ borderColor: '#f0c8b8' }}>
+              <div className="os-card-head" style={{ background: '#fff7f3' }}>
+                <AlertCircle size={16} strokeWidth={1.5} style={{ color: '#8a3520' }} />
+                <div>
+                  <strong>Held — cannot start</strong>
+                  <p>{blockedJobs.length} order{blockedJobs.length === 1 ? '' : 's'} waiting on something before production can begin</p>
+                </div>
+              </div>
+              <div className="os-card-body" style={{ gap: 8 }}>
+                {blockedJobs.map(({ job, reason }) => (
+                  <div
+                    key={job.id || job.invoiceNumber}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                      padding: '10px 12px', border: '1px solid #f3ede5', borderRadius: 9, background: '#fffdfb',
+                    }}
+                  >
+                    <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#5a4e42' }}>{job.invoiceNumber}</span>
+                    <strong style={{ fontSize: 13, color: '#1a1611', flex: '1 1 10rem' }}>{job.customer}</strong>
+                    <span style={{ fontSize: 12, color: '#8a7a6a' }}>{job.item || 'Order'}</span>
+                    <span style={{
+                      fontSize: 11.5, fontWeight: 700, color: '#8a3520', background: '#fff5f0',
+                      border: '1px solid #f0c8b8', borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap',
+                    }}>{reason}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="os-card">
             <div className="os-card-head">
               <ClipboardList size={16} strokeWidth={1.5} style={{ color: '#c97b08' }} />
@@ -5829,7 +5877,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Payments') return role === 'accounts' || role === 'owner'
     ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} />
     : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
-  if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} />;
+  if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} blockedJobs={viewProps.blockedProductionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} />;
   if (activeView === 'Inventory') return role === 'accounts' ? <AccountsInventoryReconciliationPage /> : role === 'inventory_manager' ? <InventoryListPage currentRole={viewProps.currentRole} /> : role === 'owner' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode /> : <InventoryView />;
   if (activeView === 'Reconciliations') return <InventoryView />;
   if (activeView === 'Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
@@ -5988,9 +6036,14 @@ function App() {
     }
   };
 
-  const approvedProductionJobs = productionJobs.filter((job) => {
-    return canShowJobInProduction(job, sentInvoices);
-  });
+  // Only jobs that may actually be worked reach the board and the tailors.
+  const approvedProductionJobs = productionJobs.filter((job) => canShowJobInProduction(job, sentInvoices));
+
+  // The rest are held, each with the reason, so Production can see what is
+  // stuck and chase it rather than wondering where an order went.
+  const blockedProductionJobs = productionJobs
+    .map((job) => ({ job, reason: productionBlockReason(job, sentInvoices) }))
+    .filter((entry) => entry.reason);
 
   const handleLogin = (account) => {
     setRole(account.role);
@@ -6184,6 +6237,7 @@ function App() {
                 onApproveInvoice: updateInvoiceApproval,
                 sentInvoices,
                 productionJobs: approvedProductionJobs,
+                blockedProductionJobs,
                 onCreateJob: createProductionJob,
                 onUpdateJob: updateProductionJob,
               })}

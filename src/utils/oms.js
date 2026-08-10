@@ -194,11 +194,34 @@ export const printInvoiceHtml = (html, invoiceNumber = 'invoice') => {
   frame.srcdoc = html;
 };
 
-export const canShowJobInProduction = (job, invoices) => {
-  if (!job.invoiceNumber) return true;
-  const invoice = invoices.find((item) => item.invoiceNumber === job.invoiceNumber);
-  return isInvoiceApproved(invoice);
+// Measurements can arrive as a written note or as named figures; either counts.
+export const hasMeasurements = (job) => {
+  if (job?.measurementDetails && typeof job.measurementDetails === 'object') {
+    if (Object.values(job.measurementDetails).some((value) => String(value ?? '').trim())) return true;
+  }
+  return Boolean(String(job?.measurements ?? '').trim());
 };
+
+// What is keeping a job out of production, or null when nothing is.
+//
+// The rules, in the order they are checked:
+//   1. Accounts have to have approved the invoice.
+//   2. The customer has to have paid something — an unpaid order is not cut.
+//   3. The garment has to have measurements, since a tailor cannot cut without.
+//
+// A reason rather than a boolean, so the board can say why a job is held
+// instead of quietly leaving it out.
+export const productionBlockReason = (job, invoices) => {
+  if (!job?.invoiceNumber) return null;
+  const invoice = invoices.find((item) => item.invoiceNumber === job.invoiceNumber);
+
+  if (!isInvoiceApproved(invoice)) return 'Awaiting Accounts approval';
+  if (isAwaitingPayment(invoice)) return 'Invoice unpaid';
+  if (!hasMeasurements(job)) return 'Measurements missing';
+  return null;
+};
+
+export const canShowJobInProduction = (job, invoices) => productionBlockReason(job, invoices) === null;
 
 export const productionJobFromInvoice = (invoice) => {
   if (!invoice?.orderSheet) return null;

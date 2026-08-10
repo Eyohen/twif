@@ -62,10 +62,26 @@ Given('the Store Manager invoices that customer', async function () {
   await item.locator('input').nth(0).fill('Three-piece suit');
   await item.locator('input').nth(1).fill('150000');
 
-  // Unpaid keeps the invoice out of the payment-evidence requirement; whether
-  // it reaches production is decided by Accounts, not by payment.
-  const selects = this.page.locator('.os-card select');
-  await selects.filter({ hasText: 'Select status' }).selectOption('unpaid');
+  // A part payment, because an unpaid order is now held out of production —
+  // this scenario is about an order that travels the whole way.
+  await this.page.locator('label').filter({ hasText: 'Payment Status' })
+    .locator('select').selectOption('partial_paid');
+  await this.page.locator('label').filter({ hasText: 'Payment Method' })
+    .locator('select').selectOption('transfer');
+
+  // A part-paid invoice has to carry evidence of the payment. Scoped to the
+  // Payment Evidence field: a bare input[type=file] also matches the profile
+  // photo control that now sits in the sidebar.
+  await this.page.locator('label').filter({ hasText: 'Payment Evidence' })
+    .locator('input[type="file"]').setInputFiles({
+    name: 'payment-evidence.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    ),
+  });
+  await this.page.waitForTimeout(500);
 
   await this.page.getByRole('button', { name: /send invoice/i }).click();
 

@@ -41,15 +41,19 @@ When('the Production Manager opens Production', async function () {
   await this.page.waitForTimeout(1200);
 });
 
+// "A production job" means one that can actually be worked, so the active queue
+// is what is checked — a held order appears on the board, but under Held.
+const activeQueue = (page) => page.locator('.os-card').filter({ hasText: 'Active Jobs' });
+
 Then('that order should not be listed as a production job', async function () {
-  const board = await this.page.evaluate(() => document.body.innerText);
-  expect(board, `${this.order.invoiceNumber} is on the board before Accounts have approved it`)
+  const queue = await activeQueue(this.page).innerText();
+  expect(queue, `${this.order.invoiceNumber} is in the active queue when it should be held`)
     .not.toContain(this.order.invoiceNumber);
 });
 
 Then('that order should be listed as a production job', async function () {
-  const board = await this.page.evaluate(() => document.body.innerText);
-  expect(board, `${this.order.invoiceNumber} is approved but is not on the board`)
+  const queue = await activeQueue(this.page).innerText();
+  expect(queue, `${this.order.invoiceNumber} is workable but is not in the active queue`)
     .toContain(this.order.invoiceNumber);
 });
 
@@ -94,4 +98,95 @@ Then('Mark Ready should be offered', async function () {
 
 Then('Mark Ready should not be offered', async function () {
   await expect(this.card.getByRole('button', { name: /mark ready/i })).toBeDisabled();
+});
+
+// Builds an order in an exact state through the API, because these scenarios
+// are about the rule rather than about the screens that lead to it.
+async function makeOrder({ paymentStatus, measurements }) {
+  const client = await request.newContext();
+  const stamp = Date.now().toString().slice(-6);
+  const invoiceNumber = `INVRULE${stamp}`;
+  const customer = `Rule Customer ${stamp}`;
+
+  await client.post(`${API_URL}/oms/invoices/send-email`, {
+    data: {
+      store: 'lekki',
+      invoiceNumber,
+      customer: { name: customer, email: `rule.${stamp}@twif.test`, phone: `0819${stamp}0` },
+      items: [{ description: 'Rule check suit', quantity: 1, rate: 50000, amount: 50000 }],
+      subtotal: 50000,
+      balanceDue: 50000,
+      paymentStatus,
+      paymentMethod: 'transfer',
+      recipientEmail: `rule.${stamp}@twif.test`,
+    },
+  });
+
+  await client.post(`${API_URL}/oms/tracking/order-sheet`, {
+    data: {
+      invoiceNumber,
+      orderSheet: {
+        item: 'Rule check suit',
+        customer,
+        ...(measurements ? { measurements } : {}),
+      },
+    },
+  });
+
+  await client.patch(`${API_URL}/oms/invoices/${invoiceNumber}/account-approval`, { data: { status: 'Approved' } });
+
+  const list = await client.get(`${API_URL}/oms/invoices/sent`);
+  const invoice = ((await list.json())?.data?.invoices || []).find((item) => item.invoiceNumber === invoiceNumber);
+  await client.dispose();
+  return invoice;
+}
+
+Given('an approved order whose invoice is unpaid', async function () {
+  this.order = await makeOrder({ paymentStatus: 'unpaid', measurements: 'Chest 40, Waist 34' });
+  expect(this.order.paymentStatus).toBe('Unpaid');
+  expect(this.order.accountApprovalStatus).toBe('Approved');
+});
+
+Given('an approved and paid order with no measurements', async function () {
+  this.order = await makeOrder({ paymentStatus: 'partial_paid', measurements: '' });
+  expect(this.order.paymentStatus).toBe('Partial Paid');
+  expect(this.order.orderSheet?.measurements ?? '').toBe('');
+});
+
+When('the measurements are added', async function () {
+  const client = await request.newContext();
+  await client.patch(`${API_URL}/oms/tracking/order-sheet/${this.order.trackingToken}`, {
+    data: { measurements: 'Chest 42, Waist 36, Sleeve 25' },
+  });
+  await client.dispose();
+});
+
+// Held orders are listed with what is holding them, so Production can chase
+// them rather than wonder where an order went.
+Then('that order should be held with the reason {string}', async function (reason) {
+  const held = this.page.locator('.os-card').filter({ hasText: 'Held — cannot start' });
+  await expect(held).toBeVisible({ timeout: 15000 });
+  const row = held.locator('div').filter({ hasText: this.order.invoiceNumber }).last();
+  await expect(row).toContainText(reason);
+});
+
+Then('assigning a tailor to it should be refused', async function () {
+  const client = await request.newContext();
+  const response = await client.patch(`${API_URL}/oms/tracking/order-sheet/${this.order.trackingToken}`, {
+    data: { tailor: ACCOUNTS.Tailor.name },
+  });
+  const body = await response.json();
+  await client.dispose();
+  expect(response.status(), `the server allowed it: ${JSON.stringify(body)}`).toBe(409);
+  expect(body.success).toBe(false);
+});
+
+Then('assigning a tailor to it should be allowed', async function () {
+  const client = await request.newContext();
+  const response = await client.patch(`${API_URL}/oms/tracking/order-sheet/${this.order.trackingToken}`, {
+    data: { tailor: ACCOUNTS.Tailor.name },
+  });
+  const body = await response.json();
+  await client.dispose();
+  expect(response.status(), `the server refused it: ${JSON.stringify(body)}`).toBe(200);
 });
