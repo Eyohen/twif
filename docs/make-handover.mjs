@@ -6,17 +6,15 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 const DECISIONS = [
   {
     title: 'Should payment gate production?',
-    today: 'No. A job reaches Production when Accounts approve the invoice — payment status is never consulted, on the server or in the app. An unpaid invoice that Accounts approve goes straight to a tailor.',
-    question: 'Should an unpaid, or partly paid, order be held back from Production?',
-    options: [
-      'Approval alone releases production, as today. Accounts carry the judgement.',
-      'Fully paid only. Nothing is cut until the money is in.',
-      'A deposit is enough. Needs a figure — a percentage, or an amount.',
-    ],
-    recommend: 'Worth deciding before go-live: today a garment can be made for someone who has paid nothing, and nothing in the app objects.',
+    status: 'settled',
+    today: 'Settled by Henry on 10 August: unpaid orders are held, part paid and fully paid go through. An invoice with nothing recorded against it now sits in a Held queue on the production board with the reason shown, and the server refuses to hand it to a tailor.',
+    question: '',
+    options: [],
+    recommend: 'Built and covered by tests. Nothing further needed.',
   },
   {
     title: 'Should there be a delivery step?',
+    status: 'open',
     today: 'There is none. Production runs Order Sheet Confirmed → Assigned → In Progress → Ready. Nothing anywhere sets Delivered, Collected or Completed — the store manager’s order filters mention them, but no screen produces them. An order’s last state is Ready for Collection.',
     question: 'Should someone mark an order as handed over, and who?',
     options: [
@@ -24,50 +22,34 @@ const DECISIONS = [
       'The Store Manager marks it collected when the customer takes it.',
       'Production marks it out, the store marks it collected — two steps.',
     ],
-    recommend: 'Without this, nothing in TWIF can tell you what has actually left the shop, and the customer’s tracking page never reaches a final state.',
+    recommend: 'This is the one still waiting. Without it, nothing in TWIF can tell you what has actually left the shop, and the customer’s tracking page never reaches a final state.',
   },
   {
     title: 'Should missing measurements block a job?',
-    today: 'No. Missing measurements are counted on an Exceptions card on the production board. The job still sits in the normal queue and can be assigned and started.',
-    question: 'Should a job without measurements be held out of the queue?',
-    options: [
-      'Warn only, as today.',
-      'Hold it in a blocked queue with the reason shown, until measurements are added.',
-    ],
-    recommend: 'A tailor cannot cut without measurements, so the warning is doing no work where it sits.',
+    status: 'settled',
+    today: 'Settled by Henry on 10 August: yes. A job with no measurements is held out of the queue with "Measurements missing" against it, rather than being counted on an Exceptions card and left workable.',
+    question: '',
+    options: [],
+    recommend: 'Built and covered by tests. Nothing further needed.',
   },
   {
     title: 'Do you want the authentication gap closed?',
-    today: 'Sign-in happens entirely in the browser: the PIN is checked against a list compiled into the JavaScript, so all seven PINs can be read from the deployed bundle. Separately, /api/oms/* has no authentication at all — customer records, invoices and payment evidence are readable by anyone who knows the address.',
-    question: 'Should I move sign-in to the server and put the OMS API behind it?',
-    options: [
-      'Yes — server-side sign-in, hashed PINs, a session the API checks.',
-      'Not yet, and accept the exposure for now.',
-    ],
-    recommend: 'This is the one I would fix before real customer data goes in. It is not cosmetic and it is not small, but it is well-defined.',
+    status: 'settled',
+    today: 'Settled by Henry on 10 August: yes. Sign-in now happens on the server against hashed PINs, the PINs are out of the bundle, and every /api/oms/* route requires a session — apart from the customer’s own tracking link, which is deliberately open because the customer has no account. Roles are enforced per route.',
+    question: '',
+    options: [],
+    recommend: 'Built and covered by tests, including that the API refuses a caller with no token and that a wrong PIN does not reveal which half was wrong.',
   },
 ];
 
 const OPEN = [
   {
-    title: 'No amount is ever recorded against a payment',
-    detail: 'An invoice carries a status — unpaid, partly paid, fully paid — but no figure for what was actually handed over. Screens that used to invent one now read "Not recorded". The server will pass a paid amount through if one exists, but nothing in the app ever writes it, so Accounts cannot reconcile.',
+    title: 'The rate limit',
+    detail: 'Staff sign-in has a tight limit of its own — twelve failures per quarter hour, successful attempts not counted — so a PIN cannot be guessed at. The general ceiling of 2,000 requests per quarter hour per address is no longer applied outside production, which is what a full test run used to exhaust. Whether 2,000 is right for a shop where several tabs share one connection is a judgement to revisit once it is in daily use.',
   },
   {
-    title: 'Archive Customer cannot be reached',
-    detail: 'The handler exists and works; no button is wired to it, so the action is unreachable from the interface.',
-  },
-  {
-    title: 'Duplicate customer emails in the live data',
-    detail: 'New and edited customers now need a unique address, but records created before that may still share one. GET /oms/customers/duplicates reports them. I have not touched live customer records.',
-  },
-  {
-    title: 'The sweep for controls that lead nowhere is unfinished',
-    detail: 'Every dead control I met on a screen I touched is fixed. I have not run the rule across all seven roles as one pass.',
-  },
-  {
-    title: 'The rate limit is tight enough to trip in normal use',
-    detail: 'A full test run exhausted it and the API began refusing requests. A shop with several tabs polling notifications every twenty seconds shares one address, so it is plausible during a busy day.',
+    title: 'Customer records that share an email address',
+    detail: 'New and edited customers need a unique address, but records created before that rule may still share one. Owner and Admin now have a Customer records panel in Settings that lists them, and anyone with no email at all, and can archive the record they do not want. I have not touched live customer records myself — which one to keep is the shop’s call.',
   },
 ];
 
@@ -76,32 +58,34 @@ const TESTED = [
   ['A job’s state survives changing hands and reloading', 'covered'],
   ['An order reaches production only once Accounts approve it', 'covered'],
   ['A tailor is offered Start Work or Mark Ready according to where the job is', 'covered'],
-  ['An unpaid order is kept out of production', 'cannot be tested — no such rule exists'],
-  ['A partly paid order follows the payment rule', 'cannot be tested — no such rule exists'],
+  ['An unpaid order is kept out of production', 'covered'],
+  ['A part paid order is allowed through', 'covered'],
+  ['A job with no measurements is held back', 'covered'],
+  ['The API refuses a caller with no token, and a wrong PIN says nothing useful', 'covered'],
+  ['Accounts record what a customer paid, and the status follows the money', 'covered'],
+  ['An amount larger than the invoice is refused, and a tailor cannot record one at all', 'covered'],
   ['An order is marked delivered', 'cannot be tested — no delivery state exists'],
-  ['A job with no measurements is held back', 'cannot be tested — it is only counted, not held'],
 ];
 
 const md = [
   '# TWIF OMS — where things stand',
   '',
-  'Written after the end-to-end lifecycle work. Everything below was checked against the code and the running app, not assumed.',
+  'Updated after Henry’s decisions of 10 August were built. Everything below was checked against the code and the running app, not assumed.',
   '',
-  '## Decisions I need from you',
+  '## Decisions',
   '',
   ...DECISIONS.flatMap((item, index) => [
     `### ${index + 1}. ${item.title}`,
     '',
     `**Today:** ${item.today}`,
     '',
-    `**The question:** ${item.question}`,
-    '',
+    ...(item.question ? [`**The question:** ${item.question}`, ''] : []),
     ...item.options.map((option) => `- ${option}`),
-    '',
+    ...(item.options.length ? [''] : []),
     `*${item.recommend}*`,
     '',
   ]),
-  '## Open work, no decision needed',
+  '## Open work',
   '',
   ...OPEN.flatMap((item) => [`### ${item.title}`, '', item.detail, '']),
   '## What the tests cover',
@@ -110,7 +94,7 @@ const md = [
   '| --- | --- |',
   ...TESTED.map(([what, status]) => `| ${what} | ${status} |`),
   '',
-  'The four that cannot be tested are not gaps in the suite. Each one waits on a decision above: a test asserting a rule the system does not have would pass by accident or fail for the wrong reason.',
+  'The one that cannot be tested is not a gap in the suite. It waits on the delivery decision above: a test asserting a rule the system does not have would pass by accident or fail for the wrong reason.',
   '',
 ].join('\n');
 
@@ -155,7 +139,10 @@ const html = `<!doctype html>
   .lede { margin: .8rem 0 0; max-width: 62ch; color: var(--ink-soft); }
   h2 { margin: 0 0 1rem; font-family: var(--display); font-size: 1.45rem; font-weight: 600; }
   .decision { border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); padding: 1.25rem 1.4rem; }
-  .decision h3 { margin: 0 0 .8rem; font-family: var(--body); font-size: 1.08rem; font-weight: 660; }
+  .decision h3 { margin: 0 0 .8rem; font-family: var(--body); font-size: 1.08rem; font-weight: 660; display: flex; align-items: baseline; flex-wrap: wrap; gap: .55rem; }
+  .decision.is-settled { border-left-color: var(--pass); }
+  .tag { font-family: var(--mono); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; border: 1px solid var(--line); border-radius: 999px; padding: .18rem .5rem; color: var(--warn); white-space: nowrap; }
+  .decision.is-settled .tag { color: var(--pass); }
   .decision dl { margin: 0; display: grid; gap: .7rem; }
   .decision dt { font-family: var(--mono); font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
   .decision dd { margin: .2rem 0 0; color: var(--ink-soft); }
@@ -189,15 +176,15 @@ const html = `<!doctype html>
   </header>
 
   <section>
-    <h2>Decisions I need from you</h2>
+    <h2>Decisions</h2>
     <div class="stack">
       ${DECISIONS.map((item, index) => `
-        <article class="decision">
-          <h3>${index + 1}. ${escape(item.title)}</h3>
+        <article class="decision${item.status === 'settled' ? ' is-settled' : ''}">
+          <h3>${index + 1}. ${escape(item.title)} <span class="tag">${item.status === 'settled' ? 'Settled' : 'Waiting on you'}</span></h3>
           <dl>
-            <div><dt>Today</dt><dd>${escape(item.today)}</dd></div>
-            <div><dt>The question</dt><dd>${escape(item.question)}</dd></div>
-            <div><dt>Options</dt><dd><ul>${item.options.map((option) => `<li>${escape(option)}</li>`).join('')}</ul></dd></div>
+            <div><dt>${item.status === 'settled' ? 'What was decided' : 'Today'}</dt><dd>${escape(item.today)}</dd></div>
+            ${item.question ? `<div><dt>The question</dt><dd>${escape(item.question)}</dd></div>` : ''}
+            ${item.options.length ? `<div><dt>Options</dt><dd><ul>${item.options.map((option) => `<li>${escape(option)}</li>`).join('')}</ul></dd></div>` : ''}
           </dl>
           <p class="rec">${escape(item.recommend)}</p>
         </article>`).join('')}
@@ -205,7 +192,7 @@ const html = `<!doctype html>
   </section>
 
   <section>
-    <h2>Open work, no decision needed</h2>
+    <h2>Open work</h2>
     <div class="stack">
       ${OPEN.map((item) => `
         <article class="open">
