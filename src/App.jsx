@@ -4271,8 +4271,6 @@ function StaffView({ role, currentRole }) {
       ...form,
       tailorDepartment: form.role === 'tailor' ? form.tailorDepartment : null,
       tailorGrade: form.role === 'tailor' && form.tailorGrade ? Number(form.tailorGrade) : null,
-      ownerPhone: currentRole.phone,
-      ownerPin: currentRole.pin,
     };
     if (editingId && !payload.pin) delete payload.pin;
     try {
@@ -4296,7 +4294,7 @@ function StaffView({ role, currentRole }) {
     if (!window.confirm(`Delete ${person.displayName}'s staff account? This cannot be undone.`)) return;
     setMessage('');
     try {
-      await api.delete(`/oms/staff/${person.id}`, { data: { ownerPhone: currentRole.phone, ownerPin: currentRole.pin } });
+      await api.delete(`/oms/staff/${person.id}`);
       setStaffUsers((current) => current.filter((item) => item.id !== person.id));
       if (editingId === person.id) closeForm();
       setMessage('Staff account deleted.');
@@ -4310,8 +4308,6 @@ function StaffView({ role, currentRole }) {
     try {
       const response = await api.patch(`/oms/staff/${tailor.id}/tailor-grade`, {
         grade,
-        ownerPhone: currentRole.phone,
-        ownerPin: currentRole.pin,
       });
       const updated = response.data?.data?.staffUser;
       setStaffUsers((current) => current.map((person) => person.id === tailor.id

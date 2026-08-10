@@ -65,7 +65,7 @@ function RoleBadge({ role }) {
   );
 }
 
-export default function UserManagementPage({ currentRole }) {
+export default function UserManagementPage() {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -115,7 +115,7 @@ export default function UserManagementPage({ currentRole }) {
   const save = async (event) => {
     event.preventDefault();
     setMessage('');
-    const payload = { ...form, displayName: form.displayName || form.fullName, ownerPhone: currentRole?.phone, ownerPin: currentRole?.pin };
+    const payload = { ...form, displayName: form.displayName || form.fullName };
     try {
       if (screen === 'edit') {
         const response = await api.patch(`/oms/staff/${selected.id}`, payload);
@@ -155,7 +155,6 @@ export default function UserManagementPage({ currentRole }) {
         onModal={setModal}
         modal={modal}
         setStatus={setStatus}
-        currentRole={currentRole}
       />
     );
   }
@@ -650,7 +649,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
   );
 }
 
-function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setStatus, currentRole }) {
+function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setStatus }) {
   const roleS = roleStyle[person.role] || { bg: '#f5f0e8', color: '#5a4e42' };
   return (
     <div className="os-page">
@@ -837,7 +836,6 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setSt
         <StaffModal
           type={modal}
           person={person}
-          currentRole={currentRole}
           close={() => onModal(null)}
           confirm={() => setStatus(modal === 'deactivate' ? 'inactive' : modal === 'reactivate' ? 'active' : person.status)}
         />
@@ -846,7 +844,7 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setSt
   );
 }
 
-function StaffModal({ type, person, close, confirm, currentRole }) {
+function StaffModal({ type, person, close, confirm }) {
   // Reset PIN used to arrive with "1234" already filled in, ask for a Google
   // Auth code that was never checked, and then change nothing at all — the
   // member of staff's old PIN kept working.
@@ -863,8 +861,6 @@ function StaffModal({ type, person, close, confirm, currentRole }) {
     try {
       await api.patch(`/oms/staff/${person.id}`, {
         pin: pin.trim(),
-        ownerPhone: currentRole?.phone,
-        ownerPin: currentRole?.pin,
       });
       close();
     } catch (requestError) {

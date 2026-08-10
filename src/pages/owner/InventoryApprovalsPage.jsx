@@ -22,7 +22,7 @@ function ChangePill({ fieldKey, value }) {
   );
 }
 
-export default function OwnerInventoryApprovalsPage({ currentRole, onBack }) {
+export default function OwnerInventoryApprovalsPage({ onBack }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -53,8 +53,6 @@ export default function OwnerInventoryApprovalsPage({ currentRole, onBack }) {
     try {
       await api.patch(`/oms/inventory-edit-requests/${request.id}/review`, {
         decision,
-        ownerPhone: currentRole?.phone,
-        ownerPin: currentRole?.pin,
       });
       setMessageType('success');
       setMessage(`Request ${decision.toLowerCase()} successfully.`);

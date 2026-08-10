@@ -25,3 +25,23 @@ Feature: Who may reach the shop's records
   Scenario: A customer can still open their tracking link
     Given a customer opens the tracking link for an order that has not started
     Then the tracking page should offer three steps
+
+  # These routes used to re-check the Owner by taking their phone and PIN in the
+  # request body. Once the PINs left the bundle there was no PIN to send, and
+  # every one of them refused — staff could not be added, edited or removed.
+  Rule: Managing staff is authorised by the signed-in session
+
+    Scenario: The Owner adds and removes a staff account
+      When the Owner adds a staff account
+      Then the account should be created
+      And the Owner should be able to remove it again
+
+    Scenario: A Store Manager cannot add a staff account
+      When the Store Manager tries to add a staff account
+      Then the API should refuse me as not the Owner
+
+    Scenario: Resetting a PIN ends the sessions the old one opened
+      Given a member of staff is signed in
+      When the Owner resets their PIN
+      Then their old session should stop working
+      And their old PIN should no longer sign them in
