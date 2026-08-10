@@ -74,12 +74,17 @@ export default function LoginPage({ onLogin, notice = '' }) {
               {!error && notice ? <div className="login-notice">{notice}</div> : null}
               <label>Phone number<span className="login-input-icon">⌕</span><input value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="08160000000" /></label>
               <label>PIN<span className="pin-input-wrap"><input value={pin} onChange={(event) => setPin(event.target.value)} type={showPin ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter PIN" /><button type="button" className="pin-toggle" aria-label={showPin ? 'Hide PIN' : 'Show PIN'} onClick={() => setShowPin((current) => !current)}>{showPin ? '◉' : '◎'}</button></span></label>
-              <div className="login-form-options"><label><input type="checkbox" defaultChecked />Remember me on this device</label><button type="button">Forgot PIN?</button></div>
+              {/* "Remember me" changed nothing — the session is kept either way —
+                  and "Forgot PIN?" led nowhere. There is no self-service reset;
+                  the Owner sets a new PIN from User Management. */}
+              <p className="login-form-options">Forgotten your PIN? Ask the Owner to set you a new one.</p>
               <button className="login-submit" type="submit" disabled={signingIn}>{signingIn ? 'Signing in…' : <>Continue <span>→</span></>}</button>
             </form>
             <p className="login-terms">By continuing, you agree to our <b>Terms of Use</b> and <b>Privacy Policy.</b></p>
           </section>
-          <footer className="login-support"><div><strong>Need help signing in?</strong><span>Contact IT support or your system administrator.</span></div><div><strong>● &nbsp; All systems operational</strong><span>Last updated: 22 Jul 2026, 14:30</span></div></footer>
+          {/* "All systems operational — last updated 22 Jul 2026, 14:30" was fixed
+              text: nothing monitored anything, and the date never moved. */}
+          <footer className="login-support"><div><strong>Need help signing in?</strong><span>Contact the Owner or your system administrator.</span></div></footer>
         </section>
       </section>
     </main>

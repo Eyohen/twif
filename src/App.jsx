@@ -28,6 +28,7 @@ import {
   isInvoiceApproved, canShowJobInProduction, productionBlockReason, productionJobFromInvoice,
   mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid,
   invoiceDocumentPayload, PERIOD_OPTIONS, filterByPeriod, periodTrend,
+  periodWindow, previousWindow, withinWindow, changeAgainst, changeLabel,
   amountReceived, invoicePayable, formatMoment, CUSTOMER_TRACKING_STEPS,
   openDocumentTab, presentInvoiceDocument,
 } from './utils/oms';
@@ -394,6 +395,16 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
   const periodDelayed = periodJobs.filter((job) => job.delivery && new Date(`${job.delivery}T23:59:59`) < new Date() && job.status !== 'Ready');
 
   const totalRevenue = filteredInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
+
+  // The same window, one length earlier, so each headline figure can be set
+  // against something real rather than a number typed into the source.
+  const thisWindow = periodWindow(period, customFrom, customTo);
+  const lastWindow = previousWindow(thisWindow);
+  const priorInvoices = withinWindow(sentInvoices, (invoice) => invoice.createdAt, lastWindow);
+  const priorRevenue = priorInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
+  const priorCompleted = withinWindow(productionJobs, (job) => job.updatedAt, lastWindow).filter((job) => job.status === 'Ready');
+  const nowCompleted = withinWindow(productionJobs, (job) => job.updatedAt, thisWindow).filter((job) => job.status === 'Ready');
+  const revenueChange = changeAgainst(totalRevenue, priorRevenue);
   const completed = productionJobs.filter((job) => job.status === 'Ready');
   // Overdue jobs are a standing concern, so this one is measured across the
   // whole board rather than the selected period.
@@ -424,12 +435,15 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
       </div>
       <div className="kpi-carousel-wrap">
         <section className="owner-kpis" ref={kpiScrollRef} onScroll={handleKpiScroll}>{[
-          ['Total Revenue (MTD)', money.format(totalRevenue), '↑ 18.7% vs last 30 days', 'gold', '▣'],
-          ['Total Orders', filteredInvoices.length, '↑ 12.5% vs last 30 days', 'gold', '▤'],
-          ['Completed Jobs', completed.length, '↑ 22.3% vs last 30 days', 'green', '▥'],
-          ['Active Customers', customers.length, '↑ 8.1% vs last 30 days', 'blue', '♙'],
-          ['Low Stock Items', lowStock.length, '↓ 14.3% vs last 30 days', 'red', '△'],
-          ['Outstanding Payments', money.format(outstanding), '↓ 6.7% vs last 30 days', 'red', '▣'],
+          // A caption only appears where there is an earlier window to measure
+          // against; the last three are counts of how things stand today, which
+          // nothing in the period before them speaks to.
+          ['Total Revenue', money.format(totalRevenue), changeLabel(revenueChange) || 'No earlier period to compare', 'gold', '▣'],
+          ['Total Orders', filteredInvoices.length, changeLabel(changeAgainst(filteredInvoices.length, priorInvoices.length)) || 'No earlier period to compare', 'gold', '▤'],
+          ['Completed Jobs', completed.length, changeLabel(changeAgainst(nowCompleted.length, priorCompleted.length)) || `${nowCompleted.length} in this period`, 'green', '▥'],
+          ['Active Customers', customers.length, 'On the books now', 'blue', '♙'],
+          ['Low Stock Items', lowStock.length, lowStock.length ? 'At or below threshold' : 'Nothing below threshold', 'red', '△'],
+          ['Outstanding Payments', money.format(outstanding), `${filteredInvoices.filter((invoice) => invoice.paymentStatus !== 'Fully Paid').length} invoices not settled`, 'red', '▣'],
         ].map(([label, value, change, tone, icon], index) => <article className={`owner-kpi tone-${tone}`} key={label}><span>{label}</span><strong>{value}</strong><small>{change}</small><i>{icon}</i>{index < 5 ? <div className="owner-sparkline"><b/><b/><b/><b/><b/><b/><b/></div> : null}</article>)}</section>
       </div>
 
@@ -439,7 +453,11 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
             ['▤', `${filteredInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts').length} invoices are awaiting Accounts approval.`, 'Review', 'gold', 'Invoices'],
             ['△', `${delayed.length} orders are overdue by more than 2 days.`, 'View', 'red', 'Orders'],
             ['△', `${lowStock[0]?.name || 'Inventory'} requires restocking.`, 'Restock', 'blue', 'Inventory'],
-            ['↗', 'Revenue is up this month compared to last month.', 'View Report', 'green', 'Reports'],
+            [revenueChange && !revenueChange.up ? '↘' : '↗',
+              revenueChange
+                ? `Revenue is ${revenueChange.up ? 'up' : 'down'} ${Math.abs(revenueChange.percent).toFixed(1)}% on the period before.`
+                : 'There is no earlier period to compare revenue against yet.',
+              'View Report', revenueChange && !revenueChange.up ? 'red' : 'green', 'Reports'],
             ['♙', `${topCustomers[0]?.fullName || 'A customer'} is a top customer this month.`, 'View Customer', 'blue', 'Customers'],
             ['♧', `${tailorRows[0]?.displayName || 'Production staff'} leads weekly production.`, 'View Performance', 'purple', 'Staff'],
           ].map(([icon, text, action, tone, dest]) => <article key={text}><i className={tone}>{icon}</i><span>{text}</span><button className={tone} onClick={() => onNavigate?.(dest)}>{action}</button></article>)}
@@ -1874,17 +1892,8 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
           <span style={{ fontSize: 12, color: '#8a7a6a' }}>
             Showing {filteredInvoices.length ? 1 : 0}–{filteredInvoices.length} of {sentInvoices.length} invoices
           </span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {['‹', '1', '›'].map((label, i) => (
-              <button key={i} type="button" style={{
-                border: '1px solid #ddd5c8', borderRadius: 6,
-                padding: '4px 10px', fontSize: 12, cursor: 'pointer',
-                background: label === '1' ? '#1a1611' : '#fff',
-                color: label === '1' ? '#fff' : '#5a4e42',
-                fontWeight: label === '1' ? 700 : 400,
-              }}>{label}</button>
-            ))}
-          </div>
+          {/* A ‹ 1 › paginator stood here and did nothing when clicked. This
+              list is not paged — every invoice that matches is on screen. */}
         </div>
       </div>
     </div>
@@ -2325,7 +2334,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     return <div className="invoice-preview-page-v2">
       <header><button type="button" onClick={() => setPreviewMode(false)}>← &nbsp; Back to Invoice</button><div><small>INVOICE</small><strong>{form.invoiceNumber}</strong><Status>Not Sent Yet</Status></div></header>
       <section className="invoice-preview-title"><div><h2>{previewTab === 'invoice' ? 'Invoice Preview' : 'Email Preview'}</h2><p>This is how your {previewTab === 'invoice' ? 'invoice' : 'email'} will appear to the customer.</p></div><nav><button className={previewTab === 'invoice' ? 'active' : ''} onClick={() => setPreviewTab('invoice')}>Invoice Preview</button><button className={previewTab === 'email' ? 'active' : ''} onClick={() => setPreviewTab('email')}>Email Preview</button></nav></section>
-      {previewTab === 'invoice' ? <InvoiceDocumentPreview html={previewHtml} invoiceNumber={form.invoiceNumber} /> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], ['Amount Due', money.format(balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div><button>Download Invoice PDF</button><button>Track Your Order</button></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>Balance Due</span><strong>{money.format(balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
+      {previewTab === 'invoice' ? <InvoiceDocumentPreview html={previewHtml} invoiceNumber={form.invoiceNumber} /> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], ['Amount Due', money.format(balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div>{/* These two are part of the picture of the email, not controls on this screen — clicking them here did nothing. */}<span>Download Invoice PDF</span><span>Track Your Order</span></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>Balance Due</span><strong>{money.format(balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
       {message ? <div className="invoice-message">{message}</div> : null}
       <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => { const tab = openDocumentTab(); presentInvoiceDocument(previewHtml, form.invoiceNumber, tab); }}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
     </div>;
@@ -4615,25 +4624,10 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
             <span>To</span>
             <input type="date" value={to} min={from} max={todayIso()} onChange={(event) => setTo(event.target.value)} />
           </label>
-          <label className="os-field">
-            <span>Payment Status</span>
-            <select style={{ padding: '10px 12px', border: '1px solid #ddd5c8', borderRadius: 8, fontSize: 14 }}>
-              <option>All Payments</option>
-              <option>Fully Paid</option>
-              <option>Partial Paid</option>
-              <option>Unpaid</option>
-            </select>
-          </label>
-          <label className="os-field">
-            <span>Approval Status</span>
-            <select style={{ padding: '10px 12px', border: '1px solid #ddd5c8', borderRadius: 8, fontSize: 14 }}>
-              <option>All Statuses</option>
-              <option>Approved</option>
-              <option>Pending Accounts</option>
-              <option>Flagged</option>
-              <option>Rejected</option>
-            </select>
-          </label>
+          {/* Payment Status and Approval Status selects stood here with no
+              handler behind them: choosing "Unpaid" left the report, and the
+              file it exports, showing everything. The date range and the tabs
+              below are what actually narrow this report. */}
         </div>
         {message ? (
           <div style={{ margin: '0 18px 18px', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderRadius: 8, background: '#fff5f0', border: '1px solid #f3d5cc', fontSize: 13, color: '#8a3520' }} role="status">
@@ -5884,7 +5878,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'New Invoice') return <NewInvoiceView currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
   if (activeView === 'Order Sheet') return <OrderSheetView sentInvoices={viewProps.sentInvoices} onCreateJob={viewProps.onCreateJob} />;
   if (activeView === 'Payments') return role === 'accounts' || role === 'owner'
-    ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} />
+    ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} onInvoiceUpdated={viewProps.onInvoiceUpdated} />
     : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
   if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} blockedJobs={viewProps.blockedProductionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} />;
   if (activeView === 'Inventory') return role === 'accounts' ? <AccountsInventoryReconciliationPage /> : role === 'inventory_manager' ? <InventoryListPage currentRole={viewProps.currentRole} /> : role === 'owner' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode /> : <InventoryView />;
@@ -6033,6 +6027,15 @@ function App() {
       { ...invoice, accountApprovalStatus: invoice.accountApprovalStatus || 'Pending Accounts' },
       ...current.filter((item) => item.invoiceNumber !== invoice.invoiceNumber),
     ]);
+  };
+
+  // Accounts recording a payment changes what production may pick up, so the
+  // fresh invoice has to reach the shared list the gate reads from.
+  const applyInvoiceUpdate = (invoice) => {
+    if (!invoice?.invoiceNumber) return;
+    setSentInvoices((current) => current.map((item) => (
+      item.invoiceNumber === invoice.invoiceNumber ? invoice : item
+    )));
   };
 
   const updateInvoiceApproval = (invoiceNumber, status) => {
@@ -6277,6 +6280,7 @@ function App() {
                 onNavigate: openView,
                 onInvoiceSent: recordSentInvoice,
                 onApproveInvoice: updateInvoiceApproval,
+                onInvoiceUpdated: applyInvoiceUpdate,
                 sentInvoices,
                 productionJobs: approvedProductionJobs,
                 blockedProductionJobs,

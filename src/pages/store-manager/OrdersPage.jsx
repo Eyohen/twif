@@ -3,6 +3,7 @@ import { Clock, Package, CheckCircle, AlertCircle, Search, ChevronRight, Eye } f
 import { money, invoiceApprovalStatus, amountReceived, formatMoment, daysUntilDue, dueDateLabel, toNumber } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import OrderDetailsPage from './OrderDetailsPage';
+import Pagination from '../../components/oms/Pagination';
 
 const KPI_COUNT = 4;
 
@@ -11,6 +12,8 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
   const [filter, setFilter] = useState('All');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [activeKpiDot, setActiveKpiDot] = useState(0);
+  const [sortOrder, setSortOrder] = useState('Newest First');
+  const [page, setPage] = useState(1);
   const kpiScrollRef = useRef(null);
 
   const handleKpiScroll = () => {
@@ -29,8 +32,18 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
     || (filter === 'In Production' && ['Assigned', 'In Progress'].includes(order.job.status))
     || (filter === 'Ready for Collection' && ['Ready', 'Ready for Collection'].includes(order.job.status))
     || (filter === 'Completed' && order.job.status === 'Completed');
-  const filtered = useMemo(() => orders.filter((order) => matchesFilter(order)
-    && `${order.invoiceNumber} ${order.customer} ${order.phone || ''}`.toLowerCase().includes(search.toLowerCase())), [orders, search, filter]);
+  // The sort control offered Newest and Oldest and did neither.
+  const orderedAt = (order) => new Date(order.createdAt || order.invoiceDate || 0).getTime();
+  const filtered = useMemo(() => orders
+    .filter((order) => matchesFilter(order)
+      && `${order.invoiceNumber} ${order.customer} ${order.phone || ''}`.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (sortOrder === 'Oldest First' ? orderedAt(a) - orderedAt(b) : orderedAt(b) - orderedAt(a))),
+  [orders, search, filter, sortOrder]);
+
+  const PAGE_SIZE = 10;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const pendingAccounts = orders.filter((order) => order.approval === 'Pending Accounts');
   const inProduction = orders.filter((order) => ['Assigned', 'In Progress'].includes(order.job.status));
   const ready = orders.filter((order) => ['Ready', 'Ready for Collection'].includes(order.job.status));
@@ -105,8 +118,8 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
               />
             </label>
             <label className="os-field" style={{ minWidth: 160 }}>
-              <select>
-                <option>Sort by: Newest First</option>
+              <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}>
+                <option>Newest First</option>
                 <option>Oldest First</option>
               </select>
             </label>
@@ -145,7 +158,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.slice(0, 10).map((order) => {
+            {visible.map((order) => {
               const delivery = order.job.delivery || order.deliveryDate;
               const status = productionStatus(order);
               const custInitials = order.customer?.split(' ').map((part) => part[0]).join('').slice(0, 2);
@@ -245,7 +258,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
 
       {/* Mobile card list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} className="os-customers-mobile-list">
-        {filtered.slice(0, 10).map((order, index) => {
+        {visible.map((order, index) => {
           const delivery = order.job.delivery || order.deliveryDate;
           const status = productionStatus(order);
           const custInitials = order.customer?.split(' ').map((part) => part[0]).join('').slice(0, 2);
@@ -315,28 +328,13 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
         ) : null}
       </div>
 
-      {/* Pagination */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', flexWrap: 'wrap', gap: 10 }}>
-        <span style={{ fontSize: 13, color: '#8a7a6a' }}>
-          Showing {filtered.length ? 1 : 0}–{Math.min(10, filtered.length)} of {orders.length} orders
-        </span>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {['‹', '1', '2', '›'].map((p) => (
-            <button key={p} style={{
-              padding: '6px 10px', border: '1px solid #ddd5c8', borderRadius: 6,
-              fontSize: 13, fontWeight: p === '1' ? 700 : 400,
-              background: p === '1' ? '#1a1611' : '#fff',
-              color: p === '1' ? '#fff' : '#5a4e42', cursor: 'pointer',
-            }}>{p}</button>
-          ))}
-          <label style={{ fontSize: 13, color: '#8a7a6a', marginLeft: 8 }}>
-            Rows:&nbsp;
-            <select style={{ fontSize: 13, border: '1px solid #ddd5c8', borderRadius: 6, padding: '4px 8px', color: '#1a1611' }}>
-              <option>10</option><option>20</option>
-            </select>
-          </label>
-        </div>
-      </div>
+      <Pagination
+        page={currentPage}
+        pageSize={PAGE_SIZE}
+        total={filtered.length}
+        onPage={setPage}
+        noun="orders"
+      />
     </div>
   );
 }

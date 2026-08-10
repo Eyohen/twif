@@ -171,6 +171,10 @@ export default function SettingsPage() {
         </section>
       ))}
 
+      {/* Every control in this panel is a plain button, so it cannot submit
+          the settings form it sits inside. */}
+      <CustomerRecordsPanel />
+
       {dirty ? <div className="settings-dirty-bar">You have unsaved changes.</div> : null}
     </form>
   );

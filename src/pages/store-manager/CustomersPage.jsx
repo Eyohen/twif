@@ -7,6 +7,7 @@ import EditCustomerPage from './EditCustomerPage';
 import MeasurementsPage from './MeasurementsPage';
 import CustomerOrdersPage from './CustomerOrdersPage';
 import OrderDetailsPage from './OrderDetailsPage';
+import Pagination from '../../components/oms/Pagination';
 
 const KPI_COUNT = 4;
 
@@ -18,7 +19,6 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
   const [search, setSearch] = useState('');
   const [segment, setSegment] = useState(searchParams.get('filter') || 'All Customers');
   const [sortOrder, setSortOrder] = useState('Name (A–Z)');
-  const [openMenuId, setOpenMenuId] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [measurementCustomer, setMeasurementCustomer] = useState(null);
@@ -30,6 +30,8 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
   const [creating, setCreating] = useState(false);
   const [createForm, setCreateForm] = useState({ fullName: '', phone: '', email: '', category: 'New' });
   const [activeKpiDot, setActiveKpiDot] = useState(0);
+  const [archiving, setArchiving] = useState(null);
+  const [page, setPage] = useState(1);
   const kpiScrollRef = useRef(null);
 
   const handleKpiScroll = () => {
@@ -67,6 +69,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
       setCustomers((current) => current.filter((item) => item.id !== customer.id));
       showSuccess(`${customer.fullName} was archived.`);
     } catch (error) { showError(error.response?.data?.message || 'Unable to archive customer.'); }
+    setArchiving(null);
   };
 
   const returning = customers.filter((customer) => Number(customer.totalOrders) > 1);
@@ -78,6 +81,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
 
+  const PAGE_SIZE = 10;
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     const byName = (customer) => String(customer.fullName || '').trim().toLowerCase();
@@ -145,15 +149,11 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
     );
   }
 
-  const actionMenuItems = [
-    [<User size={13} strokeWidth={1.8} />, 'View Profile'],
-    [<Package size={13} strokeWidth={1.8} />, 'New Order'],
-    [<FileText size={13} strokeWidth={1.8} />, 'New Invoice'],
-    [<Ruler size={13} strokeWidth={1.8} />, 'View Measurements'],
-    [<Calendar size={13} strokeWidth={1.8} />, 'View Orders'],
-    [<Edit2 size={13} strokeWidth={1.8} />, 'Edit Customer'],
-    [<Trash2 size={13} strokeWidth={1.8} />, 'Archive Customer'],
-  ];
+  // A filter or a search that shortens the list can leave the reader on a page
+  // that no longer exists, so the last page is the furthest they can be on.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <div className="os-page">
@@ -272,7 +272,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, 10).map((customer, index) => {
+                {visible.map((customer) => {
                   const initials = customer.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2);
                   return (
                     <tr
@@ -291,7 +291,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                           <div>
                             <div style={{ fontWeight: 800, fontSize: 14, color: '#0f0b06' }}>{customer.fullName}</div>
                             <div style={{ fontSize: 11, color: '#8a7a6a' }}>
-                              Since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : '2026'}
+                              Since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'unknown'}
                             </div>
                           </div>
                         </div>
@@ -307,7 +307,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                         </span>
                       </td>
                       <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>
-                        {customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : `${22 - index} Jul 2026`}
+                        {customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No visit yet'}
                       </td>
                       <td style={{ padding: '12px 14px' }}>
                         <span style={{
@@ -317,7 +317,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                           {customer.measurementsAdded ? '✓ Saved' : '× Not saved'}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{customer.stores?.[0] || 'Lekki'}</td>
+                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{customer.stores?.[0] || '—'}</td>
                       <td style={{ padding: '12px 14px' }}>
                         <div style={{ position: 'relative', display: 'inline-block' }}>
                           <button
@@ -332,6 +332,20 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                           >
                             <Eye size={12} strokeWidth={1.8} />
                             View Profile
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setArchiving(customer)}
+                            title={`Archive ${customer.fullName}`}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 6,
+                              padding: '5px 10px', border: '1px solid #ddd5c8', borderRadius: 6,
+                              fontSize: 12, fontWeight: 600, background: '#fff', color: '#8a3520',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <Trash2 size={12} strokeWidth={1.8} />
+                            Archive
                           </button>
                         </div>
                       </td>
@@ -351,7 +365,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
 
           {/* Mobile card list */}
           <div className="os-customers-mobile-list" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {filtered.slice(0, 10).map((customer, index) => {
+            {visible.map((customer) => {
               const initials = customer.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2);
               return (
                 <div key={customer.id} className="os-card" style={{ overflow: 'visible' }}>
@@ -379,7 +393,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Last Visit</div>
                       <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>
-                        {customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : `${22 - index} Jul 2026`}
+                        {customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No visit yet'}
                       </div>
                     </div>
                     <div>
@@ -390,16 +404,29 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                     </div>
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Store</div>
-                      <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>{customer.stores?.[0] || 'Lekki'}</div>
+                      <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>{customer.stores?.[0] || '—'}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Customer Since</div>
                       <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>
-                        {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Jan 2026'}
+                        {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : '—'}
                       </div>
                     </div>
                   </div>
-                  <div style={{ borderTop: '1px solid #f3ede5', padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <div style={{ borderTop: '1px solid #f3ede5', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setArchiving(customer)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '8px 16px', border: '1px solid #ddd5c8', borderRadius: 8,
+                        fontSize: 13, fontWeight: 600, background: '#fff', color: '#8a3520',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Trash2 size={13} strokeWidth={1.8} />
+                      Archive
+                    </button>
                     <button
                       type="button"
                       onClick={() => setSelectedCustomer(customer)}
@@ -426,22 +453,13 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
             ) : null}
           </div>
 
-          {/* Pagination */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', flexWrap: 'wrap', gap: 10 }}>
-            <span style={{ fontSize: 13, color: '#8a7a6a' }}>
-              Showing {filtered.length ? 1 : 0}–{Math.min(10, filtered.length)} of {customers.length} customers
-            </span>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {['‹', '1', '2', '3', '›'].map((p) => (
-                <button key={p} style={{
-                  padding: '6px 10px', border: '1px solid #ddd5c8', borderRadius: 6,
-                  fontSize: 13, fontWeight: p === '1' ? 700 : 400,
-                  background: p === '1' ? '#1a1611' : '#fff',
-                  color: p === '1' ? '#fff' : '#5a4e42', cursor: 'pointer',
-                }}>{p}</button>
-              ))}
-            </div>
-          </div>
+          <Pagination
+            page={currentPage}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            onPage={setPage}
+            noun="customers"
+          />
         </>
       )}
 
@@ -503,6 +521,38 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
               </button>
             </div>
           </form>
+        </div>
+      ) : null}
+
+      {/* Archiving takes a customer off every list in the shop, so it asks
+          first and names who it is about. */}
+      {archiving ? (
+        <div className="os-confirm-backdrop" onClick={() => setArchiving(null)}>
+          <div className="os-confirm" onClick={(event) => event.stopPropagation()}>
+            <h3 style={{ margin: 0, fontSize: 17, color: '#1a1611' }}>Archive {archiving.fullName}?</h3>
+            <p style={{ margin: '10px 0 0', fontSize: 13, lineHeight: 1.6, color: '#5a4e42' }}>
+              They will no longer appear in the customer list or be selectable on a new
+              invoice. Their past orders and invoices are kept.
+            </p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+              <button
+                type="button"
+                onClick={() => setArchiving(null)}
+                style={{
+                  flex: 1, padding: '11px', border: '1px solid #ddd5c8', borderRadius: 8,
+                  fontSize: 14, fontWeight: 600, background: '#fff', color: '#5a4e42', cursor: 'pointer',
+                }}
+              >Keep customer</button>
+              <button
+                type="button"
+                onClick={() => archiveCustomer(archiving)}
+                style={{
+                  flex: 1, padding: '11px', border: 0, borderRadius: 8,
+                  fontSize: 14, fontWeight: 700, background: '#8a3520', color: '#fff', cursor: 'pointer',
+                }}
+              >Archive</button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

@@ -316,6 +316,61 @@ export const filterByPeriod = (records, getDate, period, customFrom, customTo) =
   return records;
 };
 
+// Every KPI on the owner's dashboard carried a change figure — "↑ 18.7% vs last
+// 30 days" — that was written into the source and never moved. To compare a
+// period against the one before it, both windows have to be known.
+export const periodWindow = (period, customFrom, customTo) => {
+  if (period === 'all') return null;
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+
+  if (period === 'today') return { start, end };
+  if (period === 'week') { start.setDate(start.getDate() - 6); return { start, end }; }
+  if (period === 'month') { start.setDate(1); return { start, end }; }
+  if (period === 'year') { start.setMonth(0, 1); return { start, end }; }
+  if (period === 'custom' && customFrom) {
+    return {
+      start: new Date(`${customFrom}T00:00:00`),
+      end: new Date(`${customTo || todayIso()}T23:59:59`),
+    };
+  }
+  return null;
+};
+
+// The window of the same length immediately before the one on screen.
+export const previousWindow = (window) => {
+  if (!window) return null;
+  const span = window.end - window.start;
+  const end = new Date(window.start.getTime() - 1);
+  return { start: new Date(end.getTime() - span), end };
+};
+
+export const withinWindow = (records, getDate, window) => {
+  if (!window) return [];
+  return records.filter((record) => {
+    const value = getDate(record);
+    if (!value) return false;
+    const at = new Date(value);
+    return !Number.isNaN(at.valueOf()) && at >= window.start && at <= window.end;
+  });
+};
+
+// "↑ 18.7%" against nothing at all is worse than saying there is nothing to
+// compare with, so a period with no history returns null rather than a number.
+export const changeAgainst = (now, before) => {
+  if (before === 0) return now === 0 ? null : null;
+  const percent = ((now - before) / Math.abs(before)) * 100;
+  return { percent, up: percent >= 0 };
+};
+
+export const changeLabel = (change, unit = 'the period before') => {
+  if (!change) return null;
+  const arrow = change.up ? '↑' : '↓';
+  return `${arrow} ${Math.abs(change.percent).toFixed(1)}% vs ${unit}`;
+};
+
 // Buckets a period's records into columns for the dashboard chart, so the bars
 // move with the selected range instead of being a fixed decorative shape.
 export const periodTrend = (records, period, buckets = 11) => {

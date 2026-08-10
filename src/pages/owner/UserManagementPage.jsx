@@ -6,15 +6,9 @@ import {
   Phone, Calendar, Briefcase, Store, Star, Activity,
 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { downloadCsv, csvStamp } from '../../utils/csv';
+import { formatMoment } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
-
-const fallbackStaff = [
-  { id: '1', displayName: 'Jim (Admin)', role: 'admin', store: 'Head Office', phone: '0803 123 4567', status: 'active', lastLoginAt: '2026-07-30T09:25:00', device: 'Chrome on Windows' },
-  { id: '2', displayName: 'Bola (Accountant)', role: 'accounts', store: 'Head Office', phone: '0806 234 5678', status: 'active', lastLoginAt: '2026-07-29T16:40:00', device: 'Safari on iPhone' },
-  { id: '3', displayName: 'Tunde (Tailor)', role: 'tailor', store: 'Lekki Store', phone: '0806 345 6789', status: 'active', lastLoginAt: '2026-07-30T09:12:00', device: 'Android App' },
-  { id: '4', displayName: 'Ada (Store Manager)', role: 'store_manager', store: 'Victoria Island', phone: '0807 456 7890', status: 'active', lastLoginAt: '2026-07-28T11:32:00', device: 'Chrome on Windows' },
-  { id: '5', displayName: 'Chinedu (Tailor)', role: 'tailor', store: 'Yaba Store', phone: '0808 567 8901', status: 'inactive', lastLoginAt: '2026-07-23T09:00:00', device: 'Android App' },
-];
 
 const roleLabel = (role) => ({
   admin: 'Admin',
@@ -88,10 +82,13 @@ export default function UserManagementPage({ currentRole }) {
     setLoading(true);
     api.get('/oms/staff')
       .then((response) => {
-        const users = response.data?.data?.staffUsers || [];
-        setStaff(users.length ? users : fallbackStaff);
+        setStaff(response.data?.data?.staffUsers || []);
+        setMessage('');
       })
-      .catch(() => setStaff(fallbackStaff))
+      .catch((error) => {
+        setStaff([]);
+        setMessage(error.response?.data?.message || 'The staff list could not be loaded.');
+      })
       .finally(() => setLoading(false));
   };
 
@@ -149,14 +146,44 @@ export default function UserManagementPage({ currentRole }) {
     return <LoginHistory person={selected} onBack={() => setScreen('profile')} />;
   }
   if (screen === 'profile') {
-    return <StaffProfile person={selected} onBack={() => setScreen('list')} onEdit={openEdit} onHistory={() => setScreen('history')} onModal={setModal} modal={modal} setStatus={setStatus} />;
+    return (
+      <StaffProfile
+        person={selected}
+        onBack={() => setScreen('list')}
+        onEdit={openEdit}
+        onHistory={() => setScreen('history')}
+        onModal={setModal}
+        modal={modal}
+        setStatus={setStatus}
+        currentRole={currentRole}
+      />
+    );
   }
+
+  // The count was fixed at 3 whoever was on the staff list. Staff records carry
+  // a date of birth, so it can simply be counted.
+  const thisMonth = new Date().getMonth();
+  const birthdays = staff.filter((person) => {
+    if (!person.dateOfBirth) return false;
+    const born = new Date(person.dateOfBirth);
+    return !Number.isNaN(born.valueOf()) && born.getMonth() === thisMonth;
+  });
+
+  const exportStaff = () => downloadCsv(
+    `twif-staff-${csvStamp()}.csv`,
+    ['Name', 'Role', 'Store', 'Phone', 'Status', 'Date of birth', 'Last signed in'],
+    filtered.map((person) => [
+      person.displayName, roleLabel(person.role), person.store || '', person.phone,
+      person.status, person.dateOfBirth || '',
+      person.lastLoginAt ? formatMoment(person.lastLoginAt) : 'Never',
+    ])
+  );
 
   const kpis = [
     { icon: Users, label: 'Total Staff', value: staff.length, detail: 'All staff members', bg: '#e8f0fc', color: '#2a65c7' },
     { icon: UserCheck, label: 'Active Staff', value: staff.filter((p) => p.status === 'active').length, detail: 'Currently active', bg: '#eaf7ee', color: '#168647' },
     { icon: XCircle, label: 'Inactive', value: staff.filter((p) => p.status !== 'active').length, detail: 'Not active', bg: '#fce8e8', color: '#b02a2a' },
-    { icon: Cake, label: 'Birthdays This Month', value: 3, detail: 'Celebrate with your team', bg: '#fff0df', color: '#c06a00' },
+    { icon: Cake, label: 'Birthdays This Month', value: birthdays.length, detail: birthdays.length ? birthdays.map((person) => person.displayName).join(', ') : 'None on record this month', bg: '#fff0df', color: '#c06a00' },
   ];
 
   return (
@@ -182,11 +209,17 @@ export default function UserManagementPage({ currentRole }) {
           >
             <RefreshCw size={13} /> Refresh
           </button>
-          <button style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-            border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
-            fontSize: 13, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
-          }}>
+          <button
+            type="button"
+            onClick={exportStaff}
+            disabled={!filtered.length}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+              border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
+              fontSize: 13, color: '#5a4e42', cursor: filtered.length ? 'pointer' : 'not-allowed',
+              fontWeight: 500, opacity: filtered.length ? 1 : 0.6,
+            }}
+          >
             <Download size={13} /> Export
           </button>
           <button
@@ -198,6 +231,12 @@ export default function UserManagementPage({ currentRole }) {
           </button>
         </div>
       </div>
+
+      {message ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderRadius: 8, background: '#fff5f0', border: '1px solid #f0c8b8', color: '#8a3520', fontSize: 13 }} role="status">
+          <AlertCircle size={15} /> {message}
+        </div>
+      ) : null}
 
       {/* KPI Row */}
       <div className="os-kpi-row" style={{ gap: 12 }}>
@@ -611,7 +650,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
   );
 }
 
-function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setStatus }) {
+function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setStatus, currentRole }) {
   const roleS = roleStyle[person.role] || { bg: '#f5f0e8', color: '#5a4e42' };
   return (
     <div className="os-page">
@@ -797,6 +836,7 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setSt
         <StaffModal
           type={modal}
           person={person}
+          currentRole={currentRole}
           close={() => onModal(null)}
           confirm={() => setStatus(modal === 'deactivate' ? 'inactive' : modal === 'reactivate' ? 'active' : person.status)}
         />
@@ -805,7 +845,34 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setSt
   );
 }
 
-function StaffModal({ type, person, close, confirm }) {
+function StaffModal({ type, person, close, confirm, currentRole }) {
+  // Reset PIN used to arrive with "1234" already filled in, ask for a Google
+  // Auth code that was never checked, and then change nothing at all — the
+  // member of staff's old PIN kept working.
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const resetPin = async () => {
+    setError('');
+    if (pin.trim().length < 4) return setError('A PIN must be at least 4 characters.');
+    if (pin !== confirmPin) return setError('The two PINs do not match.');
+    setSaving(true);
+    try {
+      await api.patch(`/oms/staff/${person.id}`, {
+        pin: pin.trim(),
+        ownerPhone: currentRole?.phone,
+        ownerPin: currentRole?.pin,
+      });
+      close();
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'That PIN could not be changed.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const config = {
     reset:      { title: 'Reset PIN',       icon: Shield,       tone: 'blue',  bg: '#eff6ff', color: '#1d4ed8' },
     deactivate: { title: 'Deactivate Staff', icon: XCircle,     tone: 'red',   bg: '#fce8e8', color: '#b02a2a' },
@@ -823,7 +890,7 @@ function StaffModal({ type, person, close, confirm }) {
         boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
       }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-          <button onClick={close} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8a7a6a' }}>
+          <button type="button" onClick={close} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8a7a6a' }}>
             <XCircle size={18} />
           </button>
         </div>
@@ -841,16 +908,28 @@ function StaffModal({ type, person, close, confirm }) {
               : <>You are about to reactivate <strong>{person.displayName}</strong>. They will regain platform access.</>}
           </p>
         )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-          {[['New PIN', 'password', '1234'], ['Confirm PIN', 'password', '1234'], ['Google Auth Code', 'text', '123 456']].map(([label, t, def]) => (
-            <label key={label} className="os-field">
-              <span>{label} <span style={{ color: '#e05252' }}>*</span></span>
-              <input type={t} defaultValue={def} />
+        {type === 'reset' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+            <p style={{ margin: 0, fontSize: 13, color: '#5a4e42', lineHeight: 1.5, textAlign: 'center' }}>
+              Set a new PIN for <strong>{person.displayName}</strong>. They will be signed out
+              everywhere and will need the new PIN to sign back in.
+            </p>
+            <label className="os-field">
+              <span>New PIN <span style={{ color: '#e05252' }}>*</span></span>
+              <input type="password" value={pin} onChange={(event) => setPin(event.target.value)} autoComplete="new-password" />
             </label>
-          ))}
-        </div>
+            <label className="os-field">
+              <span>Confirm PIN <span style={{ color: '#e05252' }}>*</span></span>
+              <input type="password" value={confirmPin} onChange={(event) => setConfirmPin(event.target.value)} autoComplete="new-password" />
+            </label>
+            {error ? (
+              <p style={{ margin: 0, padding: '9px 11px', borderRadius: 8, background: '#fff5f0', border: '1px solid #f0c8b8', color: '#8a3520', fontSize: 12 }}>{error}</p>
+            ) : null}
+          </div>
+        ) : null}
         <div style={{ display: 'flex', gap: 10 }}>
           <button
+            type="button"
             onClick={close}
             style={{
               flex: 1, padding: '10px 16px', border: '1px solid #ddd5c8', borderRadius: 8,
@@ -858,12 +937,15 @@ function StaffModal({ type, person, close, confirm }) {
             }}
           >Cancel</button>
           <button
-            onClick={confirm}
+            type="button"
+            onClick={type === 'reset' ? resetPin : confirm}
+            disabled={saving}
             style={{
               flex: 1, padding: '10px 16px', border: 'none', borderRadius: 8,
-              background: color, color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 700,
+              background: color, color: '#fff', fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer',
+              fontWeight: 700, opacity: saving ? 0.7 : 1,
             }}
-          >{title}</button>
+          >{saving ? 'Saving…' : title}</button>
         </div>
       </div>
     </div>
@@ -871,6 +953,38 @@ function StaffModal({ type, person, close, confirm }) {
 }
 
 function LoginHistory({ person, onBack }) {
+  const [events, setEvents] = useState(null);
+  const [error, setError] = useState('');
+  const [outcomeFilter, setOutcomeFilter] = useState('All Outcomes');
+
+  useEffect(() => {
+    api.get(`/oms/staff/${person.id}/logins`)
+      .then((response) => setEvents(response.data?.data?.events || []))
+      .catch((requestError) => {
+        setEvents([]);
+        setError(requestError.response?.data?.message || 'The sign-in history could not be loaded.');
+      });
+  }, [person.id]);
+
+  const label = {
+    success: 'Success',
+    wrong_credentials: 'Failed',
+    inactive_account: 'Blocked',
+  };
+
+  const rows = (events || []).filter((event) => (
+    outcomeFilter === 'All Outcomes' || label[event.outcome] === outcomeFilter
+  ));
+
+  const exportHistory = () => downloadCsv(
+    `twif-signins-${person.displayName.replace(/\s+/g, '-').toLowerCase()}-${csvStamp()}.csv`,
+    ['When', 'Outcome', 'Phone tried', 'IP address', 'Browser or app'],
+    rows.map((event) => [
+      formatMoment(event.createdAt), label[event.outcome] || event.outcome,
+      event.phone, event.ipAddress || '', event.userAgent || '',
+    ])
+  );
+
   return (
     <div className="os-page">
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#8a7a6a' }}>
@@ -885,64 +999,83 @@ function LoginHistory({ person, onBack }) {
           <ArrowLeft size={14} /> {person.displayName}
         </button>
         <ChevronRight size={12} />
-        <span>Login History</span>
+        <span>Sign-in History</span>
       </div>
 
       <div className="os-page-header">
         <div className="os-page-title">
           <Clock size={22} strokeWidth={1.5} style={{ color: '#c97b08' }} />
           <div>
-            <h2>Login History</h2>
-            <p>All login attempts for <strong>{person.displayName}</strong></p>
+            <h2>Sign-in History</h2>
+            <p>Every attempt on <strong>{person.displayName}</strong>&apos;s number, successful or not</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <select style={{
-            padding: '7px 10px', border: '1px solid #ddd5c8', borderRadius: 8,
-            fontSize: 12, color: '#5a4e42', background: '#fff',
-          }}>
-            <option>All Statuses</option>
-            <option>Success</option>
-            <option>Failed</option>
+          <select
+            value={outcomeFilter}
+            onChange={(event) => setOutcomeFilter(event.target.value)}
+            style={{
+              padding: '7px 10px', border: '1px solid #ddd5c8', borderRadius: 8,
+              fontSize: 12, color: '#5a4e42', background: '#fff',
+            }}
+          >
+            {['All Outcomes', 'Success', 'Failed', 'Blocked'].map((option) => <option key={option}>{option}</option>)}
           </select>
-          <button style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-            border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
-            fontSize: 13, color: '#5a4e42', cursor: 'pointer',
-          }}>
+          <button
+            type="button"
+            onClick={exportHistory}
+            disabled={!rows.length}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+              border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
+              fontSize: 13, color: '#5a4e42', cursor: rows.length ? 'pointer' : 'not-allowed',
+              opacity: rows.length ? 1 : 0.6,
+            }}
+          >
             <Download size={13} /> Export
           </button>
         </div>
       </div>
+
+      {error ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderRadius: 8, background: '#fff5f0', border: '1px solid #f0c8b8', color: '#8a3520', fontSize: 13 }}>
+          <AlertCircle size={15} /> {error}
+        </div>
+      ) : null}
 
       <div className="os-card">
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Date & Time', 'Device', 'Browser / App', 'IP Address', 'Status', 'Location'].map((h) => (
-                  <th key={h} style={{
+                {['Date & Time', 'Outcome', 'Number Tried', 'IP Address', 'Browser / App'].map((heading) => (
+                  <th key={heading} style={{
                     textAlign: 'left', padding: '11px 14px', fontSize: 11,
                     color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.08em',
-                    background: '#faf7f3', borderBottom: '1px solid #eee5da',
-                  }}>{h}</th>
+                    background: '#faf7f3', borderBottom: '1px solid #eee5da', whiteSpace: 'nowrap',
+                  }}>{heading}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: 7 }, (_, index) => (
-                <tr key={index} style={{ borderBottom: '1px solid #f3ede5' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#faf7f3'}
-                  onMouseLeave={e => e.currentTarget.style.background = ''}
-                >
-                  <td data-label="Date & Time" style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{22 - index} May 2024, 09:25 AM</td>
-                  <td data-label="Device" style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{index % 2 ? 'Android 13' : 'Windows 10'}</td>
-                  <td data-label="Browser / App" style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{index % 2 ? 'TWIF Android App' : 'Chrome 124'}</td>
-                  <td data-label="IP Address" style={{ padding: '12px 14px', fontSize: 12, fontFamily: 'monospace', color: '#8a7a6a' }}>197.210.45.{12 + index}</td>
-                  <td data-label="Status" style={{ padding: '12px 14px' }}>
-                    <Status>{index === 2 || index === 5 ? 'Failed' : index === 3 ? 'Blocked' : 'Success'}</Status>
+              {events === null ? (
+                <tr><td colSpan={5} style={{ padding: 32, textAlign: 'center', color: '#8a7a6a', fontSize: 13 }}>Loading…</td></tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ padding: 32, textAlign: 'center', color: '#8a7a6a', fontSize: 13 }}>
+                    {events.length ? 'No attempts match this filter.' : 'No sign-in attempts have been recorded yet.'}
                   </td>
-                  <td data-label="Location" style={{ padding: '12px 14px', fontSize: 13, color: '#8a7a6a' }}>Lagos, Nigeria</td>
+                </tr>
+              ) : rows.map((event) => (
+                <tr key={event.id} style={{ borderBottom: '1px solid #f3ede5' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#faf7f3'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = ''}
+                >
+                  <td data-label="Date & Time" style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42', whiteSpace: 'nowrap' }}>{formatMoment(event.createdAt)}</td>
+                  <td data-label="Outcome" style={{ padding: '12px 14px' }}><Status>{label[event.outcome] || event.outcome}</Status></td>
+                  <td data-label="Number Tried" style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{event.phone}</td>
+                  <td data-label="IP Address" style={{ padding: '12px 14px', fontSize: 12, fontFamily: 'monospace', color: '#8a7a6a' }}>{event.ipAddress || '—'}</td>
+                  <td data-label="Browser / App" style={{ padding: '12px 14px', fontSize: 12, color: '#8a7a6a', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={event.userAgent || ''}>{event.userAgent || '—'}</td>
                 </tr>
               ))}
             </tbody>

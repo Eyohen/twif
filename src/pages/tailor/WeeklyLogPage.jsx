@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { CheckCircle, Clock, BarChart2, TrendingUp, Calendar, ChevronLeft, ChevronRight, HelpCircle, Award } from 'lucide-react';
 import { Status } from '../../components/oms/Common';
 
@@ -16,17 +17,34 @@ const toneStyle = {
 };
 
 export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
-  const tailorName = currentRole?.name?.split(' (')[0] || '';
-  const assignedJobs = productionJobs.filter((order) => order.tailor === tailorName);
-  const completedJobs = assignedJobs.filter((order) => order.status === 'Ready');
-  const activeJobs = assignedJobs.filter((order) => order.status !== 'Ready');
+  // The arrows either side of the date did nothing, and the page showed every
+  // job the tailor had ever been given whatever week it claimed to be showing.
+  const [weeksBack, setWeeksBack] = useState(0);
 
+  const tailorName = currentRole?.name?.split(' (')[0] || '';
   const now = new Date();
+
   const monday = new Date(now);
-  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7) - (weeksBack * 7));
+  monday.setHours(0, 0, 0, 0);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-  const dateLabel = `${monday.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${sunday.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+  sunday.setHours(23, 59, 59, 999);
+  const dateLabel = weeksBack === 0
+    ? 'This week'
+    : `${monday.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${sunday.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+
+  const assignedJobs = productionJobs.filter((order) => order.tailor === tailorName);
+  const inWeek = (value) => {
+    if (!value) return false;
+    const at = new Date(value);
+    return !Number.isNaN(at.valueOf()) && at >= monday && at <= sunday;
+  };
+
+  // Finished work belongs to the week it was finished in; work still open is
+  // the tailor's current load whichever week is on screen.
+  const completedJobs = assignedJobs.filter((order) => order.status === 'Ready' && inWeek(order.updatedAt));
+  const activeJobs = assignedJobs.filter((order) => order.status !== 'Ready');
 
   const averageDays = completedJobs.length
     ? completedJobs.reduce((sum, job) => {
@@ -36,11 +54,36 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
       }, 0) / completedJobs.length
     : 0;
 
+  // On-time was hard-coded to 100% the moment anything was finished. It is now
+  // measured against the delivery date the order sheet carries; a job with no
+  // date on it is left out rather than counted as a success.
+  const withDueDate = completedJobs.filter((job) => job.delivery);
+  const onTime = withDueDate.filter((job) => new Date(job.updatedAt) <= new Date(`${job.delivery}T23:59:59`));
+
+  // The trend showed 5 and 7 jobs for the two weeks before this one whatever
+  // the tailor had actually done, and pinned a "Best" badge to the same box
+  // every time. Each week is now counted from the jobs themselves.
+  const weekBuckets = [-2, -1, 0, 1, 2].map((offset) => {
+    const start = new Date(monday);
+    start.setDate(monday.getDate() + (offset * 7));
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    const jobs = assignedJobs.filter((job) => {
+      if (job.status !== 'Ready' || !job.updatedAt) return false;
+      const at = new Date(job.updatedAt);
+      return at >= start && at <= end;
+    }).length;
+    // A week that has not happened yet has no count to show, as opposed to none.
+    return { start, end, offset, jobs: start > now ? null : jobs };
+  });
+  const bestWeek = Math.max(...weekBuckets.map((week) => week.jobs || 0));
+
   const summaryValues = {
     completed: completedJobs.length,
     progress:  activeJobs.length,
-    avg:       `${averageDays.toFixed(1)} days`,
-    ontime:    `${completedJobs.length ? 100 : 0}%`,
+    avg:       completedJobs.length ? `${averageDays.toFixed(1)} days` : '—',
+    ontime:    withDueDate.length ? `${Math.round((onTime.length / withDueDate.length) * 100)}%` : '—',
   };
 
   return (
@@ -55,18 +98,34 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
             <p>Track your completed work this week</p>
           </div>
         </div>
-        <button
-          type="button"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
-            border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
-            fontSize: 13, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
-          }}
-        >
-          <ChevronLeft size={14} />
-          <span>{dateLabel}</span>
-          <ChevronRight size={14} />
-        </button>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 2, padding: '3px 6px',
+          border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
+          fontSize: 13, color: '#5a4e42', fontWeight: 500,
+        }}>
+          <button
+            type="button"
+            aria-label="Previous week"
+            onClick={() => setWeeksBack((current) => current + 1)}
+            style={{ display: 'flex', padding: 5, border: 0, background: 'none', color: '#5a4e42', cursor: 'pointer' }}
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <span style={{ minWidth: 150, textAlign: 'center' }}>{dateLabel}</span>
+          <button
+            type="button"
+            aria-label="Next week"
+            onClick={() => setWeeksBack((current) => Math.max(0, current - 1))}
+            disabled={weeksBack === 0}
+            style={{
+              display: 'flex', padding: 5, border: 0, background: 'none',
+              color: weeksBack === 0 ? '#ccc' : '#5a4e42',
+              cursor: weeksBack === 0 ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
       </div>
 
       {/* KPI Summary Row */}
@@ -182,13 +241,9 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
         </div>
         <div className="os-card-body">
           <div className="os-kpi-row os-kpi-row-5" style={{ gap: 10 }}>
-            {[5, 7, completedJobs.length, null, null].map((jobs, index) => {
-              const start = new Date(monday);
-              start.setDate(monday.getDate() + ((index - 2) * 7));
-              const end = new Date(start);
-              end.setDate(start.getDate() + 6);
-              const isCurrentWeek = index === 2;
-              const isBest = index === 1;
+            {weekBuckets.map(({ start, end, offset, jobs }, index) => {
+              const isCurrentWeek = offset === 0;
+              const isBest = jobs != null && jobs > 0 && jobs === bestWeek && !isCurrentWeek;
               return (
                 <div
                   key={index}
@@ -207,7 +262,7 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
                     }}>Best</span>
                   )}
                   <small style={{ display: 'block', fontSize: 10, color: '#8a7a6a', marginBottom: 4 }}>
-                    {isCurrentWeek ? 'This Week' : `Week ${index + 1}`}
+                    {isCurrentWeek ? 'Week shown' : offset < 0 ? `${-offset} week${offset === -1 ? '' : 's'} before` : `${offset} week${offset === 1 ? '' : 's'} after`}
                   </small>
                   <small style={{ display: 'block', fontSize: 10, color: '#b0a090', marginBottom: 8 }}>
                     {start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}

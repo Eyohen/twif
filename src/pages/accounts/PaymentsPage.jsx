@@ -8,13 +8,13 @@ const KPI_COUNT = 5;
 const PAGE_SIZE = 8;
 const METHODS = ['Bank Transfer', 'Cash', 'Card', 'Check'];
 
-// A part payment's amount is never recorded, so it counts as nothing received
-// rather than as a guess — the row itself says "not recorded".
+// An invoice with no figure recorded counts as nothing received rather than as
+// a guess — the row itself says "not recorded".
 const totalReceived = (rows) => rows.reduce((sum, row) => sum + (row.received || 0), 0);
 
 const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
-export default function AccountsPaymentsPage({ sentInvoices = [] }) {
+export default function AccountsPaymentsPage({ sentInvoices = [], onInvoiceUpdated }) {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('All Payments');
   const [methodFilter, setMethodFilter] = useState('Payment Method');
@@ -110,7 +110,7 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
   const kpis = [
     { icon: <Banknote size={18} />, label: 'Total Received', value: money.format(received), detail: `${payments.length} invoice${payments.length === 1 ? '' : 's'}`, tone: 'purple' },
     { icon: <CheckCircle size={18} />, label: 'Fully Paid', value: paid.length, detail: `${payments.length ? Math.round(paid.length / payments.length * 100) : 0}% of total`, tone: 'green' },
-    { icon: <Layers size={18} />, label: 'Partial Paid', value: partial.length, detail: 'Amounts not recorded', tone: 'orange' },
+    { icon: <Layers size={18} />, label: 'Partial Paid', value: partial.length, detail: money.format(totalReceived(partial)), tone: 'orange' },
     { icon: <CreditCard size={18} />, label: 'Outstanding', value: money.format(outstanding), detail: `${unpaid.length} unpaid`, tone: 'red' },
     { icon: <Building2 size={18} />, label: 'Bank Transfers', value: bank.length, detail: money.format(totalReceived(bank)), tone: 'blue' },
   ];
@@ -121,7 +121,16 @@ export default function AccountsPaymentsPage({ sentInvoices = [] }) {
   };
 
   if (openPayment) {
-    return <PaymentDetailPage invoice={openPayment} onBack={() => setOpenPayment(null)} />;
+    return (
+      <PaymentDetailPage
+        invoice={openPayment}
+        onBack={() => setOpenPayment(null)}
+        onRecorded={(invoice) => {
+          onInvoiceUpdated?.(invoice);
+          setOpenPayment(invoice);
+        }}
+      />
+    );
   }
 
   return (

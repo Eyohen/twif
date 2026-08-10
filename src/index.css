@@ -558,15 +558,12 @@ textarea:focus {
 .login-auth-side .login-panel input { min-height: 58px; border-color: #2b2b2b; border-radius: 6px; background: #151617; color: #fff; padding: 13px 16px; }
 .login-input-icon { position: absolute; z-index: 2; left: 17px; bottom: 19px; color: #999; }.login-input-icon + input { padding-left: 50px !important; }
 .login-auth-side .pin-toggle { color: #999; background: transparent; box-shadow: none; }
-.login-form-options { display: flex; align-items: center; justify-content: space-between; margin: -2px 0 5px; }
-.login-form-options label { display: flex !important; align-items: center; gap: 9px !important; margin: 0 !important; color: #aaa !important; font-size: 11px !important; }
-.login-form-options input { width: 17px !important; min-height: 17px !important; accent-color: #e99c00; }
-.login-form-options button { min-height: 0; border: 0; background: transparent; color: #e99c00; padding: 0; box-shadow: none; font-size: 11px; }
+.login-form-options { margin: -2px 0 5px; color: #888; font-size: 11px; }
 .login-auth-side .login-submit { position: relative; min-height: 58px; display: flex; align-items: center; justify-content: center; margin: 0; border-radius: 6px; font-size: 14px; }.login-submit span { position: absolute; right: 25px; margin: 0; font-size: 23px; font-weight: 400; }
 .login-divider { display: flex; align-items: center; gap: 15px; margin: 23px 0; color: #aaa; font-size: 11px; }.login-divider::before, .login-divider::after { content: ''; flex: 1; height: 1px; background: #292929; }
 .login-sso { width: 100%; min-height: 52px !important; border: 1px solid #2d2d2d !important; background: #151617 !important; color: #fff !important; box-shadow: none !important; }
 .login-terms { margin-top: 25px !important; color: #999 !important; font-size: 10px !important; }.login-terms b { color: #e99c00; font-weight: 500; }
-.login-support { max-width: 560px; width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 25px; align-items: center; margin: 34px auto 0; }
+.login-support { max-width: 560px; width: 100%; display: grid; gap: 25px; align-items: center; margin: 34px auto 0; }
 .login-support > div { display: grid; gap: 7px; }.login-support > div:last-child { border-left: 1px solid #292929; border-radius: 7px; background: #151617; padding: 12px 15px; }.login-support strong { font-size: 10px; font-weight: 500; }.login-support > div:last-child strong { color: #d8d8d8; }.login-support > div:last-child strong::first-letter { color: #42c768; }.login-support span { color: #777; font-size: 9px; }
 
 @media (max-width: 1100px) {
@@ -1875,7 +1872,7 @@ dd {
 .invoice-evidence img { width:52px;height:52px;border-radius:5px;object-fit:cover }.invoice-evidence a { min-width:30px;min-height:30px;display:grid;place-items:center;border:1px solid #e5e0d9;border-radius:5px;color:#161616;text-decoration:none }
 .invoice-preview-page-v2 { display:grid;gap:14px;color:#151515 }.invoice-preview-page-v2 > header,.invoice-preview-title,.invoice-preview-page-v2 > footer { display:flex;align-items:center;justify-content:space-between }.invoice-preview-page-v2 > header > button { border:0;background:none;font-weight:700 }.invoice-preview-page-v2 > header > div { display:grid;justify-items:end;gap:4px }.invoice-preview-page-v2 > header small { color:#777;font-size:8px;letter-spacing:.15em }.invoice-preview-page-v2 > header strong { font-size:20px }.invoice-preview-title { border-bottom:1px solid #e9e4dd;padding-bottom:11px }.invoice-preview-title h2 { margin:0 0 7px;font-size:24px }.invoice-preview-title p { margin:0;color:#667085;font-size:10px }.invoice-preview-title nav { display:flex;align-self:end }.invoice-preview-title nav button { min-height:39px;border:0;border-bottom:2px solid transparent;background:none;padding:0 15px }.invoice-preview-title nav button.active { border-color:#db9100;color:#a96900 }
 .invoice-document-preview { overflow:hidden;border:1px solid #e4dfd9;border-radius:8px;background:#eee }.invoice-preview-tools { min-height:50px;display:flex;align-items:center;justify-content:center;gap:8px;border-bottom:1px solid #ddd;background:#fff }.invoice-preview-tools span:first-of-type { border:1px solid #ddd;border-radius:5px;padding:8px 14px }.invoice-preview-tools span:last-of-type { width:1px;height:25px;background:#ddd }.invoice-preview-tools button { min-height:32px;border:1px solid #ddd;border-radius:5px;background:#fff;padding:0 12px }.invoice-document-preview iframe { width:100%;height:690px;border:0;background:#fff }
-.email-preview-layout { display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:14px }.email-preview-layout > main,.email-preview-layout > aside { border:1px solid #e4dfd9;border-radius:8px;background:#fff;padding:18px }.email-preview-layout > main > dl { display:grid;grid-template-columns:70px 1fr;gap:10px;margin:0 0 16px;font-size:10px }.email-preview-layout dd { margin:0 }.email-preview-layout main > article { max-width:620px;margin:auto;border:1px solid #e3e0db;border-radius:7px;padding:30px }.email-logo { width:43px;height:43px;display:grid;place-items:center;margin:auto;border-radius:4px;background:#080808;color:#fff;font-weight:800 }.email-preview-layout article > h2 { text-align:center }.email-preview-layout article > section { display:grid;grid-template-columns:repeat(4,1fr);margin:20px 0;border:1px solid #eee;border-radius:6px;background:#fffaf2 }.email-preview-layout article > section span { display:grid;gap:7px;padding:14px;text-align:center }.email-preview-layout article > section small { color:#777 }.email-preview-layout article > div { display:grid;grid-template-columns:1fr 1fr;gap:12px }.email-preview-layout article > div button { min-height:44px;border:0;border-radius:4px;background:#121212;color:#fff;font-weight:700 }.email-preview-layout article > div button:last-child { background:#df9700;color:#111 }.email-order-line,.email-balance { display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:10px }.email-balance { background:#fff7e9;font-weight:800 }.email-preview-layout aside h3 { margin-top:0 }.email-preview-layout aside dl { display:grid;gap:0 }.email-preview-layout aside dt { margin-top:13px;color:#667085;font-size:9px }.email-preview-layout aside dd { border-bottom:1px solid #eee;padding:7px 0 13px;font-size:10px }.invoice-preview-page-v2 > footer { border-top:1px solid #e4dfd9;padding-top:14px }.invoice-preview-page-v2 > footer > div { display:flex;gap:10px }.invoice-preview-page-v2 > footer button { min-height:42px;border:1px solid #e3ded7;border-radius:6px;background:#fff;padding:0 18px;font-weight:700 }.invoice-preview-page-v2 > footer .primary-action { border-color:#d99200;background:#d99200;color:#111 }
+.email-preview-layout { display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:14px }.email-preview-layout > main,.email-preview-layout > aside { border:1px solid #e4dfd9;border-radius:8px;background:#fff;padding:18px }.email-preview-layout > main > dl { display:grid;grid-template-columns:70px 1fr;gap:10px;margin:0 0 16px;font-size:10px }.email-preview-layout dd { margin:0 }.email-preview-layout main > article { max-width:620px;margin:auto;border:1px solid #e3e0db;border-radius:7px;padding:30px }.email-logo { width:43px;height:43px;display:grid;place-items:center;margin:auto;border-radius:4px;background:#080808;color:#fff;font-weight:800 }.email-preview-layout article > h2 { text-align:center }.email-preview-layout article > section { display:grid;grid-template-columns:repeat(4,1fr);margin:20px 0;border:1px solid #eee;border-radius:6px;background:#fffaf2 }.email-preview-layout article > section span { display:grid;gap:7px;padding:14px;text-align:center }.email-preview-layout article > section small { color:#777 }.email-preview-layout article > div { display:grid;grid-template-columns:1fr 1fr;gap:12px }.email-preview-layout article > div span { display:grid;place-items:center;min-height:44px;border-radius:4px;background:#121212;color:#fff;font-weight:700 }.email-preview-layout article > div span:last-child { background:#df9700;color:#111 }.email-order-line,.email-balance { display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:10px }.email-balance { background:#fff7e9;font-weight:800 }.email-preview-layout aside h3 { margin-top:0 }.email-preview-layout aside dl { display:grid;gap:0 }.email-preview-layout aside dt { margin-top:13px;color:#667085;font-size:9px }.email-preview-layout aside dd { border-bottom:1px solid #eee;padding:7px 0 13px;font-size:10px }.invoice-preview-page-v2 > footer { border-top:1px solid #e4dfd9;padding-top:14px }.invoice-preview-page-v2 > footer > div { display:flex;gap:10px }.invoice-preview-page-v2 > footer button { min-height:42px;border:1px solid #e3ded7;border-radius:6px;background:#fff;padding:0 18px;font-weight:700 }.invoice-preview-page-v2 > footer .primary-action { border-color:#d99200;background:#d99200;color:#111 }
 @media(max-width:1100px){.new-invoice-toolbar{align-items:flex-start;flex-direction:column}.new-invoice-toolbar ol{width:100%;overflow-x:auto}.email-preview-layout{grid-template-columns:1fr}.email-preview-layout>aside{order:-1}}
 @media(max-width:780px){.new-invoice-toolbar>div{width:100%;display:grid;grid-template-columns:1fr 1fr}.new-invoice-toolbar>div .primary-action{grid-column:1/-1}.new-invoice-toolbar ol{gap:12px}.new-invoice-toolbar li:not(:last-child)::after{width:18px}.invoice-preview-title{align-items:flex-start;flex-direction:column;gap:12px}.invoice-preview-title nav{width:100%;overflow-x:auto}.invoice-preview-page-v2>footer{align-items:stretch;flex-direction:column}.invoice-preview-page-v2>footer>div{display:grid}.invoice-document-preview iframe{height:62dvh}.email-preview-layout main>article{padding:17px}.email-preview-layout article>section{grid-template-columns:1fr 1fr}.email-preview-layout article>div{grid-template-columns:1fr}.payment-evidence-upload>span{grid-template-columns:50px 1fr}.payment-evidence-upload span button{grid-column:1/-1}}
 .production-workflow-panel { padding: 0 14px 14px; }
@@ -10565,3 +10562,68 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 }
 
 .job-comments form button:disabled { background: #ddd5c8; cursor: not-allowed; }
+
+/* Recording what a customer actually paid. */
+.record-payment { display: grid; gap: 10px; }
+.record-payment > div { display: grid; grid-template-columns: 1fr 140px; gap: 10px; }
+.record-payment button {
+  justify-self: start; display: inline-flex; align-items: center; gap: 7px;
+  min-height: 40px; border: 0; border-radius: 8px; background: #1a1611; color: #fff;
+  padding: 0 16px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.record-payment button:disabled { background: #ddd5c8; cursor: not-allowed; }
+.record-payment-error {
+  margin: 0; border: 1px solid #f0c8b8; border-radius: 8px; background: #fff5f0;
+  color: #8a3520; padding: 8px 10px; font-size: 12px;
+}
+.payment-history { display: grid; gap: 8px; margin-top: 4px; }
+.payment-history h4 {
+  margin: 0; font-size: 11px; font-weight: 700; color: #8a7a6a;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.payment-history > div {
+  display: grid; gap: 2px; border-left: 3px solid #2a7d4f; border-radius: 8px;
+  background: #faf7f3; padding: 8px 12px;
+}
+.payment-history strong { font-size: 14px; color: #1a1611; }
+.payment-history span { font-size: 12px; color: #5a4e42; }
+.payment-history small { font-size: 11px; color: #8a7a6a; }
+
+@media (max-width: 620px) { .record-payment > div { grid-template-columns: 1fr; } }
+
+/* Asking before something that removes a record from view. */
+.os-confirm-backdrop {
+  position: fixed; inset: 0; z-index: 2000; display: flex;
+  align-items: center; justify-content: center; padding: 16px;
+  background: rgba(4, 12, 20, .55);
+}
+.os-confirm {
+  width: 100%; max-width: 420px; padding: 22px;
+  background: #fff; border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, .25);
+}
+
+/* Customer records that share an email, or have none. */
+.dup-panel { display: grid; gap: 14px; }
+.dup-clean { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #2a7d4f; }
+.dup-group { display: grid; gap: 8px; }
+.dup-group h4 {
+  margin: 0; display: flex; align-items: baseline; gap: 8px;
+  font-size: 13px; font-weight: 700; color: #1a1611; word-break: break-all;
+}
+.dup-group h4 span { font-size: 11px; font-weight: 600; color: #8a7a6a; white-space: nowrap; }
+.dup-hint { margin: 0; font-size: 12px; line-height: 1.6; color: #5a4e42; }
+.dup-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid #eee5da; border-radius: 10px; background: #faf7f3; padding: 10px 12px;
+}
+.dup-row > div { display: grid; gap: 2px; min-width: 0; }
+.dup-row strong { font-size: 13px; color: #1a1611; }
+.dup-row span { font-size: 12px; color: #5a4e42; }
+.dup-row small { font-size: 11px; color: #8a7a6a; }
+.dup-row button {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  min-height: 34px; padding: 0 12px; border: 1px solid #ddd5c8;
+  border-radius: 8px; background: #fff; color: #8a3520; font: inherit;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.dup-row button:disabled { opacity: .55; cursor: not-allowed; }

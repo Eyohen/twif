@@ -210,23 +210,8 @@ export default function MeasurementsPage({ customer, onBack, onSaved }) {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, padding: '0 22px', borderTop: '1px solid #eee5da' }}>
-          {['Measurements', 'Measurement History', 'Notes'].map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              style={{
-                padding: '10px 14px', border: 'none',
-                borderBottom: tab === 'Measurements' ? '2px solid #c97b08' : '2px solid transparent',
-                background: 'none', cursor: 'pointer', fontSize: 13,
-                color: tab === 'Measurements' ? '#1a1611' : '#8a7a6a',
-                fontWeight: tab === 'Measurements' ? 700 : 400,
-                marginBottom: -1,
-              }}
-            >{tab}</button>
-          ))}
-        </div>
+        {/* A tab strip offering Measurement History and Notes stood here, but
+            neither is kept for a customer, so both tabs did nothing. */}
       </div>
 
       {/* Content: Table + Diagram */}
@@ -311,20 +296,12 @@ export default function MeasurementsPage({ customer, onBack, onSaved }) {
                 <strong>Measurement Diagram</strong>
                 <p>Front and back reference points</p>
               </div>
-              <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
-                {['Inches', 'cm'].map((unit) => (
-                  <button
-                    key={unit}
-                    type="button"
-                    style={{
-                      padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                      border: '1px solid #ddd5c8', cursor: 'pointer',
-                      background: unit === 'Inches' ? '#1a1611' : '#fff',
-                      color: unit === 'Inches' ? '#fff' : '#5a4e42',
-                    }}
-                  >{unit}</button>
-                ))}
-              </div>
+              {/* An Inches / cm switch sat here and converted nothing. Every
+                  measurement in the system is recorded in inches. */}
+              <span style={{
+                marginLeft: 'auto', padding: '3px 10px', borderRadius: 6, fontSize: 11,
+                fontWeight: 600, border: '1px solid #ddd5c8', color: '#5a4e42', background: '#faf7f3',
+              }}>Inches</span>
             </div>
             <div className="os-card-body">
               <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
