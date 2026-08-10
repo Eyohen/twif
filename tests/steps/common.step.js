@@ -3,10 +3,19 @@ import { expect } from '@playwright/test';
 import { ACCOUNTS } from '../support/world.js';
 
 Given('I am signed in as the {word}', async function (role) {
-  await this.signIn(role);
+  await this.signInAs(role);
 });
 
 Given('I am signed in as the {word} {word}', async function (first, second) {
+  await this.signInAs(`${first} ${second}`);
+});
+
+// The sign-in feature is about the form itself, so it uses it.
+Given('I sign in through the form as the {word}', async function (role) {
+  await this.signIn(role);
+});
+
+Given('I sign in through the form as the {word} {word}', async function (first, second) {
   await this.signIn(`${first} ${second}`);
 });
 

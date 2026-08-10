@@ -7,13 +7,13 @@ export const API_URL = process.env.TWIF_API_URL || 'http://localhost:8084/api';
 // The seeded staff logins. Scenarios name a role in plain English — "signed in
 // as the Owner" — and the credentials are looked up here.
 export const ACCOUNTS = {
-  Owner: { phone: '08000000001', pin: 'owner26', home: '/owner/overview', name: 'Jenni' },
-  Administrator: { phone: '08000000002', pin: 'admin26', home: '/admin/overview', name: 'Jim' },
-  'Store Manager': { phone: '08000000003', pin: 'store26', home: '/store-manager/overview', name: 'Bola' },
-  Accountant: { phone: '08000000004', pin: 'accounts26', home: '/accounts/overview', name: 'Funke' },
-  'Production Manager': { phone: '08000000005', pin: 'production26', home: '/production-manager/overview', name: 'Tunde' },
-  'Inventory Manager': { phone: '08000000006', pin: 'inventory26', home: '/inventory-manager/overview', name: 'Kemi' },
-  Tailor: { phone: '08000000007', pin: 'tailor26', home: '/tailor/my-tasks', name: 'Segun' },
+  Owner: { role: 'owner', phone: '08000000001', pin: 'owner26', home: '/owner/overview', name: 'Jenni' },
+  Administrator: { role: 'admin', phone: '08000000002', pin: 'admin26', home: '/admin/overview', name: 'Jim' },
+  'Store Manager': { role: 'store_manager', phone: '08000000003', pin: 'store26', home: '/store-manager/overview', name: 'Bola' },
+  Accountant: { role: 'accounts', phone: '08000000004', pin: 'accounts26', home: '/accounts/overview', name: 'Funke' },
+  'Production Manager': { role: 'production_manager', phone: '08000000005', pin: 'production26', home: '/production-manager/overview', name: 'Tunde' },
+  'Inventory Manager': { role: 'inventory_manager', phone: '08000000006', pin: 'inventory26', home: '/inventory-manager/overview', name: 'Kemi' },
+  Tailor: { role: 'tailor', phone: '08000000007', pin: 'tailor26', home: '/tailor/my-tasks', name: 'Segun' },
 };
 
 // Navigation labels as they read in the sidebar, mapped to their route.
@@ -39,8 +39,30 @@ class TwifWorld extends World {
     this.role = null;
   }
 
-  // Signing in is the first line of nearly every scenario, so it lives on the
-  // World rather than being repeated in each step file.
+  // Most scenarios are about what happens *after* someone is signed in, and
+  // driving the login form for each one costs a page load and a burst of API
+  // calls per scenario — enough of them to exhaust the server's rate limit part
+  // way through a run. This seeds the session exactly as the app writes it
+  // after a successful sign-in. The sign-in feature itself still uses the real
+  // form, so the login path is not left untested.
+  async signInAs(roleName) {
+    const account = ACCOUNTS[roleName];
+    if (!account) throw new Error(`No seeded account for the role "${roleName}"`);
+
+    await this.page.goto(`${APP_URL}/login`);
+    await this.page.evaluate(([role, phone, label]) => {
+      window.localStorage.setItem('twif_oms_session', JSON.stringify({ role, phone, label }));
+      window.localStorage.setItem('twif_oms_last_active', String(Date.now()));
+    }, [account.role ?? roleName, account.phone, roleName]);
+
+    this.role = roleName;
+    this.account = account;
+    await this.page.goto(`${APP_URL}${account.home}`);
+    await this.page.waitForURL(new RegExp(`${account.home}$`), { timeout: 20000 });
+    return account;
+  }
+
+  // Signing in through the form, as a person does.
   async signIn(roleName) {
     const account = ACCOUNTS[roleName];
     if (!account) throw new Error(`No seeded account for the role "${roleName}"`);

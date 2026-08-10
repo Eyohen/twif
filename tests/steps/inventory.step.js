@@ -25,6 +25,10 @@ When('I add an inventory item named {string}', async function (name) {
 
 Then('the inventory list should include {string}', async function (name) {
   expect(this.itemName, 'the item was never named').toContain(name);
+  // The list pages at ten, so a newly added item is not necessarily on the
+  // first page — it is searched for, the way anyone would look for it.
+  await this.page.getByPlaceholder(/Search name, SKU/).fill(this.itemName);
+  await this.page.waitForTimeout(600);
   const row = this.page.locator('.inventory-table-desktop tbody tr').filter({ hasText: this.itemName });
   await expect(row).toHaveCount(1, { timeout: 15000 });
 });

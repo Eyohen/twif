@@ -2950,7 +2950,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     }));
   };
 
-  const submitOrderSheet = (event) => {
+  const submitOrderSheet = async (event) => {
     event.preventDefault();
     const items = sheetForm.items.map((item) => ({ ...item, item: item.item.trim() }));
 
@@ -3013,13 +3013,21 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       }).format(new Date()),
     };
 
-    onCreateJob(orderSheet);
-    api.post('/oms/tracking/order-sheet', {
-      trackingToken: orderSheet.trackingToken,
-      invoiceNumber: orderSheet.invoiceNumber,
-      orderSheet,
-    }).catch(() => {});
+    // The save used to be fired and forgotten: if the server refused it, the
+    // failure was swallowed and the screen still said the sheet was saved, so
+    // the Store Manager would leave believing production had it.
+    try {
+      await api.post('/oms/tracking/order-sheet', {
+        trackingToken: orderSheet.trackingToken,
+        invoiceNumber: orderSheet.invoiceNumber,
+        orderSheet,
+      });
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'The order sheet could not be saved. Nothing has been sent to Production.');
+      return;
+    }
 
+    onCreateJob(orderSheet);
     setMessage(`Order sheet saved with ${items.length} item${items.length === 1 ? '' : 's'}. It will become visible to Production after Accounts approves the invoice.`);
     setSheetForm(emptySheetForm());
   };
@@ -5971,10 +5979,12 @@ function App() {
     )));
 
     if (updatedJob?.trackingToken) {
-      api.patch(`/oms/tracking/order-sheet/${updatedJob.trackingToken}`, {
-        ...updatedJob,
-        status: customerStatus(updatedJob.status),
-      }).catch(() => {});
+      // The job's own status is saved, not the customer-facing label. Sending
+      // customerStatus() here overwrote 'Assigned' with 'Order Received' and
+      // 'Ready' with 'Ready for Collection', so after a reload the job matched
+      // none of the production board's states and dropped out of every count.
+      // The server derives what the customer is shown from this value.
+      api.patch(`/oms/tracking/order-sheet/${updatedJob.trackingToken}`, updatedJob).catch(() => {});
     }
   };
 

@@ -1,0 +1,241 @@
+import { Given, When, Then } from '@cucumber/cucumber';
+import { expect, request } from '@playwright/test';
+import { ACCOUNTS, API_URL, APP_URL } from '../support/world.js';
+
+// The production board sorts jobs by these, and only these. A job holding any
+// other value falls out of every count on the board.
+const BOARD_STATES = ['Order Sheet Confirmed', 'Assigned', 'In Progress', 'Ready'];
+
+const api = async () => request.newContext();
+
+// Reads the order back from the server rather than from the page, so each
+// assertion is about what TWIF actually stored.
+async function fetchInvoice(invoiceNumber) {
+  const client = await api();
+  const response = await client.get(`${API_URL}/oms/invoices/sent`);
+  const body = await response.json();
+  await client.dispose();
+  return (body?.data?.invoices || []).find((invoice) => invoice.invoiceNumber === invoiceNumber);
+}
+
+async function findInvoiceForCustomer(customer) {
+  const client = await api();
+  const response = await client.get(`${API_URL}/oms/invoices/sent`);
+  const body = await response.json();
+  await client.dispose();
+  return (body?.data?.invoices || []).find((invoice) => invoice.customer === customer);
+}
+
+Given('the Store Manager creates a customer', async function () {
+  // One order per run, named so it can be picked out of the shop's real data.
+  this.runTag = Date.now().toString().slice(-6);
+  this.customerName = `E2E Customer ${this.runTag}`;
+  this.customerPhone = `0810${this.runTag}0`;
+  // example.com is reserved for documentation, so the invoice email cannot
+  // reach a real person.
+  this.customerEmail = `e2e.${this.runTag}@example.com`;
+
+  await this.signInAs('Store Manager');
+  await this.page.goto(this.rolePath('Customers'));
+  await this.page.getByRole('button', { name: /new customer|add customer/i }).first().click();
+
+  const form = this.page.locator('form').filter({ has: this.page.locator('input[type="email"]') }).first();
+  const inputs = form.locator('input');
+  await inputs.nth(0).fill(this.customerName);
+  await inputs.nth(1).fill(this.customerPhone);
+  await inputs.nth(2).fill(this.customerEmail);
+  await form.getByRole('button', { name: /create|save|add/i }).last().click();
+
+  await expect(this.page.getByText(new RegExp(`${this.customerName} was created`, 'i'))).toBeVisible({ timeout: 15000 });
+});
+
+Given('the Store Manager invoices that customer', async function () {
+  await this.page.goto(this.rolePath('Invoices'));
+  await this.page.getByRole('button', { name: /new invoice/i }).first().click();
+  await this.page.waitForSelector('.invoice-item-fields', { timeout: 15000 });
+
+  await this.page.getByPlaceholder(/Search or type customer/).fill(this.customerName);
+  await this.page.getByPlaceholder('e.g. 08012345678').fill(this.customerPhone);
+  await this.page.getByPlaceholder('customer@email.com').fill(this.customerEmail);
+
+  const item = this.page.locator('.invoice-item-fields').first();
+  await item.locator('input').nth(0).fill('Three-piece suit');
+  await item.locator('input').nth(1).fill('150000');
+
+  // Unpaid keeps the invoice out of the payment-evidence requirement; whether
+  // it reaches production is decided by Accounts, not by payment.
+  const selects = this.page.locator('.os-card select');
+  await selects.filter({ hasText: 'Select status' }).selectOption('unpaid');
+
+  await this.page.getByRole('button', { name: /send invoice/i }).click();
+
+  // The invoice number is assigned by the form, so it is read back from the
+  // server against the customer we just created.
+  await expect(async () => {
+    const invoice = await findInvoiceForCustomer(this.customerName);
+    expect(invoice, 'the invoice never reached the server').toBeTruthy();
+    this.invoiceNumber = invoice.invoiceNumber;
+    this.trackingToken = invoice.trackingToken;
+  }).toPass({ timeout: 25000 });
+});
+
+Given('the Store Manager raises an order sheet with fabric and measurements', async function () {
+  await this.page.goto(this.rolePath('Order Sheet'));
+  await this.page.waitForLoadState('networkidle');
+
+  // Link the sheet to the invoice just sent. The picker is found by its own
+  // label rather than by position, so another select cannot stand in for it.
+  const invoicePicker = this.page.locator('label').filter({ hasText: 'Invoice Number' }).locator('select');
+  await invoicePicker.selectOption(this.invoiceNumber);
+  await this.page.waitForTimeout(800);
+
+  const fillLabelled = async (label, value) => {
+    const field = this.page.locator('label').filter({ hasText: label }).first();
+    const box = field.locator('input, textarea').first();
+    if (await box.count()) await box.fill(value);
+  };
+
+  await fillLabelled('Garment', 'Three-piece suit');
+  await fillLabelled('Item', 'Three-piece suit');
+  await fillLabelled('Measurements', 'Chest 40, Waist 34, Sleeve 24');
+  await fillLabelled('Design', 'Notch lapel, single vent');
+  await fillLabelled('Delivery', new Date(Date.now() + 12096e5).toISOString().slice(0, 10));
+
+  // Fabric comes from stock, so whatever the shop actually holds is chosen.
+  const fabricPicker = this.page.locator('label').filter({ hasText: 'Fabric' }).locator('select').first();
+  if (await fabricPicker.count()) {
+    const values = await fabricPicker.locator('option').evaluateAll((options) => options
+      .map((option) => option.value).filter(Boolean));
+    if (values.length) await fabricPicker.selectOption(values[0]);
+  }
+
+  await this.page.getByRole('button', { name: /save order sheet|create order sheet|release/i }).first().click();
+  await expect(this.page.getByText(/order sheet saved/i)).toBeVisible({ timeout: 20000 });
+});
+
+Then('the order should be waiting on Accounts', async function () {
+  const invoice = await fetchInvoice(this.invoiceNumber);
+  expect(invoice.accountApprovalStatus).toBe('Pending Accounts');
+  expect(invoice.orderSheet, 'no order sheet was stored against the invoice').toBeTruthy();
+});
+
+When('the Accountant approves the invoice', async function () {
+  await this.signInAs('Accountant');
+  await this.page.goto(this.rolePath('Invoices'));
+  await this.page.waitForLoadState('networkidle');
+
+  await this.page.getByPlaceholder(/search invoice or customer/i).fill(this.invoiceNumber);
+  await this.page.waitForTimeout(600);
+  await this.page.locator('.accounts-invoice-table tbody button').first().click();
+  await this.page.waitForSelector('.review-invoice-grid', { timeout: 15000 });
+
+  await this.page.getByRole('button', { name: /^approve$/i }).first().click();
+  // Approving releases the job to production, so it asks first.
+  await this.page.getByRole('button', { name: /confirm|yes|approve/i }).last().click();
+
+  await expect(async () => {
+    const invoice = await fetchInvoice(this.invoiceNumber);
+    expect(invoice.accountApprovalStatus).toBe('Approved');
+  }).toPass({ timeout: 20000 });
+});
+
+Then('the order should be released to Production', async function () {
+  await this.signInAs('Production Manager');
+  await this.page.goto(this.rolePath('Production'));
+  await this.page.waitForLoadState('networkidle');
+  await expect(this.page.getByText(this.invoiceNumber).first()).toBeVisible({ timeout: 20000 });
+});
+
+When('the Production Manager assigns the job to a tailor', async function () {
+  if (this.role !== 'Production Manager') {
+    await this.signInAs('Production Manager');
+    await this.page.goto(this.rolePath('Production'));
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  const row = this.page.locator('tr, article').filter({ hasText: this.invoiceNumber }).first();
+  await row.getByRole('button', { name: /view/i }).first().click();
+  await this.page.waitForSelector('.job-comments', { timeout: 15000 });
+
+  // Assigned to the tailor this suite can sign in as, so the next step is
+  // taken by the person the job was actually given to.
+  const tailorPicker = this.page.locator('select').filter({ hasText: /unassigned/i }).first();
+  const options = await tailorPicker.locator('option').allTextContents();
+  this.tailorName = ACCOUNTS.Tailor.name;
+  expect(options.join(' | '), `${this.tailorName} is not on the tailor list`).toContain(this.tailorName);
+  await tailorPicker.selectOption({ label: this.tailorName });
+  await this.page.waitForTimeout(1500);
+});
+
+Then('the job should be assigned to that tailor', async function () {
+  await expect(async () => {
+    const invoice = await fetchInvoice(this.invoiceNumber);
+    expect(invoice.orderSheet?.tailor).toBe(this.tailorName);
+  }).toPass({ timeout: 20000 });
+});
+
+When('the tailor starts the job', async function () {
+  await this.signInAs('Tailor');
+  await this.page.goto(this.rolePath('My Tasks'));
+  await this.page.waitForLoadState('networkidle');
+
+  // The task cards carry no class of their own, so the card is the innermost
+  // element holding both this customer's name and the button — ancestors match
+  // too, and they come first in document order.
+  const card = this.page.locator('div')
+    .filter({ hasText: this.customerName })
+    .filter({ has: this.page.getByRole('button', { name: /start work/i }) })
+    .last();
+  await card.getByRole('button', { name: /start work/i }).click();
+  await this.page.getByRole('button', { name: /yes, start work/i }).click();
+  await this.page.waitForTimeout(1500);
+});
+
+Then('the job should be in progress', async function () {
+  await expect(async () => {
+    const invoice = await fetchInvoice(this.invoiceNumber);
+    expect(invoice.orderSheet?.status).toBe('In Progress');
+  }).toPass({ timeout: 20000 });
+});
+
+When('the tailor marks the job ready', async function () {
+  const card = this.page.locator('div')
+    .filter({ hasText: this.customerName })
+    .filter({ has: this.page.getByRole('button', { name: /mark ready/i }) })
+    .last();
+  await card.getByRole('button', { name: /mark ready/i }).click();
+  await this.page.getByRole('button', { name: /yes, mark ready/i }).click();
+  await this.page.waitForTimeout(1500);
+});
+
+Then('the job should be ready for collection', async function () {
+  await expect(async () => {
+    const invoice = await fetchInvoice(this.invoiceNumber);
+    expect(invoice.orderSheet?.status).toBe('Ready');
+  }).toPass({ timeout: 20000 });
+});
+
+When('the customer opens their tracking link', async function () {
+  const invoice = await fetchInvoice(this.invoiceNumber);
+  this.trackingToken = invoice.trackingToken;
+  expect(this.trackingToken, 'the order carries no tracking link').toBeTruthy();
+  await this.page.goto(`${APP_URL}/c/${this.trackingToken}`);
+  await this.page.waitForSelector('.tracking-steps', { timeout: 15000 });
+});
+
+Then('the customer should be told the order is ready for collection', async function () {
+  const current = this.page.locator('.tracking-step.active');
+  await expect(current).toContainText('Ready for Collection');
+});
+
+When('the order is read back from the server', async function () {
+  this.storedJob = (await fetchInvoice(this.invoiceNumber))?.orderSheet;
+  expect(this.storedJob, 'no order sheet came back').toBeTruthy();
+});
+
+// The status the app saves has to be one production works in. Saving the
+// customer-facing label here once dropped the job out of every board count.
+Then('the stored job status should be one the production board recognises', function () {
+  expect(BOARD_STATES, `the board cannot place a job at "${this.storedJob.status}"`)
+    .toContain(this.storedJob.status);
+});
