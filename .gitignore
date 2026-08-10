@@ -32,3 +32,6 @@ tests/reports/
 cucumber-report.*
 test-results/
 playwright-report/
+
+# Generated handover output
+docs/out/
