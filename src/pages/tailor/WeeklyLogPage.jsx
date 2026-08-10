@@ -1,4 +1,4 @@
-import { CheckCircle, Clock, BarChart2, TrendingUp, Calendar, ChevronDown, ChevronLeft, ChevronRight, HelpCircle, MessageSquare, Award } from 'lucide-react';
+import { CheckCircle, Clock, BarChart2, TrendingUp, Calendar, ChevronLeft, ChevronRight, HelpCircle, Award } from 'lucide-react';
 import { Status } from '../../components/oms/Common';
 
 const SUMMARY_ITEMS = [
@@ -241,17 +241,6 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
             Contact your Production Manager if you have any questions.
           </span>
         </div>
-        <button
-          type="button"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-            background: '#1a1611', color: '#fff', border: 'none', borderRadius: 8,
-            fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
-          }}
-        >
-          <MessageSquare size={13} />
-          Send Message
-        </button>
       </div>
 
     </div>

@@ -10427,3 +10427,141 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 18px 0 4px;
 }
+
+/* ---------------------------------------------------------------------------
+   Review invoice layout
+   The three columns were `1fr 1fr 260px`. A `1fr` track will not shrink below
+   its content's minimum, so the order summary table forced the first column to
+   818px, left the evidence column 135px — enough for about one letter a line —
+   and pushed Review Actions past the right edge of the page.
+--------------------------------------------------------------------------- */
+.review-invoice-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 260px;
+  gap: 16px;
+  align-items: start;
+}
+
+.review-invoice-grid > * { min-width: 0; }
+
+/* Below a wide desktop the evidence sits under the summary, with the actions
+   rail kept alongside for as long as it fits. */
+@media (max-width: 1180px) {
+  .review-invoice-grid { grid-template-columns: minmax(0, 1fr) 240px; }
+  .review-invoice-grid > *:nth-child(2) { grid-row: 2; grid-column: 1; }
+}
+
+@media (max-width: 860px) {
+  .review-invoice-grid { grid-template-columns: minmax(0, 1fr); }
+  .review-invoice-grid > *:nth-child(2) { grid-row: auto; grid-column: auto; }
+}
+
+/* ---------------------------------------------------------------------------
+   Job sheet comment thread
+   The scope calls for a comment thread on production job sheets, so a question
+   about a garment stays with the garment.
+--------------------------------------------------------------------------- */
+.job-comments {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #eee5da;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px 16px;
+}
+
+.job-comments > header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #c97b08;
+}
+
+.job-comments > header strong { display: block; font-size: 14px; color: #1a1611; }
+.job-comments > header p { margin: 1px 0 0; font-size: 11.5px; color: #8a7a6a; }
+
+.job-comments-list {
+  display: grid;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.job-comments-compact .job-comments-list { max-height: 200px; }
+
+.job-comments-list article {
+  border: 1px solid #f0e9df;
+  border-left: 3px solid #ddd5c8;
+  border-radius: 9px;
+  background: #faf7f3;
+  padding: 9px 12px;
+}
+
+/* Your own comments are marked so a thread can be read at a glance. */
+.job-comments-list article.is-mine {
+  border-left-color: var(--gold);
+  background: #fffaf0;
+}
+
+.job-comments-list article > header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.job-comments-list article strong { font-size: 12.5px; color: #1a1611; }
+.job-comments-list article small { font-size: 10.5px; color: #8a7a6a; }
+.job-comments-list article time { margin-left: auto; font-size: 10.5px; color: #b0a090; }
+.job-comments-list article p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #4a443c;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.job-comments-empty { margin: 0; padding: 14px 2px; font-size: 12.5px; color: #8a7a6a; }
+.job-comments-error {
+  margin: 0;
+  border: 1px solid #f0c8b8;
+  border-radius: 8px;
+  background: #fff5f0;
+  color: #8a3520;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.job-comments form { display: grid; gap: 8px; }
+.job-comments textarea {
+  min-height: 62px;
+  border: 1px solid #ddd5c8;
+  border-radius: 9px;
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.job-comments form button {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: #1a1611;
+  color: #fff;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.job-comments form button:disabled { background: #ddd5c8; cursor: not-allowed; }

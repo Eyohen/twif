@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Clock, CheckCircle, Flag, DollarSign } from 'lucide-react';
-import { money, invoiceApprovalStatus } from '../../utils/oms';
+import { money, invoiceApprovalStatus, amountReceived, amountOutstanding, formatMoment } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 import ReviewInvoicePage from './ReviewInvoicePage';
@@ -14,8 +14,9 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('All Invoices');
+  const [storeFilter, setStoreFilter] = useState('All Stores');
+  const [sortOrder, setSortOrder] = useState('Newest first');
   const [currentPage, setCurrentPage] = useState(1);
-  const [selected, setSelected] = useState(invoices[0] || null);
   const [reviewInvoice, setReviewInvoice] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
   const [activeKpiDot, setActiveKpiDot] = useState(0);
@@ -29,19 +30,53 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
   };
 
   const statusOf = (invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts' ? 'Awaiting Review' : invoiceApprovalStatus(invoice);
-  const filtered = useMemo(() => invoices.filter((invoice) => {
-    const status = statusOf(invoice);
-    const matchesSearch = `${invoice.invoiceNumber} ${invoice.customer}`.toLowerCase().includes(search.toLowerCase());
-    const matchesTab = tab === 'All Invoices' || status === tab || invoice.paymentStatus === tab;
-    return matchesSearch && matchesTab;
-  }), [invoices, search, tab]);
+
+  // Offered from the invoices on hand, so the list can never name a store with
+  // nothing behind it.
+  const stores = useMemo(() => [...new Set(invoices.map((invoice) => invoice.store).filter(Boolean))], [invoices]);
+
+  const filtered = useMemo(() => {
+    const byDate = (invoice) => new Date(invoice.invoiceDate || invoice.createdAt || 0).getTime();
+    const comparators = {
+      'Newest first': (a, b) => byDate(b) - byDate(a),
+      'Oldest first': (a, b) => byDate(a) - byDate(b),
+      'Highest amount': (a, b) => Number(b.total || 0) - Number(a.total || 0),
+      'Lowest amount': (a, b) => Number(a.total || 0) - Number(b.total || 0),
+    };
+    return invoices.filter((invoice) => {
+      const status = statusOf(invoice);
+      const matchesSearch = `${invoice.invoiceNumber} ${invoice.customer}`.toLowerCase().includes(search.toLowerCase());
+      const matchesTab = tab === 'All Invoices' || status === tab || invoice.paymentStatus === tab;
+      const matchesStore = storeFilter === 'All Stores' || invoice.store === storeFilter;
+      return matchesSearch && matchesTab && matchesStore;
+    }).sort(comparators[sortOrder] || comparators['Newest first']);
+  }, [invoices, search, tab, storeFilter, sortOrder]);
+
+  const exportCsv = () => {
+    const header = ['Invoice', 'Customer', 'Store', 'Amount', 'Received', 'Payment', 'Status', 'Submitted', 'By'];
+    const rows = filtered.map((invoice) => [
+      invoice.invoiceNumber, invoice.customer, invoice.store || '', Number(invoice.total || 0),
+      amountReceived(invoice) === null ? 'Not recorded' : amountReceived(invoice),
+      invoice.paymentStatus, statusOf(invoice), invoice.submitted || formatMoment(invoice.createdAt), invoice.createdBy || '',
+    ]);
+    const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `twif-invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const page = Math.min(currentPage, pageCount);
   const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const awaiting = invoices.filter((invoice) => statusOf(invoice) === 'Awaiting Review');
   const approved = invoices.filter((invoice) => statusOf(invoice) === 'Approved');
   const flagged = invoices.filter((invoice) => statusOf(invoice) === 'Flagged');
-  const outstanding = invoices.reduce((sum, invoice) => sum + Math.max(0, Number(invoice.total || 0) - Number(invoice.paid || 0)), 0);
+  // An invoice whose received amount was never recorded cannot be counted as
+  // fully outstanding, so it is counted apart from the figure.
+  const outstanding = invoices.reduce((sum, invoice) => sum + (amountOutstanding(invoice) ?? 0), 0);
+  const unrecorded = invoices.filter((invoice) => amountReceived(invoice) === null).length;
 
   // The overview queue links straight to one invoice's review page, so the
   // invoice number arrives as `?review=`. Invoices load after the first render,
@@ -64,7 +99,6 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
 
   const review = (invoice, status) => {
     onApproveInvoice?.(invoice.invoiceNumber, status);
-    setSelected((current) => current?.invoiceNumber === invoice.invoiceNumber ? { ...current, accountApprovalStatus: status } : current);
   };
 
   if (reviewInvoice) {
@@ -74,7 +108,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
     }} />;
   }
 
-  return <div className={`accounts-invoices-page ${selected ? 'drawer-open' : ''}`}>
+  return <div className="accounts-invoices-page">
     <div className="accounts-invoice-main">
       <header className="accounts-invoice-heading">
         <div>
@@ -82,7 +116,6 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
           <h2>Invoices</h2>
           <span>Review, approve and manage customer invoices before they enter production.</span>
         </div>
-        <label>▣ &nbsp; 22 Jul – 22 Jul 2026 &nbsp;⌄</label>
       </header>
 
       <div className="kpi-carousel-wrap">
@@ -91,7 +124,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
             [<Clock size={18} />, 'Awaiting Review', awaiting.length, awaiting.reduce((sum, item) => sum + Number(item.total || 0), 0), 'gold'],
             [<CheckCircle size={18} />, 'Approved Today', approved.length, approved.reduce((sum, item) => sum + Number(item.total || 0), 0), 'green'],
             [<Flag size={18} />, 'Flagged', flagged.length, flagged.reduce((sum, item) => sum + Number(item.total || 0), 0), 'red'],
-            [<DollarSign size={18} />, 'Total Outstanding', money.format(outstanding), '↑ 18.7% vs last 30 days', 'chart'],
+            [<DollarSign size={18} />, 'Total Outstanding', money.format(outstanding), unrecorded ? `${unrecorded} with no amount recorded` : 'Across all invoices', 'chart'],
           ].map(([icon, label, value, detail, tone]) => (
             <article className={tone} key={label}>
               <i>{icon}</i>
@@ -108,11 +141,17 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
       <section className="accounts-invoice-register">
         <header>
           <label>⌕<input value={search} onChange={(event) => { setSearch(event.target.value); setCurrentPage(1); }} placeholder="Search invoice or customer..." /></label>
-          <select><option>Payment Status</option></select>
-          <select><option>Store</option></select>
-          <select><option>▣ &nbsp; All Dates</option></select>
-          <select><option>Sort by: Newest</option></select>
-          <button>⇩ &nbsp; Export</button>
+          <select value={storeFilter} onChange={(event) => { setStoreFilter(event.target.value); setCurrentPage(1); }}>
+            <option>All Stores</option>
+            {stores.map((store) => <option key={store}>{store}</option>)}
+          </select>
+          <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}>
+            <option>Newest first</option>
+            <option>Oldest first</option>
+            <option>Highest amount</option>
+            <option>Lowest amount</option>
+          </select>
+          <button type="button" onClick={exportCsv} disabled={!filtered.length}>⇩ &nbsp; Export</button>
         </header>
         <nav>
           {[
@@ -148,7 +187,6 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
                 const status = statusOf(invoice);
                 return (
                   <tr
-                    className={selected?.invoiceNumber === invoice.invoiceNumber ? 'selected' : ''}
                     key={invoice.invoiceNumber}
                   >
                     <td><strong>{invoice.invoiceNumber}</strong></td>
@@ -161,14 +199,14 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
                     <td><Status>{invoice.paymentStatus}</Status></td>
                     <td><Status>{status}</Status></td>
                     <td>
-                      {invoice.submitted || 'Today'}
-                      <small>by {invoice.createdBy || 'Bola'}</small>
+                      {invoice.submitted || formatMoment(invoice.createdAt)}
+                      <small>{invoice.createdBy ? `by ${invoice.createdBy}` : ''}</small>
                     </td>
                     <td>
                       <button onClick={() => setReviewInvoice(invoice)}>
                         {status === 'Awaiting Review' ? 'Review' : status === 'Flagged' ? 'Resolve' : 'View'}
                       </button>
-                      <button className="dots" onClick={() => setSelected(invoice)}>⋮</button>
+                      <button className="dots" title="Open full invoice" onClick={() => setReviewInvoice(invoice)}>⋮</button>
                     </td>
                   </tr>
                 );
@@ -193,11 +231,11 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
                 <section>
                   <div><small>Amount</small><strong>{money.format(invoice.total)}</strong></div>
                   <div><small>Payment</small><Status>{invoice.paymentStatus}</Status></div>
-                  <div><small>Submitted</small><span>{invoice.submitted || 'Today'}</span></div>
-                  <div><small>By</small><span>{invoice.createdBy || 'Bola'}</span></div>
+                  <div><small>Submitted</small><span>{invoice.submitted || formatMoment(invoice.createdAt)}</span></div>
+                  <div><small>By</small><span>{invoice.createdBy || '—'}</span></div>
                 </section>
                 <footer>
-                  <span>{invoice.submitted || 'Today'}</span>
+                  <span>{invoice.submitted || formatMoment(invoice.createdAt)}</span>
                   <button type="button" onClick={() => setReviewInvoice(invoice)}>
                     {status === 'Awaiting Review' ? 'Review' : status === 'Flagged' ? 'Resolve' : 'View'} &nbsp;›
                   </button>
@@ -222,85 +260,6 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
         </footer>
       </section>
     </div>
-
-    {selected && (
-      <aside className="accounts-invoice-drawer">
-        <button className="drawer-close" onClick={() => setSelected(null)}>×</button>
-        <section>
-          <header>
-            <h3>Invoice {selected.invoiceNumber}</h3>
-            <Status>{statusOf(selected)}</Status>
-          </header>
-          <p>Submitted today, 10:32 AM by {selected.createdBy || 'Bola'}</p>
-          <p>Store: {selected.store || 'Lekki'}</p>
-        </section>
-        <section>
-          <h4>Customer</h4>
-          <div className="invoice-drawer-customer">
-            <i>♙</i>
-            <span><strong>{selected.customer}</strong><small>ELITE Customer</small></span>
-            <button>View Profile</button>
-          </div>
-        </section>
-        <section>
-          <h4>Invoice Summary</h4>
-          <dl>
-            <dt>Total Amount</dt><dd>{money.format(selected.total)}</dd>
-            <dt>Elite Discount (5%)</dt><dd className="positive">- {money.format(Number(selected.total || 0) * .05)}</dd>
-            <dt>Store Credit Used</dt><dd className="positive">- ₦0</dd>
-            <dt className="total">Amount Payable</dt><dd className="total">{money.format(Number(selected.total || 0) * .95)}</dd>
-          </dl>
-        </section>
-        <section>
-          <header>
-            <h4>Payment Status</h4>
-            <Status>{selected.paymentStatus}</Status>
-          </header>
-          <dl>
-            <dt>Amount Received</dt><dd>{money.format(selected.paid || 0)}</dd>
-            <dt>Balance Outstanding</dt><dd>{money.format(Math.max(0, Number(selected.total || 0) * .95 - Number(selected.paid || 0)))}</dd>
-            <dt>Payment Method</dt><dd>Bank Transfer</dd>
-            <dt>Reference</dt><dd>GTBank – 0123045678</dd>
-          </dl>
-        </section>
-        <section>
-          <h4>Evidence</h4>
-          {selected.paymentEvidence
-            ? <div className="invoice-evidence">
-                <span>✓</span>
-                <p>Payment evidence uploaded<small>{selected.paymentEvidence.name}</small></p>
-                {selected.paymentEvidence.dataUrl ? <img src={selected.paymentEvidence.dataUrl} alt="Payment evidence" /> : <i>▧</i>}
-                <a href={selected.paymentEvidence.dataUrl} download={selected.paymentEvidence.name}>⇩</a>
-              </div>
-            : <div className="accounts-empty">
-                {selected.paymentStatus === 'Unpaid' ? 'No evidence required for an unpaid invoice.' : 'No payment evidence uploaded.'}
-              </div>}
-        </section>
-        <section>
-          <h4>Order &amp; Production</h4>
-          <dl>
-            <dt>Order Sheet</dt><dd>Attached &nbsp;✓</dd>
-            <dt>Production Status</dt><dd>Not Released &nbsp;●</dd>
-          </dl>
-        </section>
-        <section className="invoice-drawer-actions">
-          <h4>Actions</h4>
-          <div>
-            <button onClick={() => setPendingAction({ invoice: selected, status: 'Approved' })}>
-              <CheckCircle size={15} /><span>Approve</span>
-            </button>
-            <button onClick={() => setPendingAction({ invoice: selected, status: 'Flagged' })}>
-              <Flag size={15} /><span>Flag</span>
-            </button>
-            <button onClick={() => setPendingAction({ invoice: selected, status: 'Rejected' })}>
-              ×<span>Reject</span>
-            </button>
-          </div>
-          <button>▢ &nbsp; Message Store Manager</button>
-          <button>▤ &nbsp; View Full Invoice</button>
-        </section>
-      </aside>
-    )}
 
     {pendingAction && (
       <InvoiceActionConfirmModal

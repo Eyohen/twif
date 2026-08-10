@@ -9,7 +9,6 @@ const KPI_COUNT = 4;
 export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
-  const [openMenu, setOpenMenu] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [activeKpiDot, setActiveKpiDot] = useState(0);
   const kpiScrollRef = useRef(null);
@@ -216,40 +215,21 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
                   <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>
                     {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                   </td>
+                  {/* View opened a menu of five items, four of which did
+                      nothing — including Email Customer and Email Accounts —
+                      and the fifth repeated what clicking the row already does. */}
                   <td style={{ padding: '12px 14px' }} onClick={(e) => e.stopPropagation()}>
-                    <div style={{ position: 'relative' }}>
-                      <button
-                        onClick={() => setOpenMenu(openMenu === order.invoiceNumber ? null : order.invoiceNumber)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 4,
-                          padding: '5px 10px', border: '1px solid #ddd5c8', borderRadius: 6,
-                          fontSize: 12, fontWeight: 600, background: '#fff', color: '#1a1611', cursor: 'pointer',
-                        }}
-                      >
-                        <Eye size={12} strokeWidth={1.8} /> View
-                      </button>
-                      {openMenu === order.invoiceNumber ? (
-                        <div style={{
-                          position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 100,
-                          background: '#fff', border: '1px solid #eee5da', borderRadius: 10,
-                          boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: 160, overflow: 'hidden',
-                        }}>
-                          {[['View Order'], ['View Invoice'], ['View Customer'], ['Email Customer'], ['Email Accounts']].map(([label]) => (
-                            <button
-                              key={label}
-                              onClick={() => { setOpenMenu(null); if (label === 'View Order') setSelectedOrder(order); }}
-                              style={{
-                                display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px',
-                                fontSize: 13, fontWeight: 500, color: '#1a1611', background: 'none',
-                                border: 'none', cursor: 'pointer', borderBottom: '1px solid #f3ede5',
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#faf7f3'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-                            >{label}</button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrder(order)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '5px 10px', border: '1px solid #ddd5c8', borderRadius: 6,
+                        fontSize: 12, fontWeight: 600, background: '#fff', color: '#1a1611', cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      <Eye size={12} strokeWidth={1.8} /> View
+                    </button>
                   </td>
                 </tr>
               );

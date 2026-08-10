@@ -21,6 +21,7 @@ import { Stat, Status, SectionHeader } from './components/oms/Common';
 import useLabelledTables from './hooks/useLabelledTables';
 import useCarouselIndicators from './hooks/useCarouselIndicators';
 import InvoiceActionConfirmModal from './components/oms/InvoiceActionConfirmModal';
+import JobCommentThread from './components/oms/JobCommentThread';
 import {
   money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
   dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
@@ -3250,7 +3251,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
   );
 }
 
-function ProductionView({ productionJobs, onUpdateJob }) {
+function ProductionView({ productionJobs, onUpdateJob, currentRole }) {
   const [statusFilter, setStatusFilter] = useState('All');
   const [query, setQuery] = useState('');
   const [jobModal, setJobModal] = useState(null);
@@ -3745,6 +3746,16 @@ function ProductionView({ productionJobs, onUpdateJob }) {
                   <textarea value={jobModal.productionNote || ''} onChange={(e) => { setJobModal((j) => ({ ...j, productionNote: e.target.value })); onUpdateJob(jobModal.id, { productionNote: e.target.value }); }} placeholder="Instructions for tailor..." rows={2} />
                 </label>
               </div>
+
+              {/* The scope calls for a comment thread on the job sheet, so a
+                  question about a garment stays with the garment rather than in
+                  somebody's phone. */}
+              <JobCommentThread
+                invoiceNumber={jobModal.invoiceNumber}
+                currentRole={currentRole}
+                role="production_manager"
+                compact
+              />
 
               {/* Action buttons */}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -5810,7 +5821,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Payments') return role === 'accounts' || role === 'owner'
     ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} />
     : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
-  if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
+  if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} />;
   if (activeView === 'Inventory') return role === 'accounts' ? <AccountsInventoryReconciliationPage /> : role === 'inventory_manager' ? <InventoryListPage currentRole={viewProps.currentRole} /> : role === 'owner' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode /> : <InventoryView />;
   if (activeView === 'Reconciliations') return <InventoryView />;
   if (activeView === 'Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;

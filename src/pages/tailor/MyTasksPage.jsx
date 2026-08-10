@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CheckSquare, Clock, User, Package, ArrowRight, Play, CheckCircle, ChevronDown, ChevronUp, Calendar, Ruler, Image, Scissors, Filter } from 'lucide-react';
-import { classNames } from '../../utils/oms';
+import JobCommentThread from '../../components/oms/JobCommentThread';
 
 export default function MyTasksPage({ compact = false, currentRole, productionJobs = [], onUpdateJob }) {
   const tailorName = currentRole?.name?.split(' (')[0] || '';
@@ -262,6 +262,15 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                       )}
                     </section>
                   </div>
+
+                  {/* The same thread the Production Manager reads, so a query
+                      about a garment is answered against the job. */}
+                  <JobCommentThread
+                    invoiceNumber={order.invoiceNumber}
+                    currentRole={currentRole}
+                    role="tailor"
+                    compact
+                  />
 
                 </div>
               )}

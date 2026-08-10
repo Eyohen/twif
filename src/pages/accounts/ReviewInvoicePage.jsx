@@ -96,8 +96,11 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
         </button>
       </div>
 
-      {/* Main 3-column Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 260px', gap: 16, alignItems: 'start' }}>
+      {/* A `1fr` column will not shrink below its own content, so the order
+          summary table pushed the first column to 818px, squeezed the evidence
+          column to 135px — a strip of one-letter-per-line text — and pushed the
+          actions off the right edge. minmax(0, 1fr) lets them share the room. */}
+      <div className="review-invoice-grid">
 
         {/* Column 1: Invoice & Order Summary */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -151,7 +154,8 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               {/* Order summary table */}
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Order Summary</div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 320 }}>
                   <thead>
                     <tr>
                       {['Item', 'Qty', 'Unit Price', 'Total'].map((col) => (
@@ -170,6 +174,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
               {/* Totals */}
               <div style={{ background: '#faf7f3', borderRadius: 8, padding: '12px 14px' }}>
@@ -440,13 +445,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
         </div>
       ) : null}
 
-      <style>{`
-        @media (max-width: 860px) {
-          .os-page > div[style*="grid-template-columns: 1fr 1fr 260px"] {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
+
     </div>
   );
 }
