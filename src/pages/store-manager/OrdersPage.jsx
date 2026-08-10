@@ -30,8 +30,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
     || (filter === 'Paid' && ['Fully Paid', 'Paid'].includes(order.paymentStatus))
     || (filter === 'Pending Accounts' && order.approval === 'Pending Accounts')
     || (filter === 'In Production' && ['Assigned', 'In Progress'].includes(order.job.status))
-    || (filter === 'Ready for Collection' && ['Ready', 'Ready for Collection'].includes(order.job.status))
-    || (filter === 'Completed' && order.job.status === 'Completed');
+    || (filter === 'Ready for Collection' && ['Ready', 'Ready for Collection'].includes(order.job.status));
   // The sort control offered Newest and Oldest and did neither.
   const orderedAt = (order) => new Date(order.createdAt || order.invoiceDate || 0).getTime();
   const filtered = useMemo(() => orders
@@ -64,7 +63,9 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
     { Icon: AlertCircle, label: 'Outstanding Payments', count: outstanding.length, total: totalFor(outstanding), tone: '#fff5f0', iconColor: '#8a3520', textColor: '#8a3520' },
   ];
 
-  const filterTabs = ['All', 'Unpaid', 'Partial Paid', 'Paid', 'Pending Accounts', 'In Production', 'Ready for Collection', 'Completed'];
+  // Ready for Collection is where an order ends: nothing in TWIF sets a state
+  // after it, so a Completed tab could only ever come back empty.
+  const filterTabs = ['All', 'Unpaid', 'Partial Paid', 'Paid', 'Pending Accounts', 'In Production', 'Ready for Collection'];
 
   return (
     <div className="os-page">

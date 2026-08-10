@@ -496,7 +496,8 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
           <div>
             <div className="owner-production-donut"><span><strong>{periodJobs.length}</strong>Total Jobs</span></div>
             <div>{[
-              ['Completed', periodCompleted.length, 'green'],
+              // Named for the state it counts: Ready is where a job ends.
+              ['Ready', periodCompleted.length, 'green'],
               ['In Progress', periodInProgress.length, 'gold'],
               ['Pending', periodPending.length, 'blue'],
               ['Delayed', periodDelayed.length, 'red'],
@@ -5614,27 +5615,6 @@ function ProfilePhotoControl({ account, onProfileImageChange }) {
   );
 }
 
-function PortalPreview() {
-  return (
-    <section className="portal-preview">
-      <div className="brand-rule">CUSTOMER PORTAL</div>
-      <h2>Ken Mbachu</h2>
-      <p>Elite member since 14 Feb 2026. Your 5% discount is active on all orders.</p>
-      <div className="portal-orders">
-        <article>
-          <span>Active Order</span>
-          <strong>Three-piece suit</strong>
-          <p>In Progress · Delivery 12 Jul 2026 · Paid {money.format(400000)}</p>
-        </article>
-        <article>
-          <span>Measurements</span>
-          <strong>Saved profile</strong>
-          <p>Chest, waist, inseam, sleeve, shoulder, neck, and preferred fit stored securely.</p>
-        </article>
-      </div>
-    </section>
-  );
-}
 
 function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] }) {
   const [tracking, setTracking] = useState(null);
@@ -5947,7 +5927,7 @@ function App() {
   const pathSegments = location.pathname.split('/').filter(Boolean);
   const requestedViewSlug = pathSegments[0] === roleSlug(role) ? pathSegments[1] : '';
   const activeView = visibleNav?.find((item) => viewSlug(item) === requestedViewSlug)
-    || (requestedViewSlug === 'portal-preview' ? 'Portal Preview' : visibleNav?.[0] || 'Overview');
+    || visibleNav?.[0] || 'Overview';
 
   const currentRole = useMemo(() => {
     const roleDetails = roles.find((item) => item.id === role);
@@ -6014,7 +5994,7 @@ function App() {
   useEffect(() => {
     if (!signedIn || location.pathname.startsWith('/c/')) return;
     const basePath = `/${roleSlug(role)}`;
-    const validSlugs = new Set([...(visibleNav || []).map(viewSlug), 'portal-preview']);
+    const validSlugs = new Set((visibleNav || []).map(viewSlug));
     const isAuthOrRoot = ['/', '/login', '/register', '/registration-success'].includes(location.pathname);
     const hasCorrectRole = location.pathname === basePath || location.pathname.startsWith(`${basePath}/`);
     if (isAuthOrRoot || !hasCorrectRole || !validSlugs.has(pathSegments[1])) {
@@ -6289,7 +6269,6 @@ function App() {
               })}
             />
           ))}
-          <Route path={`/${roleSlug(role)}/portal-preview`} element={<PortalPreview />} />
           <Route path="*" element={<Navigate to={`/${roleSlug(role)}/${viewSlug(visibleNav?.[0] || 'Overview')}`} replace />} />
         </Routes>
       </main>

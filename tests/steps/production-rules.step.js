@@ -10,11 +10,36 @@ async function anOrderWith(world, { approval, status, tailor }) {
   const list = await client.get(`${API_URL}/oms/invoices/sent`);
   const invoices = (await list.json())?.data?.invoices || [];
 
-  const candidate = invoices.find((invoice) => invoice.orderSheet && invoice.trackingToken
+  let candidate = invoices.find((invoice) => invoice.orderSheet && invoice.trackingToken
     && invoice.accountApprovalStatus === approval);
+
+  // The shop's own data supplies these when it can. When it does not — every
+  // pending invoice has been through a previous run, say — the scenario raises
+  // the order sheet it needs rather than failing for want of test data.
   if (!candidate) {
-    await client.dispose();
-    throw new Error(`No order is currently ${approval} with an order sheet, so this rule cannot be checked`);
+    const bare = invoices.find((invoice) => !invoice.orderSheet && invoice.accountApprovalStatus === approval);
+    if (!bare) {
+      await client.dispose();
+      throw new Error(`No invoice is ${approval}, so this rule cannot be checked`);
+    }
+    await client.post(`${API_URL}/oms/tracking/order-sheet`, {
+      data: {
+        invoiceNumber: bare.invoiceNumber,
+        orderSheet: {
+          customer: bare.customer,
+          item: bare.item || 'Test garment',
+          measurements: 'Chest 40, Waist 34, Length 30',
+          delivery: new Date(Date.now() + 12096e5).toISOString().slice(0, 10),
+        },
+      },
+    });
+    const refreshed = await client.get(`${API_URL}/oms/invoices/sent`);
+    const list = (await refreshed.json())?.data?.invoices || [];
+    candidate = list.find((invoice) => invoice.invoiceNumber === bare.invoiceNumber);
+    if (!candidate?.orderSheet) {
+      await client.dispose();
+      throw new Error(`An order sheet could not be raised on ${bare.invoiceNumber}`);
+    }
   }
 
   if (status || tailor) {

@@ -1,8 +1,8 @@
 # TWIF OMS — automated test results
 
-**47 of 47 scenarios passed** · 180 steps · 137.5s
+**47 of 47 scenarios passed** · 180 steps · 134.8s
 
-Run on Monday, 10 August 2026 at 16:43 against a local build.
+Run on Monday, 10 August 2026 at 17:27 against a local build.
 Playwright drives a real Chromium browser; the scenarios are written in Gherkin and run by Cucumber.
 
 | Feature | Scenarios | Result |
@@ -31,28 +31,28 @@ The OMS holds customer records, invoices and payment evidence. Until this was
 
 ### PASS — The API refuses a caller with no token
 
-_0.46s_
+_0.51s_
 
 - When I ask the API for the customer list with no token
 - Then the API should refuse me
 
 ### PASS — The API refuses a made-up token
 
-_0.10s_
+_0.11s_
 
 - When I ask the API for the customer list with a made-up token
 - Then the API should refuse me
 
 ### PASS — A signed-in member of staff is let through
 
-_0.34s_
+_0.41s_
 
 - When I ask the API for the customer list as the Store Manager
 - Then the API should answer
 
 ### PASS — A wrong PIN is refused
 
-_0.31s_
+_0.34s_
 
 - When I try to sign in with the wrong PIN
 - Then I should not be signed in
@@ -60,7 +60,7 @@ _0.31s_
 
 ### PASS — A customer can still open their tracking link
 
-_1.19s_
+_1.27s_
 
 - Given a customer opens the tracking link for an order that has not started
 - Then the tracking page should offer three steps
@@ -75,7 +75,7 @@ An invoice carried a status — unpaid, part paid, fully paid — but no figure
 
 ### PASS — Accounts record a part payment against an invoice
 
-_3.47s_
+_4.00s_
 
 - Given an invoice for 50000 that nothing has been paid against
 - When the Accountant records 20000 received on it
@@ -84,7 +84,7 @@ _3.47s_
 
 ### PASS — The rest of the money settles the invoice
 
-_2.96s_
+_3.29s_
 
 - Given an invoice for 50000 that nothing has been paid against
 - When the Accountant records 20000 received on it
@@ -93,7 +93,7 @@ _2.96s_
 
 ### PASS — More than the invoice is owed cannot be recorded
 
-_0.61s_
+_0.54s_
 
 - Given an invoice for 50000 that nothing has been paid against
 - When the Accountant tries to record 90000 received on it
@@ -102,7 +102,7 @@ _0.61s_
 
 ### PASS — A tailor cannot record a payment
 
-_0.97s_
+_1.17s_
 
 - Given an invoice for 50000 that nothing has been paid against
 - When the Tailor tries to record 20000 received on it
@@ -116,7 +116,7 @@ What the customer is told about their order has to be true.
 
 ### PASS — An order that has not reached a tailor says it has been received
 
-_0.99s_
+_0.91s_
 
 - Given a customer opens the tracking link for an order that has not started
 - Then the tracking page should show "Order Received" as the current step
@@ -124,7 +124,7 @@ _0.99s_
 
 ### PASS — The tracking page offers one clear way to the customer's profile
 
-_1.06s_
+_0.98s_
 
 - Given a customer opens the tracking link for an order that has not started
 - Then I should see "Go to my profile"
@@ -132,7 +132,7 @@ _1.06s_
 
 ### PASS — A client cannot edit their own record from the portal
 
-_0.86s_
+_0.97s_
 
 - Given a customer opens their profile from the tracking link
 - Then I should not see "Edit"
@@ -147,7 +147,7 @@ The invoice and the tracking link both go to the customer's email address, so
 
 ### PASS — The email address is not offered as optional
 
-_2.94s_
+_2.77s_
 
 - Given I am signed in as the Store Manager
 - And I open the Customers page
@@ -157,7 +157,7 @@ _2.94s_
 
 ### PASS — An address already on file is refused
 
-_5.41s_
+_4.32s_
 
 - Given I am signed in as the Store Manager
 - And I open the Customers page
@@ -168,7 +168,7 @@ _5.41s_
 
 ### PASS — A new customer has no measurements until someone takes them
 
-_5.26s_
+_5.19s_
 
 - Given I am signed in as the Store Manager
 - And I open the Customers page
@@ -184,7 +184,7 @@ The Inventory Manager keeps what is on the shelves, and every item can be
 
 ### PASS — An item can be added with everything the shop records
 
-_4.04s_
+_4.08s_
 
 - Given I am signed in as the Inventory Manager
 - And I open the Inventory page
@@ -193,7 +193,7 @@ _4.04s_
 
 ### PASS — View opens the item
 
-_3.12s_
+_3.17s_
 
 - Given I am signed in as the Inventory Manager
 - And I open the Inventory page
@@ -203,7 +203,7 @@ _3.12s_
 
 ### PASS — The list shows no invented stock
 
-_3.15s_
+_3.03s_
 
 - Given I am signed in as the Inventory Manager
 - And I open the Inventory page
@@ -218,7 +218,7 @@ Accounts and the Owner work through invoices from this screen.
 
 ### PASS — No panel opens until an invoice is chosen
 
-_4.24s_
+_2.71s_
 
 - Given I am signed in as the Owner
 - And I open the Invoices page
@@ -226,7 +226,7 @@ _4.24s_
 
 ### PASS — The invoice list does not run off the side of the screen
 
-_3.63s_
+_3.22s_
 
 - Given I am signed in as the Owner
 - And I open the Invoices page
@@ -234,7 +234,7 @@ _3.63s_
 
 ### PASS — Opening an invoice for review fits the screen
 
-_3.31s_
+_3.26s_
 
 - Given I am signed in as the Owner
 - And I open the Invoices page
@@ -246,7 +246,7 @@ _3.31s_
 
 ### PASS — The review screen shows no figures the shop never entered
 
-_3.66s_
+_2.90s_
 
 - Given I am signed in as the Owner
 - And I open the Invoices page
@@ -263,7 +263,7 @@ A question about a garment belongs with the garment, so everyone working a job
 
 ### PASS — The Production Manager comments on a job and it is kept
 
-_3.06s_
+_3.15s_
 
 - Given I am signed in as the Production Manager
 - And I open the Production page
@@ -274,7 +274,7 @@ _3.06s_
 
 ### PASS — A comment survives leaving the job and coming back
 
-_3.92s_
+_4.38s_
 
 - Given I am signed in as the Production Manager
 - And I open the Production page
@@ -308,7 +308,7 @@ _2.18s_
 
 ### PASS — Store Manager can open notifications from the bell
 
-_2.20s_
+_2.18s_
 
 - Given I am signed in as the Store Manager
 - When I click the notification bell
@@ -316,7 +316,7 @@ _2.20s_
 
 ### PASS — Accountant can open notifications from the bell
 
-_2.16s_
+_2.29s_
 
 - Given I am signed in as the Accountant
 - When I click the notification bell
@@ -324,7 +324,7 @@ _2.16s_
 
 ### PASS — Production Manager can open notifications from the bell
 
-_2.17s_
+_2.13s_
 
 - Given I am signed in as the Production Manager
 - When I click the notification bell
@@ -332,7 +332,7 @@ _2.17s_
 
 ### PASS — Inventory Manager can open notifications from the bell
 
-_2.24s_
+_2.22s_
 
 - Given I am signed in as the Inventory Manager
 - When I click the notification bell
@@ -359,7 +359,7 @@ One order, followed from the counter to the customer's tracking link. Each
 
 ### PASS — An approved order travels from customer to ready for collection
 
-_16.47s_
+_16.44s_
 
 - Given the Store Manager creates a customer
 - And the Store Manager invoices that customer
@@ -378,7 +378,7 @@ _16.47s_
 
 ### PASS — The order keeps its state across roles and reloads
 
-_11.32s_
+_11.11s_
 
 - Given the Store Manager creates a customer
 - And the Store Manager invoices that customer
@@ -397,7 +397,7 @@ What may enter production, and what a job may do once it is there. These are
 
 ### PASS — An order still waiting on Accounts is not in production
 
-_3.97s_
+_4.06s_
 
 - Given an order sheet has been raised but Accounts have not reviewed it
 - When the Production Manager opens Production
@@ -405,7 +405,7 @@ _3.97s_
 
 ### PASS — An approved order is listed as a production job
 
-_4.00s_
+_3.99s_
 
 - Given an order sheet has been raised and Accounts have approved it
 - When the Production Manager opens Production
@@ -413,7 +413,7 @@ _4.00s_
 
 ### PASS — An unpaid order is kept out of production even once approved
 
-_4.91s_
+_4.53s_
 
 - Given an approved order whose invoice is unpaid
 - When the Production Manager opens Production
@@ -422,14 +422,14 @@ _4.91s_
 
 ### PASS — An unpaid order cannot be given to a tailor
 
-_0.93s_
+_1.10s_
 
 - Given an approved order whose invoice is unpaid
 - Then assigning a tailor to it should be refused
 
 ### PASS — An order with no measurements is held out of the queue
 
-_4.46s_
+_4.53s_
 
 - Given an approved and paid order with no measurements
 - When the Production Manager opens Production
@@ -438,7 +438,7 @@ _4.46s_
 
 ### PASS — Once measured, the same order can start
 
-_0.79s_
+_0.84s_
 
 - Given an approved and paid order with no measurements
 - When the measurements are added
@@ -446,7 +446,7 @@ _0.79s_
 
 ### PASS — A job nobody has started offers Start Work, not Mark Ready
 
-_2.94s_
+_2.77s_
 
 - Given a tailor has a job that has not been started
 - Then Start Work should be offered
@@ -454,7 +454,7 @@ _2.94s_
 
 ### PASS — A started job offers Mark Ready, not Start Work
 
-_5.03s_
+_4.37s_
 
 - Given a tailor has a job that has not been started
 - When the tailor starts that job
@@ -469,7 +469,7 @@ Every member of staff reaches their own workspace, and no one else's.
 
 ### PASS — Owner signs in and lands on their own dashboard
 
-_1.28s_
+_1.29s_
 
 - Given I sign in through the form as the Owner
 - Then the page should belong to the Owner
@@ -477,7 +477,7 @@ _1.28s_
 
 ### PASS — Store Manager signs in and lands on their own dashboard
 
-_1.22s_
+_1.24s_
 
 - Given I sign in through the form as the Store Manager
 - Then the page should belong to the Store Manager
@@ -485,7 +485,7 @@ _1.22s_
 
 ### PASS — Accountant signs in and lands on their own dashboard
 
-_1.28s_
+_1.22s_
 
 - Given I sign in through the form as the Accountant
 - Then the page should belong to the Accountant
@@ -493,7 +493,7 @@ _1.28s_
 
 ### PASS — Production Manager signs in and lands on their own dashboard
 
-_1.28s_
+_1.72s_
 
 - Given I sign in through the form as the Production Manager
 - Then the page should belong to the Production Manager
@@ -509,7 +509,7 @@ _1.33s_
 
 ### PASS — Tailor signs in and lands on their own dashboard
 
-_1.30s_
+_1.59s_
 
 - Given I sign in through the form as the Tailor
 - Then the page should belong to the Tailor

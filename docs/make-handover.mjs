@@ -14,15 +14,11 @@ const DECISIONS = [
   },
   {
     title: 'Should there be a delivery step?',
-    status: 'open',
-    today: 'There is none. Production runs Order Sheet Confirmed → Assigned → In Progress → Ready. Nothing anywhere sets Delivered, Collected or Completed — the store manager’s order filters mention them, but no screen produces them. An order’s last state is Ready for Collection.',
-    question: 'Should someone mark an order as handed over, and who?',
-    options: [
-      'Leave it. Ready for Collection is the end of the line.',
-      'The Store Manager marks it collected when the customer takes it.',
-      'Production marks it out, the store marks it collected — two steps.',
-    ],
-    recommend: 'This is the one still waiting. Without it, nothing in TWIF can tell you what has actually left the shop, and the customer’s tracking page never reaches a final state.',
+    status: 'settled',
+    today: 'Settled by Henry on 10 August: no delivered status. Ready for Collection is the end of the line. The screens now say so — the Completed and Cancelled filters, which nothing could ever put an order into, are gone, and the customer’s tracking page ends at Ready for Collection.',
+    question: '',
+    options: [],
+    recommend: 'One consequence to keep in mind: TWIF cannot tell you what has physically left the shop, only what is ready to. If that becomes a question later, this is the decision to revisit.',
   },
   {
     title: 'Should missing measurements block a job?',
@@ -64,13 +60,12 @@ const TESTED = [
   ['The API refuses a caller with no token, and a wrong PIN says nothing useful', 'covered'],
   ['Accounts record what a customer paid, and the status follows the money', 'covered'],
   ['An amount larger than the invoice is refused, and a tailor cannot record one at all', 'covered'],
-  ['An order is marked delivered', 'cannot be tested — no delivery state exists'],
 ];
 
 const md = [
   '# TWIF OMS — where things stand',
   '',
-  'Updated after Henry’s decisions of 10 August were built. Everything below was checked against the code and the running app, not assumed.',
+  'Updated after all four of Henry’s decisions of 10 August were built. Everything below was checked against the code and the running app, not assumed.',
   '',
   '## Decisions',
   '',
@@ -94,7 +89,7 @@ const md = [
   '| --- | --- |',
   ...TESTED.map(([what, status]) => `| ${what} | ${status} |`),
   '',
-  'The one that cannot be tested is not a gap in the suite. It waits on the delivery decision above: a test asserting a rule the system does not have would pass by accident or fail for the wrong reason.',
+  'Every behaviour the four decisions settled is covered. Nothing in the suite asserts a rule TWIF does not have.',
   '',
 ].join('\n');
 

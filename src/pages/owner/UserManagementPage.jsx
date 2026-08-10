@@ -778,7 +778,8 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setSt
                 ['Store', person.store],
                 ...(person.role === 'tailor' ? [['Department', person.tailorDepartment || 'Native'], ['Tailor Grade', `Grade ${person.tailorGrade || 1}`]] : []),
                 ['Account Status', person.status],
-                ['Date Created', '22 May 2024'],
+                // Was fixed at "22 May 2024" for every member of staff.
+                ['Date Created', person.createdAt ? formatMoment(person.createdAt) : 'Not recorded'],
               ].map(([dt, dd]) => (
                 <div key={dt} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingBottom: 10, borderBottom: '1px solid #f3ede5' }}>
                   <dt style={{ color: '#8a7a6a', fontWeight: 400 }}>{dt}</dt>

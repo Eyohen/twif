@@ -6,36 +6,6 @@ import {
 import { api } from '../../lib/api';
 import { Status } from '../../components/oms/Common';
 
-const fallbackRequests = [
-  {
-    id: 'r1',
-    fabric: { name: 'Navy Blue Wool (3m)' },
-    requestedBy: 'Inventory Manager',
-    proposedChanges: { quantity: 45, unitCost: 3200 },
-    reason: 'Stock recount after delivery from supplier; actual quantity differs from system.',
-    status: 'Pending Owner Approval',
-    createdAt: '2026-07-30T09:25:00',
-  },
-  {
-    id: 'r2',
-    fabric: { name: 'Cream Linen (5m)' },
-    requestedBy: 'Inventory Manager',
-    proposedChanges: { unitCost: 1800 },
-    reason: 'Supplier increased price. Updating cost to reflect new invoice.',
-    status: 'Approved',
-    createdAt: '2026-07-28T14:10:00',
-  },
-  {
-    id: 'r3',
-    fabric: { name: 'Black Ankara' },
-    requestedBy: 'Inventory Manager',
-    proposedChanges: { quantity: 0, status: 'Out of Stock' },
-    reason: 'Fabric damaged in transit. Quantity zeroed out pending reorder.',
-    status: 'Pending Owner Approval',
-    createdAt: '2026-07-29T11:45:00',
-  },
-];
-
 const TABS = ['All', 'Pending', 'Approved', 'Rejected'];
 
 function ChangePill({ fieldKey, value }) {
@@ -63,8 +33,15 @@ export default function OwnerInventoryApprovalsPage({ currentRole, onBack }) {
   const load = () => {
     setLoading(true);
     api.get('/oms/inventory-edit-requests')
-      .then((response) => setRequests(response.data?.data?.requests || fallbackRequests))
-      .catch(() => setRequests(fallbackRequests))
+      .then((response) => {
+        setRequests(response.data?.data?.requests || []);
+        setMessage('');
+      })
+      .catch((error) => {
+        setRequests([]);
+        setMessageType('error');
+        setMessage(error.response?.data?.message || 'The approval queue could not be loaded.');
+      })
       .finally(() => setLoading(false));
   };
 

@@ -1,17 +1,23 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, Search, Package, ChevronRight, User, Phone, MapPin, TrendingUp, Calendar, CreditCard, BarChart2 } from 'lucide-react';
-import { money } from '../../utils/oms';
+import { money, daysUntilDue, dueDateLabel } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 
-function normalizeOrder(invoice, index) {
+function normalizeOrder(invoice) {
   const status = invoice.orderSheet?.status || invoice.orderStatus || 'In Production';
+  // "4 days left" was fixed text against every order in production. The
+  // delivery date the order actually carries says how long is really left, and
+  // an order already collected-ready is not chased for it.
+  const settled = ['Ready', 'Ready for Collection'].includes(status);
+  const days = settled ? null : daysUntilDue(invoice.deliveryDate);
   return {
     ...invoice,
     description: invoice.description || `${invoice.pieces || 1} Piece`,
     orderDate: invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
     deliveryDate: invoice.deliveryDate ? new Date(invoice.deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
-    orderNumber: 1256 - index * 15,
     status,
+    dueLabel: days === null ? '' : dueDateLabel(invoice.deliveryDate),
+    overdue: days !== null && days < 0,
   };
 }
 
@@ -23,22 +29,21 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
   // The pill labels are the store's language; the underlying order sheet uses
   // its own status names, so each pill maps to the statuses it covers.
   const STATUSES_BY_FILTER = {
-    'In Production': ['Assigned', 'In Progress', 'Order Sheet Confirmed'],
+    'Awaiting Production': ['Order Sheet Confirmed'],
+    'In Production': ['Assigned', 'In Progress'],
     'Ready for Collection': ['Ready', 'Ready for Collection'],
-    Completed: ['Completed', 'Collected'],
-    Cancelled: ['Cancelled'],
   };
 
   const filtered = useMemo(() => orders.filter((order) => {
     const matchesSearch = `${order.invoiceNumber} ${order.item} ${order.status}`.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filter === 'All Orders'
-      || (filter === 'Active' && !['Completed', 'Collected', 'Cancelled'].includes(order.status))
+      || (filter === 'Active' && !['Ready', 'Ready for Collection'].includes(order.status))
       || (STATUSES_BY_FILTER[filter] || []).includes(order.status);
     return matchesSearch && matchesFilter;
   }), [orders, search, filter]);
-  const completed = orders.filter((order) => order.status === 'Completed').length;
-  const active = orders.filter((order) => !['Completed', 'Cancelled'].includes(order.status)).length;
-  const totalSpent = orders.filter((order) => order.status !== 'Cancelled').reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const ready = orders.filter((order) => ['Ready', 'Ready for Collection'].includes(order.status)).length;
+  const active = orders.length - ready;
+  const totalSpent = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const initials = customer.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2);
 
   return (
@@ -109,7 +114,7 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
           {[
             { Icon: Package, label: 'Total Orders', value: orders.length },
             { Icon: TrendingUp, label: 'Active Orders', value: active },
-            { Icon: Calendar, label: 'Completed', value: completed },
+            { Icon: Calendar, label: 'Ready for Collection', value: ready },
             { Icon: CreditCard, label: 'Total Spent', value: money.format(totalSpent) },
           ].map(({ Icon, label, value }, i) => (
             <div key={label} style={{
@@ -141,7 +146,7 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
             </label>
           </div>
           <nav className="os-filter-pills" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {['All Orders', 'Active', 'In Production', 'Ready for Collection', 'Completed', 'Cancelled'].map((item) => (
+            {['All Orders', 'Active', 'Awaiting Production', 'In Production', 'Ready for Collection'].map((item) => (
               <button
                 key={item}
                 onClick={() => setFilter(item)}
@@ -190,7 +195,6 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
                     </div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 13, color: '#1a1611' }}>{order.invoiceNumber}</div>
-                      <div style={{ fontSize: 11, color: '#8a7a6a' }}>Order #{order.orderNumber}</div>
                     </div>
                   </div>
                 </td>
@@ -202,21 +206,17 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
                 <td style={{ padding: '12px 14px' }}>
                   <Status>{order.status}</Status>
                   <div style={{ fontSize: 11, color: '#8a7a6a', marginTop: 3 }}>
-                    {order.status === 'In Production' ? 'With Production'
-                      : order.status === 'Ready for Collection' ? 'Ready'
-                      : order.status === 'Completed' ? 'Collected'
-                      : 'Cancelled'}
+                    {['Assigned', 'In Progress', 'In Production'].includes(order.status) ? 'With Production'
+                      : ['Ready', 'Ready for Collection'].includes(order.status) ? 'Waiting for the customer'
+                      : 'Not started'}
                   </div>
                 </td>
                 <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{order.orderDate}</td>
                 <td style={{ padding: '12px 14px' }}>
                   <div style={{ fontSize: 13, color: '#5a4e42' }}>{order.deliveryDate}</div>
-                  {order.status === 'In Production' && (
-                    <div style={{ fontSize: 11, color: '#8a3520', fontWeight: 600, marginTop: 2 }}>4 days left</div>
-                  )}
-                  {order.status === 'Completed' && (
-                    <div style={{ fontSize: 11, color: '#2a7d4f', fontWeight: 600, marginTop: 2 }}>Collected</div>
-                  )}
+                  {order.dueLabel ? (
+                    <div style={{ fontSize: 11, color: order.overdue ? '#8a3520' : '#8a7a6a', fontWeight: 600, marginTop: 2 }}>{order.dueLabel}</div>
+                  ) : null}
                 </td>
                 <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700, color: '#1a1611' }}>{money.format(order.total)}</td>
                 <td style={{ padding: '12px 14px' }}>
@@ -257,7 +257,6 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
                 </div>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 14, color: '#0f0b06' }}>{order.invoiceNumber}</div>
-                  <div style={{ fontSize: 11, color: '#8a7a6a' }}>Order #{order.orderNumber}</div>
                   <div style={{ fontWeight: 700, fontSize: 13, color: '#3d352c', marginTop: 2 }}>{order.item}</div>
                   <div style={{ fontSize: 12, color: '#8a7a6a' }}>{order.description}</div>
                 </div>
@@ -309,9 +308,8 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
               <dt>Total Orders</dt><dd>{orders.length}</dd>
               <dt>Total Spent</dt><dd>{money.format(totalSpent)}</dd>
               <dt>Average Order Value</dt><dd>{money.format(orders.length ? totalSpent / orders.length : 0)}</dd>
-              <dt>In Production</dt><dd>{active}</dd>
-              <dt>Completed</dt><dd>{completed}</dd>
-              <dt>Cancelled</dt><dd>{orders.filter((o) => o.status === 'Cancelled').length}</dd>
+              <dt>Still in hand</dt><dd>{active}</dd>
+              <dt>Ready for collection</dt><dd>{ready}</dd>
             </dl>
           </div>
         </aside>
