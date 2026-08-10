@@ -40,6 +40,10 @@ const DECISIONS = [
 
 const OPEN = [
   {
+    title: 'Nothing here has been seen live yet',
+    detail: 'Everything is pushed to both repositories, but I have no way to confirm what the deployed site is running. The server needs a restart so its startup schema check creates the StaffLoginEvents table that the sign-in history reads from — it creates missing tables and never alters an existing one, so live data is not at risk. The staff PINs on the live system should also be set by the Owner from User Management, where Reset PIN now works; the ones in the local seed are for development.',
+  },
+  {
     title: 'The rate limit',
     detail: 'Staff sign-in has a tight limit of its own — twelve failures per quarter hour, successful attempts not counted — so a PIN cannot be guessed at. The general ceiling of 2,000 requests per quarter hour per address is no longer applied outside production, which is what a full test run used to exhaust. Whether 2,000 is right for a shop where several tabs share one connection is a judgement to revisit once it is in daily use.',
   },
