@@ -1,12 +1,12 @@
 import { Given, When, Then } from '@cucumber/cucumber';
-import { expect, request } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { ACCOUNTS, API_URL } from '../support/world.js';
 
 // These scenarios are about the rule, not about the screens that reach it, so
 // the order is put into the state under test directly and only the rule's
 // effect is read from the app.
-async function anOrderWith({ approval, status, tailor }) {
-  const client = await request.newContext();
+async function anOrderWith(world, { approval, status, tailor }) {
+  const client = await world.api();
   const list = await client.get(`${API_URL}/oms/invoices/sent`);
   const invoices = (await list.json())?.data?.invoices || [];
 
@@ -27,11 +27,11 @@ async function anOrderWith({ approval, status, tailor }) {
 }
 
 Given('an order sheet has been raised but Accounts have not reviewed it', async function () {
-  this.order = await anOrderWith({ approval: 'Pending Accounts' });
+  this.order = await anOrderWith(this, { approval: 'Pending Accounts' });
 });
 
 Given('an order sheet has been raised and Accounts have approved it', async function () {
-  this.order = await anOrderWith({ approval: 'Approved' });
+  this.order = await anOrderWith(this, { approval: 'Approved' });
 });
 
 When('the Production Manager opens Production', async function () {
@@ -59,7 +59,7 @@ Then('that order should be listed as a production job', async function () {
 
 Given('a tailor has a job that has not been started', async function () {
   // Put a job in the tailor's hands, not yet started.
-  this.order = await anOrderWith({
+  this.order = await anOrderWith(this, {
     approval: 'Approved',
     status: 'Assigned',
     tailor: ACCOUNTS.Tailor.name,
@@ -102,8 +102,8 @@ Then('Mark Ready should not be offered', async function () {
 
 // Builds an order in an exact state through the API, because these scenarios
 // are about the rule rather than about the screens that lead to it.
-async function makeOrder({ paymentStatus, measurements }) {
-  const client = await request.newContext();
+async function makeOrder(world, { paymentStatus, measurements }) {
+  const client = await world.api();
   const stamp = Date.now().toString().slice(-6);
   const invoiceNumber = `INVRULE${stamp}`;
   const customer = `Rule Customer ${stamp}`;
@@ -142,19 +142,19 @@ async function makeOrder({ paymentStatus, measurements }) {
 }
 
 Given('an approved order whose invoice is unpaid', async function () {
-  this.order = await makeOrder({ paymentStatus: 'unpaid', measurements: 'Chest 40, Waist 34' });
+  this.order = await makeOrder(this, { paymentStatus: 'unpaid', measurements: 'Chest 40, Waist 34' });
   expect(this.order.paymentStatus).toBe('Unpaid');
   expect(this.order.accountApprovalStatus).toBe('Approved');
 });
 
 Given('an approved and paid order with no measurements', async function () {
-  this.order = await makeOrder({ paymentStatus: 'partial_paid', measurements: '' });
+  this.order = await makeOrder(this, { paymentStatus: 'partial_paid', measurements: '' });
   expect(this.order.paymentStatus).toBe('Partial Paid');
   expect(this.order.orderSheet?.measurements ?? '').toBe('');
 });
 
 When('the measurements are added', async function () {
-  const client = await request.newContext();
+  const client = await this.api();
   await client.patch(`${API_URL}/oms/tracking/order-sheet/${this.order.trackingToken}`, {
     data: { measurements: 'Chest 42, Waist 36, Sleeve 25' },
   });
@@ -171,7 +171,7 @@ Then('that order should be held with the reason {string}', async function (reaso
 });
 
 Then('assigning a tailor to it should be refused', async function () {
-  const client = await request.newContext();
+  const client = await this.api('Production Manager');
   const response = await client.patch(`${API_URL}/oms/tracking/order-sheet/${this.order.trackingToken}`, {
     data: { tailor: ACCOUNTS.Tailor.name },
   });
@@ -182,7 +182,7 @@ Then('assigning a tailor to it should be refused', async function () {
 });
 
 Then('assigning a tailor to it should be allowed', async function () {
-  const client = await request.newContext();
+  const client = await this.api('Production Manager');
   const response = await client.patch(`${API_URL}/oms/tracking/order-sheet/${this.order.trackingToken}`, {
     data: { tailor: ACCOUNTS.Tailor.name },
   });

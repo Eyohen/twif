@@ -21,8 +21,15 @@ BeforeAll({ timeout: 30 * 1000 }, async function () {
   }
 
   try {
-    const server = await api.get(`${API_URL}/oms/invoices/sent`, { timeout: 5000 });
-    if (!server.ok()) unreachable.push(`the API at ${API_URL} answered ${server.status()}`);
+    // Signing in proves the API is up *and* that the seeded staff exist, which
+    // is what every other scenario depends on.
+    const login = await api.post(`${API_URL}/oms/auth/login`, {
+      data: { phone: '08000000001', pin: 'owner26' },
+      timeout: 5000,
+    });
+    if (!login.ok()) {
+      unreachable.push(`the API at ${API_URL} refused the seeded Owner sign-in (${login.status()})`);
+    }
   } catch {
     unreachable.push(`the API at ${API_URL} is not answering — start the server with "node index.js"`);
   }

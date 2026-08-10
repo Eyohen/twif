@@ -8,15 +8,10 @@ export const roles = [
   { id: 'tailor', label: 'Tailor', name: 'Segun (Tailor)' },
 ];
 
-export const demoCredentials = [
-  { phone: '08000000001', pin: 'owner26', role: 'owner', label: 'Owner' },
-  { phone: '08000000002', pin: 'admin26', role: 'admin', label: 'Admin' },
-  { phone: '08000000003', pin: 'store26', role: 'store_manager', label: 'Store Manager' },
-  { phone: '08000000004', pin: 'accounts26', role: 'accounts', label: 'Accounts' },
-  { phone: '08000000005', pin: 'production26', role: 'production_manager', label: 'Production Manager' },
-  { phone: '08000000006', pin: 'inventory26', role: 'inventory_manager', label: 'Inventory Manager' },
-  { phone: '08000000007', pin: 'tailor26', role: 'tailor', label: 'Tailor' },
-];
+// The staff list with their PINs used to live here, which meant it was compiled
+// into the JavaScript and readable by anyone who opened the bundle. Sign-in is
+// checked on the server now, against a hashed PIN, so nothing about an account
+// belongs in the client.
 
 export const inventoryCategories = [
   'Suiting', 'Shirting', 'Jacket', 'Trouser', 'Native', 'Bridal',

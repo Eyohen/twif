@@ -1,5 +1,8 @@
 import { setWorldConstructor, World } from '@cucumber/cucumber';
-import { expect } from '@playwright/test';
+import { expect, request } from '@playwright/test';
+
+// One token per role for the whole run.
+const TOKENS = new Map();
 
 export const APP_URL = process.env.TWIF_APP_URL || 'http://localhost:5173';
 export const API_URL = process.env.TWIF_API_URL || 'http://localhost:8084/api';
@@ -49,17 +52,54 @@ class TwifWorld extends World {
     const account = ACCOUNTS[roleName];
     if (!account) throw new Error(`No seeded account for the role "${roleName}"`);
 
+    // A real token from the real endpoint — the session is no longer something
+    // that can simply be asserted in local storage.
+    const token = await this.staffToken(roleName);
+
     await this.page.goto(`${APP_URL}/login`);
-    await this.page.evaluate(([role, phone, label]) => {
-      window.localStorage.setItem('twif_oms_session', JSON.stringify({ role, phone, label }));
+    await this.page.evaluate(([role, phone, label, name, accessToken]) => {
+      window.localStorage.setItem('twif_oms_session', JSON.stringify({ role, phone, label, name }));
       window.localStorage.setItem('twif_oms_last_active', String(Date.now()));
-    }, [account.role ?? roleName, account.phone, roleName]);
+      window.localStorage.setItem('twif_access_token', accessToken);
+    }, [account.role, account.phone, roleName, account.name, token]);
 
     this.role = roleName;
     this.account = account;
     await this.page.goto(`${APP_URL}${account.home}`);
     await this.page.waitForURL(new RegExp(`${account.home}$`), { timeout: 20000 });
+
+    // The token is what opens the API; if anything has dropped it the scenario
+    // would fail later in a way that looks like a product fault.
+    await this.page.waitForTimeout(1200);
+    const stillSignedIn = await this.page.evaluate(() => Boolean(window.localStorage.getItem('twif_access_token')));
+    if (!stillSignedIn) throw new Error(`The session for ${roleName} was dropped immediately after signing in`);
+
     return account;
+  }
+
+  // Tokens are reused across a scenario's steps rather than signing in again
+  // for each API call.
+  async staffToken(roleName) {
+    const account = ACCOUNTS[roleName];
+    if (TOKENS.has(roleName)) return TOKENS.get(roleName);
+
+    const client = await request.newContext();
+    const response = await client.post(`${API_URL}/oms/auth/login`, {
+      data: { phone: account.phone, pin: account.pin },
+    });
+    const body = await response.json();
+    await client.dispose();
+
+    if (!body?.data?.token) throw new Error(`Could not sign in as ${roleName}: ${JSON.stringify(body)}`);
+    TOKENS.set(roleName, body.data.token);
+    return body.data.token;
+  }
+
+  // An API client carrying a staff token, for the steps that read or set state
+  // directly rather than through a screen.
+  async api(roleName = 'Owner') {
+    const token = await this.staffToken(roleName);
+    return request.newContext({ extraHTTPHeaders: { Authorization: `Bearer ${token}` } });
   }
 
   // Signing in through the form, as a person does.

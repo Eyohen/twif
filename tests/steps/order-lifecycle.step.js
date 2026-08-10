@@ -1,29 +1,28 @@
 import { Given, When, Then } from '@cucumber/cucumber';
-import { expect, request } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { ACCOUNTS, API_URL, APP_URL } from '../support/world.js';
 
 // The production board sorts jobs by these, and only these. A job holding any
 // other value falls out of every count on the board.
 const BOARD_STATES = ['Order Sheet Confirmed', 'Assigned', 'In Progress', 'Ready'];
 
-const api = async () => request.newContext();
-
 // Reads the order back from the server rather than from the page, so each
-// assertion is about what TWIF actually stored.
-async function fetchInvoice(invoiceNumber) {
-  const client = await api();
+// assertion is about what TWIF actually stored. The API is staff-only now, so
+// these calls carry a token like any other.
+async function invoices(world) {
+  const client = await world.api();
   const response = await client.get(`${API_URL}/oms/invoices/sent`);
   const body = await response.json();
   await client.dispose();
-  return (body?.data?.invoices || []).find((invoice) => invoice.invoiceNumber === invoiceNumber);
+  return body?.data?.invoices || [];
 }
 
-async function findInvoiceForCustomer(customer) {
-  const client = await api();
-  const response = await client.get(`${API_URL}/oms/invoices/sent`);
-  const body = await response.json();
-  await client.dispose();
-  return (body?.data?.invoices || []).find((invoice) => invoice.customer === customer);
+async function fetchInvoice(world, invoiceNumber) {
+  return (await invoices(world)).find((invoice) => invoice.invoiceNumber === invoiceNumber);
+}
+
+async function findInvoiceForCustomer(world, customer) {
+  return (await invoices(world)).find((invoice) => invoice.customer === customer);
 }
 
 Given('the Store Manager creates a customer', async function () {
@@ -88,7 +87,7 @@ Given('the Store Manager invoices that customer', async function () {
   // The invoice number is assigned by the form, so it is read back from the
   // server against the customer we just created.
   await expect(async () => {
-    const invoice = await findInvoiceForCustomer(this.customerName);
+    const invoice = await findInvoiceForCustomer(this, this.customerName);
     expect(invoice, 'the invoice never reached the server').toBeTruthy();
     this.invoiceNumber = invoice.invoiceNumber;
     this.trackingToken = invoice.trackingToken;
@@ -130,7 +129,7 @@ Given('the Store Manager raises an order sheet with fabric and measurements', as
 });
 
 Then('the order should be waiting on Accounts', async function () {
-  const invoice = await fetchInvoice(this.invoiceNumber);
+  const invoice = await fetchInvoice(this, this.invoiceNumber);
   expect(invoice.accountApprovalStatus).toBe('Pending Accounts');
   expect(invoice.orderSheet, 'no order sheet was stored against the invoice').toBeTruthy();
 });
@@ -150,7 +149,7 @@ When('the Accountant approves the invoice', async function () {
   await this.page.getByRole('button', { name: /confirm|yes|approve/i }).last().click();
 
   await expect(async () => {
-    const invoice = await fetchInvoice(this.invoiceNumber);
+    const invoice = await fetchInvoice(this, this.invoiceNumber);
     expect(invoice.accountApprovalStatus).toBe('Approved');
   }).toPass({ timeout: 20000 });
 });
@@ -185,7 +184,7 @@ When('the Production Manager assigns the job to a tailor', async function () {
 
 Then('the job should be assigned to that tailor', async function () {
   await expect(async () => {
-    const invoice = await fetchInvoice(this.invoiceNumber);
+    const invoice = await fetchInvoice(this, this.invoiceNumber);
     expect(invoice.orderSheet?.tailor).toBe(this.tailorName);
   }).toPass({ timeout: 20000 });
 });
@@ -209,7 +208,7 @@ When('the tailor starts the job', async function () {
 
 Then('the job should be in progress', async function () {
   await expect(async () => {
-    const invoice = await fetchInvoice(this.invoiceNumber);
+    const invoice = await fetchInvoice(this, this.invoiceNumber);
     expect(invoice.orderSheet?.status).toBe('In Progress');
   }).toPass({ timeout: 20000 });
 });
@@ -226,13 +225,13 @@ When('the tailor marks the job ready', async function () {
 
 Then('the job should be ready for collection', async function () {
   await expect(async () => {
-    const invoice = await fetchInvoice(this.invoiceNumber);
+    const invoice = await fetchInvoice(this, this.invoiceNumber);
     expect(invoice.orderSheet?.status).toBe('Ready');
   }).toPass({ timeout: 20000 });
 });
 
 When('the customer opens their tracking link', async function () {
-  const invoice = await fetchInvoice(this.invoiceNumber);
+  const invoice = await fetchInvoice(this, this.invoiceNumber);
   this.trackingToken = invoice.trackingToken;
   expect(this.trackingToken, 'the order carries no tracking link').toBeTruthy();
   await this.page.goto(`${APP_URL}/c/${this.trackingToken}`);
@@ -245,7 +244,7 @@ Then('the customer should be told the order is ready for collection', async func
 });
 
 When('the order is read back from the server', async function () {
-  this.storedJob = (await fetchInvoice(this.invoiceNumber))?.orderSheet;
+  this.storedJob = (await fetchInvoice(this, this.invoiceNumber))?.orderSheet;
   expect(this.storedJob, 'no order sheet came back').toBeTruthy();
 });
 

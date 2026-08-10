@@ -1,12 +1,11 @@
 import { Given, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
-import { request } from '@playwright/test';
 import { APP_URL, API_URL } from '../support/world.js';
 
 // A tracking link belongs to a customer, so these scenarios sign nobody in.
 // The token is taken from a real invoice rather than being made up.
-async function trackingToken(wantedStatus = null) {
-  const api = await request.newContext();
+async function trackingToken(world, wantedStatus = null) {
+  const api = await world.api();
   const response = await api.get(`${API_URL}/oms/invoices/sent`);
   const body = await response.json();
 
@@ -38,13 +37,13 @@ async function trackingToken(wantedStatus = null) {
 }
 
 Given('a customer opens the tracking link for an order that has not started', async function () {
-  const token = await trackingToken('Order Received');
+  const token = await trackingToken(this, 'Order Received');
   await this.page.goto(`${APP_URL}/c/${token}`);
   await this.page.waitForSelector('.tracking-steps', { timeout: 15000 });
 });
 
 Given('a customer opens their profile from the tracking link', async function () {
-  const token = await trackingToken();
+  const token = await trackingToken(this);
   await this.page.goto(`${APP_URL}/c/${token}/profile`);
   await this.page.waitForSelector('.client-portal-workspace', { timeout: 15000 });
 });

@@ -2,15 +2,17 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
-import { AuthProvider } from './context/AuthContext.jsx'
 import './index.css'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
+    {/* The template's AuthProvider used to wrap this. It fetched /auth/me on
+        every load — the customer-account endpoint from the product this
+        codebase started as — and on the 401 it cleared the stored token, which
+        is now the staff token the OMS signs in with. Nothing in the OMS ever
+        used it: its three consumers are unreachable from here. */}
     <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
+      <App />
     </BrowserRouter>
   </StrictMode>,
 )

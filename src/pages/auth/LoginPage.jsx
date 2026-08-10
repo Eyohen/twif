@@ -1,21 +1,47 @@
 import { useState } from 'react';
-import { demoCredentials } from '../../config/oms';
+import { api, setStoredAccessToken } from '../../lib/api';
 
 export default function LoginPage({ onLogin, notice = '' }) {
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState('');
+  const [signingIn, setSigningIn] = useState(false);
 
-  const submit = (event) => {
+  // The PIN used to be checked here, in the browser, against a list compiled
+  // into the JavaScript — so all seven were readable by anyone who opened the
+  // bundle. It goes to the server now, and what comes back is a token the rest
+  // of the API requires.
+  const submit = async (event) => {
     event.preventDefault();
-    const account = demoCredentials.find((item) => item.phone === phone.trim() && item.pin === pin.trim());
-    if (!account) {
-      setError('Invalid phone number or PIN');
-      return;
-    }
+    if (signingIn) return;
+    setSigningIn(true);
     setError('');
-    onLogin(account);
+
+    try {
+      const response = await api.post('/oms/auth/login', { phone: phone.trim(), pin: pin.trim() });
+      const { token, staff } = response.data?.data || {};
+      if (!token || !staff) throw new Error('missing token');
+
+      setStoredAccessToken(token);
+      onLogin({
+        role: staff.role,
+        phone: staff.phone,
+        name: staff.displayName,
+        label: staff.displayName,
+        store: staff.store,
+        profileImageUrl: staff.profileImageUrl,
+        tailorDepartment: staff.tailorDepartment,
+        tailorGrade: staff.tailorGrade,
+      });
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message
+        || (requestError.response ? 'Could not sign you in' : 'Cannot reach the server. Check your connection.'),
+      );
+    } finally {
+      setSigningIn(false);
+    }
   };
 
   return (
@@ -49,7 +75,7 @@ export default function LoginPage({ onLogin, notice = '' }) {
               <label>Phone number<span className="login-input-icon">⌕</span><input value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="08160000000" /></label>
               <label>PIN<span className="pin-input-wrap"><input value={pin} onChange={(event) => setPin(event.target.value)} type={showPin ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter PIN" /><button type="button" className="pin-toggle" aria-label={showPin ? 'Hide PIN' : 'Show PIN'} onClick={() => setShowPin((current) => !current)}>{showPin ? '◉' : '◎'}</button></span></label>
               <div className="login-form-options"><label><input type="checkbox" defaultChecked />Remember me on this device</label><button type="button">Forgot PIN?</button></div>
-              <button className="login-submit" type="submit">Continue <span>→</span></button>
+              <button className="login-submit" type="submit" disabled={signingIn}>{signingIn ? 'Signing in…' : <>Continue <span>→</span></>}</button>
             </form>
             <p className="login-terms">By continuing, you agree to our <b>Terms of Use</b> and <b>Privacy Policy.</b></p>
           </section>

@@ -15,7 +15,10 @@ When('I try to save a customer using an address already on file', async function
   // A real customer record, not one the list synthesises from an invoice —
   // only the first kind is checked for a duplicate address.
   const existing = await this.page.evaluate(async () => {
-    const response = await fetch('http://localhost:8084/api/oms/customers');
+    // The API is staff-only now, so the page's own token goes with the request.
+    const response = await fetch('http://localhost:8084/api/oms/customers', {
+      headers: { Authorization: `Bearer ${window.localStorage.getItem('twif_access_token')}` },
+    });
     const body = await response.json();
     return (body?.data?.customers || [])
       .find((customer) => customer.email && !String(customer.id).startsWith('sent-'))?.email || '';

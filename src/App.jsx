@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { LogOut, LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors } from 'lucide-react';
-import { api } from './lib/api';
+import { api, getStoredAccessToken, setStoredAccessToken } from './lib/api';
 import LoginPage from './pages/auth/LoginPage';
 import MyTasksPage from './pages/tailor/MyTasksPage';
 import WeeklyLogPage from './pages/tailor/WeeklyLogPage';
@@ -16,7 +16,7 @@ import MembershipsPage from './pages/owner/MembershipsPage';
 import SettingsPage from './pages/owner/SettingsPage';
 import InventoryManagerOverviewPage from './pages/inventory/OverviewPage';
 import InventoryListPage from './pages/inventory/InventoryListPage';
-import { roles, demoCredentials, inventoryCategories, navByRole, accountTypeByRole } from './config/oms';
+import { roles, inventoryCategories, navByRole, accountTypeByRole } from './config/oms';
 import { Stat, Status, SectionHeader } from './components/oms/Common';
 import useLabelledTables from './hooks/useLabelledTables';
 import useCarouselIndicators from './hooks/useCarouselIndicators';
@@ -59,6 +59,8 @@ const markActive = () => window.localStorage.setItem(LAST_ACTIVE_KEY, String(Dat
 const clearSessionStorage = () => {
   window.localStorage.removeItem(OMS_SESSION_KEY);
   window.localStorage.removeItem(LAST_ACTIVE_KEY);
+  // The token is what actually opens the API, so signing out has to drop it.
+  setStoredAccessToken(null);
 };
 
 // Set when a stored session is discarded for being stale, so the login screen
@@ -79,9 +81,16 @@ const sessionFromStorage = () => {
       return null;
     }
 
+    // What is in storage is only a hint for the first paint — the token is what
+    // actually grants anything, and the server is asked who the caller is as
+    // soon as the app mounts.
+    if (!getStoredAccessToken()) {
+      clearSessionStorage();
+      return null;
+    }
+
     const roleDetails = roles.find((item) => item.id === saved.role);
-    const demoAccount = demoCredentials.find((item) => item.role === saved.role && (!saved.phone || item.phone === saved.phone));
-    return { ...roleDetails, ...demoAccount, ...saved };
+    return { ...roleDetails, ...saved };
   } catch {
     return null;
   }
@@ -5910,6 +5919,37 @@ function App() {
     expiredOnLoad() ? 'Signed out after 8 hours of inactivity. Please sign in again.' : ''
   );
   const signedIn = Boolean(role && signedInAccount);
+
+  // Local storage says who the browser thinks it is; the server says who the
+  // token actually belongs to. A token that has expired or been revoked sends
+  // the person back to the login screen rather than leaving them in a shell
+  // whose every request fails.
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    let live = true;
+
+    api.get('/oms/auth/me')
+      .then((response) => {
+        const staff = response.data?.data?.staff;
+        if (!live || !staff) return;
+        setSignedInAccount((current) => ({
+          ...current,
+          role: staff.role,
+          phone: staff.phone,
+          name: staff.displayName,
+          store: staff.store,
+          profileImageUrl: staff.profileImageUrl || current?.profileImageUrl,
+        }));
+        setRole(staff.role);
+      })
+      .catch((error) => {
+        if (!live || error.response?.status !== 401) return;
+        handleLogout('Your session has ended. Please sign in again.');
+      });
+
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn]);
   const pathSegments = location.pathname.split('/').filter(Boolean);
   const requestedViewSlug = pathSegments[0] === roleSlug(role) ? pathSegments[1] : '';
   const activeView = visibleNav?.find((item) => viewSlug(item) === requestedViewSlug)
@@ -6049,7 +6089,9 @@ function App() {
     setRole(account.role);
     setSignedInAccount(account);
     setStaffProfile(null);
-    window.localStorage.setItem(OMS_SESSION_KEY, JSON.stringify({ role: account.role, phone: account.phone, label: account.label }));
+    window.localStorage.setItem(OMS_SESSION_KEY, JSON.stringify({
+      role: account.role, phone: account.phone, label: account.label, name: account.name,
+    }));
     markActive();
     setMobileMenuOpen(false);
     navigate(`/${roleSlug(account.role)}/${viewSlug(navByRole[account.role][0])}`, { replace: true });
