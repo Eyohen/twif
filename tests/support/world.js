@@ -19,7 +19,10 @@ export const ACCOUNTS = {
   Tailor: { role: 'tailor', phone: '08000000007', pin: 'tailor26', home: '/tailor/my-tasks', name: 'Segun' },
 };
 
-// Navigation labels as they read in the sidebar, mapped to their route.
+// Navigation labels as they read in the sidebar, mapped to their route. The app
+// derives a route from the label, so this follows the same rule — anything
+// missing here is a view the suite cannot reach, which the render smoke test
+// reports rather than skipping over.
 export const VIEW_PATHS = {
   Overview: 'overview',
   Orders: 'orders',
@@ -36,6 +39,10 @@ export const VIEW_PATHS = {
   'Tailor List': 'tailor-list',
   'Tailor Performance': 'tailor-performance',
   'Order Sheet': 'order-sheet',
+  'User Management': 'user-management',
+  Stores: 'stores',
+  Memberships: 'memberships',
+  Staff: 'staff',
 };
 
 class TwifWorld extends World {

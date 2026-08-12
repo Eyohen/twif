@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, Save, Building2, FileText, Factory, Bell, RotateCcw } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Building2, FileText, Factory, Bell, RotateCcw, Users, Trash2, CheckCircle, Shield } from 'lucide-react';
 import { api } from '../../lib/api';
 
 // Grouped the way an owner would look for them, rather than by data type.
@@ -54,6 +54,102 @@ const SECTIONS = [
   },
 ];
 
+
+// Two customers sharing an email address is refused on create, but records made
+// before that rule went in are still there — and an owner had no way to see
+// them, let alone decide which one to keep.
+function CustomerRecordsPanel() {
+  const [report, setReport] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  const load = () => api.get('/oms/customers/duplicates')
+    .then((response) => setReport(response.data?.data || { duplicates: [], missingEmail: [] }))
+    .catch(() => setNotice({ tone: 'error', text: 'The customer records could not be checked.' }));
+
+  useEffect(() => { load(); }, []);
+
+  const archive = async (customer) => {
+    setBusyId(customer.id);
+    setNotice(null);
+    try {
+      await api.delete(`/oms/customers/${customer.id}`);
+      await load();
+      setNotice({ tone: 'success', text: `${customer.fullName} was archived.` });
+    } catch (error) {
+      setNotice({ tone: 'error', text: error.response?.data?.message || 'That record could not be archived.' });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (!report) return null;
+
+  const { duplicates = [], missingEmail = [] } = report;
+  const clean = !duplicates.length && !missingEmail.length;
+
+  return (
+    <section className="os-card">
+      <div className="os-card-head">
+        <Users size={16} strokeWidth={1.6} style={{ color: '#c97b08' }} />
+        <div>
+          <strong>Customer records</strong>
+          <p>Records that share an email address, or have none</p>
+        </div>
+      </div>
+      <div className="os-card-body dup-panel">
+        {notice ? (
+          <div className={`os-row-notice${notice.tone === 'error' ? ' is-error' : ''}`} role="status">
+            <span>{notice.text}</span>
+            <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss">×</button>
+          </div>
+        ) : null}
+
+        {clean ? (
+          <p className="dup-clean"><CheckCircle size={15} strokeWidth={1.8} /> Every customer has an email address of their own.</p>
+        ) : null}
+
+        {duplicates.map((group) => (
+          <div className="dup-group" key={group.email}>
+            <h4>{group.email} <span>{group.customers.length} records</span></h4>
+            {/* Keeping the record with measurements — and the older one where
+                neither has any — loses the least history. */}
+            {group.customers.map((customer) => (
+              <div className="dup-row" key={customer.id}>
+                <div>
+                  <strong>{customer.fullName}</strong>
+                  <span>{customer.phone || 'No phone'} · added {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'unknown'}</span>
+                  <small>{customer.hasMeasurements ? 'Has measurements' : 'No measurements'}</small>
+                </div>
+                <button type="button" onClick={() => archive(customer)} disabled={busyId === customer.id}>
+                  <Trash2 size={13} strokeWidth={1.8} /> {busyId === customer.id ? 'Archiving…' : 'Archive'}
+                </button>
+              </div>
+            ))}
+          </div>
+        ))}
+
+        {missingEmail.length ? (
+          <div className="dup-group">
+            <h4>No email address <span>{missingEmail.length} records</span></h4>
+            <p className="dup-hint">
+              An email address is required on every new customer, so these predate the rule.
+              Open each on the Customers page and add one — the tracking link is sent there.
+            </p>
+            {missingEmail.map((customer) => (
+              <div className="dup-row" key={customer.id}>
+                <div>
+                  <strong>{customer.fullName}</strong>
+                  <span>{customer.phone || 'No phone'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
 
 // An Admin signs in with a code from an authenticator app as well as a PIN.
 // This is where they see that it is on, how many recovery codes they have left,
