@@ -42,6 +42,23 @@ async function anOrderWith(world, { approval, status, tailor }) {
     }
   }
 
+  // An approved order also has to clear the payment gate and carry measurements
+  // before it can be worked, and the shop's own records often have neither. The
+  // scenarios that expect a workable order settle both first.
+  if (approval === 'Approved') {
+    const accounts = await world.api('Accountant');
+    await accounts.patch(`${API_URL}/oms/invoices/${candidate.invoiceNumber}/payment`, {
+      data: { amountReceived: Number(candidate.total || 0) },
+    });
+    await accounts.dispose();
+
+    if (!String(candidate.orderSheet?.measurements || '').trim()) {
+      await client.patch(`${API_URL}/oms/tracking/order-sheet/${candidate.trackingToken}`, {
+        data: { measurements: 'Chest 40, Waist 34, Length 30' },
+      });
+    }
+  }
+
   if (status || tailor) {
     await client.patch(`${API_URL}/oms/tracking/order-sheet/${candidate.trackingToken}`, {
       data: { ...(status ? { status } : {}), ...(tailor ? { tailor } : {}) },
@@ -127,7 +144,7 @@ Then('Mark Ready should not be offered', async function () {
 
 // Builds an order in an exact state through the API, because these scenarios
 // are about the rule rather than about the screens that lead to it.
-async function makeOrder(world, { paymentStatus, measurements }) {
+async function makeOrder(world, { paymentStatus, measurements, percentPaid }) {
   const client = await world.api();
   const stamp = Date.now().toString().slice(-6);
   const invoiceNumber = `INVRULE${stamp}`;
@@ -144,6 +161,9 @@ async function makeOrder(world, { paymentStatus, measurements }) {
       paymentStatus,
       paymentMethod: 'transfer',
       recipientEmail: `rule.${stamp}@twif.test`,
+      // The gate measures what was actually received, so a scenario that calls
+      // an order paid has to say how much of it.
+      amountReceived: percentPaid ? (50000 * percentPaid) / 100 : 0,
     },
   });
 
@@ -173,7 +193,7 @@ Given('an approved order whose invoice is unpaid', async function () {
 });
 
 Given('an approved and paid order with no measurements', async function () {
-  this.order = await makeOrder(this, { paymentStatus: 'partial_paid', measurements: '' });
+  this.order = await makeOrder(this, { paymentStatus: 'partial_paid', measurements: '', percentPaid: 70 });
   expect(this.order.paymentStatus).toBe('Partial Paid');
   expect(this.order.orderSheet?.measurements ?? '').toBe('');
 });
@@ -214,4 +234,35 @@ Then('assigning a tailor to it should be allowed', async function () {
   const body = await response.json();
   await client.dispose();
   expect(response.status(), `the server refused it: ${JSON.stringify(body)}`).toBe(200);
+});
+
+Given('an approved order with {int}% of the invoice paid', async function (percent) {
+  this.order = await makeOrder(this, {
+    paymentStatus: percent >= 100 ? 'fully_paid' : 'partial_paid',
+    measurements: 'Chest 40, Waist 34',
+    percentPaid: percent,
+  });
+  expect(this.order.accountApprovalStatus).toBe('Approved');
+});
+
+// Releasing a held order is the Owner's and Admin's to do. Accounts approving
+// the invoice is a different decision, and does not carry this one with it.
+Then('the Accountant should not be able to release it', async function () {
+  const client = await this.api('Accountant');
+  const response = await client.patch(`${API_URL}/oms/tracking/order-sheet/${this.order.trackingToken}`, {
+    data: { status: 'Assigned', tailor: ACCOUNTS.Tailor.name, overrideProductionHold: true },
+  });
+  await client.dispose();
+  expect(response.status(), 'Accounts released an order the payment gate was holding').toBe(409);
+});
+
+Then('the Owner should be able to release it', async function () {
+  const client = await this.api('Owner');
+  const response = await client.patch(`${API_URL}/oms/tracking/order-sheet/${this.order.trackingToken}`, {
+    data: { status: 'Assigned', tailor: ACCOUNTS.Tailor.name, overrideProductionHold: true },
+  });
+  const body = await response.json().catch(() => null);
+  await client.dispose();
+  expect(response.status(), `the Owner was refused: ${body?.message}`).toBe(200);
+  expect(body?.data?.orderSheet?.productionOverride?.by, 'the override was not recorded').toBeTruthy();
 });

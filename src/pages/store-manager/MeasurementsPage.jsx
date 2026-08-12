@@ -1,16 +1,37 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { ArrowLeft, Printer, Edit2, Save, X, Ruler, ChevronRight, User, Phone, Mail, Clock } from 'lucide-react';
 import { api } from '../../lib/api';
 
 // The measurements a tailor takes. Every one starts empty: a chart that
 // arrives pre-filled with 16in neck and 42in chest is a garment cut wrong.
-const MEASUREMENT_FIELDS = [
-  'Neck', 'Shoulder', 'Chest', 'Waist', 'Hip / Seat', 'Sleeve Length',
-  'Bicep', 'Wrist', 'Back Length', 'Front Length', 'Top Length',
-  'Trouser Waist', 'Trouser Hip', 'Trouser Length (Outseam)',
+// The set the shop actually measures to, grouped the way a tailor works.
+// "Length" appears under both Top and Bottom and means different things, so a
+// field is keyed by its group as well as its name.
+export const MEASUREMENT_GROUPS = [
+  { group: 'Top', fields: ['Shoulder', 'Sleeve', 'Chest', 'Stomach', 'Length', 'Round Sleeve', 'Neck'] },
+  { group: 'Bottom', fields: ['Waist', 'Lap', 'Hip', 'Length', 'Calf', 'Ankle'] },
+  {
+    group: 'Others',
+    fields: [
+      'Agbada Length', 'Agbada Sleeve', 'Cap', 'Nipple to Nipple', 'Half Length',
+      'Half Back', 'Inseam Length', 'Mini Skirt', 'Midi Skirt', 'Knee Length',
+    ],
+  },
 ];
 
-const fieldKey = (label) => label.toLowerCase().replaceAll(' ', '');
+export const MEASUREMENT_FIELDS = MEASUREMENT_GROUPS.flatMap(({ group, fields }) =>
+  fields.map((label) => ({ group, label, key: `${group}_${label}`.toLowerCase().replace(/[^a-z0-9]+/g, '_') })));
+
+// Measurements taken before this set existed were stored under bare names.
+// They are read under the old key when the new one is empty, so nobody's
+// figures disappear the day the list changes.
+const LEGACY_KEYS = {
+  top_shoulder: 'shoulder', top_chest: 'chest', top_neck: 'neck',
+  top_length: 'toplength', top_sleeve: 'sleevelength',
+  bottom_waist: 'trouserwaist', bottom_hip: 'trouserhip', bottom_length: 'trouserlength(outseam)',
+};
+
+const readValue = (stored, key) => stored[key] ?? stored[LEGACY_KEYS[key]] ?? '';
 
 function BodyFigure({ back = false }) {
   return (
@@ -46,25 +67,42 @@ export default function MeasurementsPage({ customer, onBack, onSaved }) {
   const stored = customer.measurements || {};
   const [editing, setEditing] = useState(false);
   const [values, setValues] = useState(() => Object.fromEntries(
-    MEASUREMENT_FIELDS.map((label) => [fieldKey(label), stored[fieldKey(label)] ?? ''])
+    MEASUREMENT_FIELDS.map((field) => [field.key, readValue(stored, field.key)])
   ));
   const [draft, setDraft] = useState(values);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  const recorded = MEASUREMENT_FIELDS.filter((label) => String(values[fieldKey(label)] ?? '').trim()).length;
+  const recorded = MEASUREMENT_FIELDS.filter((field) => String(values[field.key] ?? '').trim()).length;
 
   const save = async () => {
-    if (String(customer.id || '').startsWith('sent-')) {
-      setMessage('Save this customer with Edit Customer first, then measurements can be stored.');
-      return;
-    }
     setSaving(true);
     setMessage('');
     try {
+      // Most people in the customer list exist only because an invoice was
+      // raised for them — they have no profile, and measurements have nowhere
+      // to be stored. Rather than refusing, the profile is created from what
+      // the invoice already knows and the measurements saved against it.
+      let customerId = customer.id;
+      if (String(customerId || '').startsWith('sent-')) {
+        if (!String(customer.email || '').trim()) {
+          setMessage('This customer has no email address. Add one with Edit Customer, then save their measurements.');
+          setSaving(false);
+          return;
+        }
+        const created = await api.post('/oms/customers', {
+          fullName: customer.fullName,
+          phone: customer.phone || '',
+          email: customer.email,
+          category: 'Active',
+        });
+        customerId = created.data?.data?.customer?.id;
+        if (!customerId) throw new Error('The customer profile could not be created.');
+      }
+
       // Only the profile block is carried over; the rest of `measurements`
       // holds unrelated profile fields that must not be flattened away.
-      await api.patch(`/oms/customers/${customer.id}`, {
+      await api.patch(`/oms/customers/${customerId}`, {
         fullName: customer.fullName,
         phone: customer.phone,
         email: customer.email,
@@ -73,8 +111,10 @@ export default function MeasurementsPage({ customer, onBack, onSaved }) {
       });
       setValues(draft);
       setEditing(false);
-      setMessage('Measurements saved.');
-      onSaved?.(draft);
+      setMessage(customerId === customer.id
+        ? 'Measurements saved.'
+        : `Profile created for ${customer.fullName}, and their measurements saved.`);
+      onSaved?.(draft, customerId);
     } catch (error) {
       setMessage(error.response?.data?.message || 'Measurements could not be saved.');
     } finally {
@@ -237,12 +277,22 @@ export default function MeasurementsPage({ customer, onBack, onSaved }) {
                 </tr>
               </thead>
               <tbody>
-                {MEASUREMENT_FIELDS.map((label, index) => {
-                  const key = fieldKey(label);
+                {MEASUREMENT_FIELDS.map(({ group, label, key }, index) => {
                   const value = String(values[key] ?? '').trim();
+                  const startsGroup = index === 0 || MEASUREMENT_FIELDS[index - 1].group !== group;
                   return (
+                    <Fragment key={key}>
+                    {/* The three groups are how a tailor reads the sheet. */}
+                    {startsGroup ? (
+                      <tr>
+                        <th colSpan={5} style={{
+                          textAlign: 'left', padding: '9px 14px', fontSize: 11, fontWeight: 800,
+                          color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.1em',
+                          background: '#f6f1e8', borderBottom: '1px solid #eee5da',
+                        }}>{group}</th>
+                      </tr>
+                    ) : null}
                     <tr
-                      key={label}
                       style={{ borderBottom: '1px solid #f3ede5' }}
                       onMouseEnter={e => e.currentTarget.style.background = '#faf7f3'}
                       onMouseLeave={e => e.currentTarget.style.background = ''}
@@ -274,6 +324,7 @@ export default function MeasurementsPage({ customer, onBack, onSaved }) {
                         {value ? '' : 'Not measured'}
                       </td>
                     </tr>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -309,10 +360,10 @@ export default function MeasurementsPage({ customer, onBack, onSaved }) {
                 <BodyFigure back />
               </div>
               <ol style={{ margin: 0, padding: '0 0 0 18px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {MEASUREMENT_FIELDS.map((label, index) => (
-                  <li key={label} style={{ fontSize: 11, color: '#5a4e42' }}>
+                {MEASUREMENT_FIELDS.map(({ key, group, label }, index) => (
+                  <li key={key} style={{ fontSize: 11, color: '#5a4e42' }}>
                     <strong style={{ color: '#c97b08', marginRight: 4 }}>{index + 1}</strong>
-                    {label.replace(' (Outseam)', '')}
+                    {group === 'Others' ? label : `${group} ${label.toLowerCase()}`}
                   </li>
                 ))}
               </ol>

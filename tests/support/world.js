@@ -32,7 +32,9 @@ export const VIEW_PATHS = {
   Settings: 'settings',
   Notifications: 'notifications',
   'My Tasks': 'my-tasks',
-  'Weekly Log': 'weekly-log',
+  'My Log': 'my-log',
+  'Tailor List': 'tailor-list',
+  'Tailor Performance': 'tailor-performance',
   'Order Sheet': 'order-sheet',
 };
 

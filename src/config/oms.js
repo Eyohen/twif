@@ -22,13 +22,17 @@ export const navByRole = {
   // Notifications was missing here, and the route guard only allows a view
   // that appears in the role's navigation — so the Owner's bell navigated to
   // /owner/notifications and was redirected straight back to the overview.
-  owner: ['Overview', 'Orders', 'Customers', 'Invoices', 'Payments', 'Production', 'Inventory', 'User Management', 'Stores', 'Memberships', 'Reports', 'Settings', 'Notifications'],
-  admin: ['Overview', 'Orders', 'Customers', 'Payments', 'Production', 'Inventory', 'Staff', 'Memberships', 'Reports', 'Settings', 'Notifications'],
+  // The Owner and Admin could see everything except the two screens where work
+  // actually starts, so neither could raise an invoice or an order sheet.
+  owner: ['Overview', 'Orders', 'Customers', 'Invoices', 'Order Sheet', 'Payments', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'User Management', 'Stores', 'Memberships', 'Reports', 'Settings', 'Notifications'],
+  admin: ['Overview', 'Orders', 'Customers', 'Invoices', 'Order Sheet', 'Payments', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'Staff', 'Memberships', 'Reports', 'Settings', 'Notifications'],
   store_manager: ['Overview', 'Customers', 'Orders', 'Invoices', 'Order Sheet', 'Notifications'],
   accounts: ['Overview', 'Invoices', 'Payments', 'Reports', 'Inventory', 'Notifications'],
-  production_manager: ['Overview', 'Production', 'Inventory', 'Notifications'],
+  production_manager: ['Overview', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'Notifications'],
   inventory_manager: ['Overview', 'Inventory', 'Notifications'],
-  tailor: ['My Tasks', 'Weekly Log', 'Notifications'],
+  // One log screen, read over a week, month, quarter, year or a range of the
+  // tailor's own choosing.
+  tailor: ['My Tasks', 'My Log', 'Notifications'],
 };
 
 export const accountTypeByRole = {
@@ -54,7 +58,9 @@ export const navIcons = {
   Settings: 'Settings',
   'Order Sheet': 'ClipboardList',
   'My Tasks': 'CheckSquare',
-  'Weekly Log': 'Calendar',
+  'My Log': 'Calendar',
+  'Tailor List': 'Users2',
+  'Tailor Performance': 'Award',
   Staff: 'Users2',
   'Tailors & Staff': 'Users2',
   'User Management': 'UserCog',

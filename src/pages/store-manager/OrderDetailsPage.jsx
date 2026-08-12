@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Printer, CheckCircle, Package, CreditCard, Ruler, FileText, Clock, User, AlertCircle } from 'lucide-react';
 import { api } from '../../lib/api';
-import { money, formatMoment, amountReceived, invoicePayable, invoiceDocumentPayload, openDocumentTab, presentInvoiceDocument, daysUntilDue, dueDateLabel } from '../../utils/oms';
+import { money, formatMoment, amountReceived, invoicePayable, invoiceDocumentPayload, downloadInvoicePdf, daysUntilDue, dueDateLabel } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 
 const label = { fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' };
@@ -65,13 +65,10 @@ export default function OrderDetailsPage({ order, onBack }) {
 
   const printInvoice = async () => {
     setNotice('');
-    // Opened before awaiting the server, or the browser blocks it as a popup.
-    const tab = openDocumentTab();
     try {
       const response = await api.post('/oms/invoices/html-preview', invoiceDocumentPayload(order), { responseType: 'text' });
-      presentInvoiceDocument(response.data, order.invoiceNumber, tab);
+      await downloadInvoicePdf(response.data, order.invoiceNumber);
     } catch (error) {
-      tab?.close();
       setNotice(error.response?.data?.message || 'Unable to produce this invoice right now.');
     }
   };

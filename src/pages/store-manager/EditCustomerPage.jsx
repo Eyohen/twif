@@ -3,13 +3,13 @@ import { ArrowLeft, Save, X, User, Settings, Star, Ruler, StickyNote, Edit2, Che
 import { money } from '../../utils/oms';
 import { api } from '../../lib/api';
 
-export default function EditCustomerPage({ customer, onCancel, onSave, onViewMeasurements }) {
+export default function EditCustomerPage({ customer, onCancel, onSave, onViewMeasurements, currentRole }) {
   const notesFieldRef = useRef(null);
   const [form, setForm] = useState({
     fullName: customer.fullName || '',
     phone: customer.phone || '',
     email: customer.email || '',
-    customerType: Number(customer.totalOrders) > 1 ? 'Returning' : 'New',
+    customerType: customer.category || (Number(customer.totalOrders) > 1 ? 'Returning' : 'New'),
     registrationDate: customer.createdAt ? String(customer.createdAt).slice(0, 10) : '',
     referredBy: customer.referredBy || 'Walk-in',
     dateOfBirth: customer.dateOfBirth ? String(customer.dateOfBirth).slice(0, 10) : '',
@@ -59,8 +59,15 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
     } finally { setSaving(false); }
   };
 
+  // Tagging someone an elite member turns on an automatic discount on every
+  // invoice they are sent, so it is the Owner's and Admin's to give.
+  const mayTagElite = ['owner', 'admin'].includes(currentRole?.id);
+  const customerTypes = mayTagElite
+    ? ['New', 'Returning', 'Elite Member']
+    : [...new Set([form.customerType, 'New', 'Returning'].filter(Boolean))];
+
   const infoFields = [
-    ['Full Name *', 'fullName', 'input'], ['Customer Type', 'customerType', 'select', ['Returning', 'New']],
+    ['Full Name *', 'fullName', 'input'], ['Customer Type', 'customerType', 'select', customerTypes],
     ['Phone Number *', 'phone', 'input'], ['Registration Date', 'registrationDate', 'date'],
     ['Email Address', 'email', 'email'], ['Referred By', 'referredBy', 'select', ['Walk-in', 'Referral', 'Social Media']],
     ['Date of Birth', 'dateOfBirth', 'date'], ['Preferred Store', 'preferredStore', 'select', ['Lekki', 'Ikeja', 'Surulere']],

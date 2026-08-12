@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors, Ruler, Award } from 'lucide-react';
 import { api, getStoredAccessToken, setStoredAccessToken } from './lib/api';
 import LoginPage from './pages/auth/LoginPage';
 import MyTasksPage from './pages/tailor/MyTasksPage';
 import WeeklyLogPage from './pages/tailor/WeeklyLogPage';
+import TailorReportsPage from './pages/production/TailorReportsPage';
 import StoreManagerOverviewPage from './pages/store-manager/OverviewPage';
 import StoreManagerCustomersPage from './pages/store-manager/CustomersPage';
 import StoreManagerOrdersPage from './pages/store-manager/OrdersPage';
@@ -26,11 +27,12 @@ import {
   money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
   dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
   isInvoiceApproved, canShowJobInProduction, productionBlockReason, productionJobFromInvoice,
-  mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid,
-  invoiceDocumentPayload, PERIOD_OPTIONS, filterByPeriod, periodTrend,
-  periodWindow, previousWindow, withinWindow, changeAgainst, changeLabel,
+  mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid, DEFAULT_RELEASE_PERCENT,
+  worksOnJob, jobTailors, averageScore,
+  invoiceDocumentPayload, PERIOD_OPTIONS, filterByPeriod, periodTrend, addDaysIso, isEliteCustomer,
+  periodWindow, previousWindow, withinWindow, changeAgainst, changeLabel, LOG_PERIODS,
   amountReceived, invoicePayable, formatMoment, CUSTOMER_TRACKING_STEPS,
-  openDocumentTab, presentInvoiceDocument,
+  openDocumentTab, presentInvoiceDocument, downloadInvoicePdf as saveInvoicePdf,
 } from './utils/oms';
 
 const trackingBaseUrl = (
@@ -111,7 +113,9 @@ const NAV_ICONS = {
   Settings: Settings2,
   'Order Sheet': ClipboardList,
   'My Tasks': CheckSquare,
-  'Weekly Log': Calendar,
+  'My Log': Calendar,
+  'Tailor List': Users2,
+  'Tailor Performance': Award,
   Staff: Users2,
   'Tailors & Staff': Users2,
   'User Management': UserCog,
@@ -345,7 +349,16 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
   const [salesPeriod, setSalesPeriod] = useState('month');
   const [productionPeriod, setProductionPeriod] = useState('week');
   const [storePeriod, setStorePeriod] = useState('month');
-  const [customFrom, setCustomFrom] = useState('');
+  // Top customers were ranked on lifetime spend under a heading that said "this
+  // month", with "Recently" printed for every last order. It reads over a real
+  // period now, with the period on the panel.
+  const [customerPeriod, setCustomerPeriod] = useState('month');
+  const [customerFrom, setCustomerFrom] = useState('');
+  const [customerTo, setCustomerTo] = useState(todayIso());
+  // Custom used to start with no From date, and filterByPeriod passes every
+  // record through until one is set — so picking Custom appeared to do nothing.
+  // It opens on the start of this month, which the reader can then move.
+  const [customFrom, setCustomFrom] = useState(() => `${todayIso().slice(0, 7)}-01`);
   const [customTo, setCustomTo] = useState(todayIso());
   const [activeKpiDot, setActiveKpiDot] = useState(0);
   const kpiScrollRef = useRef(null);
@@ -416,7 +429,25 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
     return { store, revenue: rowInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), orders: rowInvoices.length };
   });
   const storeRevenue = storeRows.reduce((sum, row) => sum + row.revenue, 0);
-  const topCustomers = customers.length ? [...customers].sort((a, b) => toNumber(b.lifetimeSpend) - toNumber(a.lifetimeSpend)).slice(0, 5) : filteredInvoices.slice(0, 5).map((invoice) => ({ id: invoice.invoiceNumber, fullName: invoice.customer, lifetimeSpend: invoice.total, totalOrders: 1 }));
+  // Ranked on what they actually spent in the period on screen, from the
+  // invoices raised against them.
+  const customerWindow = periodWindow(customerPeriod === 'custom' && !customerFrom ? 'month' : customerPeriod, customerFrom, customerTo);
+  const topCustomers = useMemo(() => {
+    const inWindow = customerWindow
+      ? withinWindow(sentInvoices, (invoice) => invoice.createdAt, customerWindow)
+      : sentInvoices;
+    const totals = new Map();
+    inWindow.forEach((invoice) => {
+      const name = invoice.customer || 'Unnamed';
+      const entry = totals.get(name) || { id: name, fullName: name, spend: 0, orders: 0, lastOrder: null };
+      entry.spend += toNumber(invoice.total);
+      entry.orders += 1;
+      const at = invoice.createdAt ? new Date(invoice.createdAt) : null;
+      if (at && (!entry.lastOrder || at > entry.lastOrder)) entry.lastOrder = at;
+      totals.set(name, entry);
+    });
+    return [...totals.values()].sort((a, b) => b.spend - a.spend).slice(0, 5);
+  }, [sentInvoices, customerWindow]);
   const tailorRows = staff.filter((person) => person.role === 'tailor').slice(0, 5);
 
   return (
@@ -540,9 +571,38 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
       </section>
 
       <section className="owner-bottom-grid">
-        <section className="owner-panel owner-table-panel"><header><span>Top Customers (This Month)</span><button onClick={() => onNavigate?.('Customers')}>View all customers →</button></header><table><thead><tr><th>Customer</th><th>Revenue</th><th>Orders</th><th>Last Order</th></tr></thead><tbody>{topCustomers.map((customer) => <tr key={customer.id || customer.fullName}><td><i>{customer.fullName?.slice(0, 1)}</i>{customer.fullName}</td><td>{money.format(customer.lifetimeSpend)}</td><td>{customer.totalOrders || 1}</td><td>Recently</td></tr>)}</tbody></table></section>
+        <section className="owner-panel owner-table-panel">
+          <header>
+            <span>Top Customers</span>
+            <select value={customerPeriod} onChange={(event) => setCustomerPeriod(event.target.value)} aria-label="Top customers period">
+              {LOG_PERIODS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          </header>
+          {customerPeriod === 'custom' ? (
+            <div className="owner-panel-range">
+              <input type="date" value={customerFrom} max={customerTo} onChange={(event) => setCustomerFrom(event.target.value)} />
+              <span>→</span>
+              <input type="date" value={customerTo} min={customerFrom} max={todayIso()} onChange={(event) => setCustomerTo(event.target.value)} />
+            </div>
+          ) : null}
+          <table>
+            <thead><tr><th>Customer</th><th>Spend</th><th>Orders</th><th>Last Order</th></tr></thead>
+            <tbody>
+              {topCustomers.length ? topCustomers.map((customer) => (
+                <tr key={customer.id}>
+                  <td><i>{customer.fullName?.slice(0, 1)}</i>{customer.fullName}</td>
+                  <td>{money.format(customer.spend)}</td>
+                  <td>{customer.orders}</td>
+                  <td>{customer.lastOrder ? customer.lastOrder.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—'}</td>
+                </tr>
+              )) : (
+                <tr><td colSpan={4} style={{ color: '#8a7a6a' }}>No invoices in this period.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </section>
         <section className="owner-panel owner-table-panel"><header><span>Inventory Alerts</span><button onClick={() => onNavigate?.('Inventory')}>View full inventory →</button></header><table><thead><tr><th>Item</th><th>Category</th><th>Stock</th><th>Status</th><th>Location</th></tr></thead><tbody>{lowStock.slice(0, 5).map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.type}</td><td>{item.quantity} {item.unit}</td><td><Status>{toNumber(item.quantity) <= 0 ? 'Out of Stock' : 'Low Stock'}</Status></td><td>{item.store || 'Lekki'}</td></tr>)}</tbody></table></section>
-        <section className="owner-panel owner-table-panel"><header><span>Staff Performance (This Week)</span><button onClick={() => onNavigate?.('Staff')}>View all staff →</button></header><table><thead><tr><th>Staff Member</th><th>Role</th><th>Jobs Completed</th><th>Rating</th></tr></thead><tbody>{tailorRows.map((person, index) => <tr key={person.id}><td><i>{person.displayName?.slice(0, 1)}</i>{person.displayName}</td><td>Tailor</td><td>{productionJobs.filter((job) => job.tailor === person.displayName && job.status === 'Ready').length}</td><td>★ {(4.9 - index * .2).toFixed(1)}</td></tr>)}</tbody></table></section>
+        <section className="owner-panel owner-table-panel"><header><span>Staff Performance (This Week)</span><button onClick={() => onNavigate?.('Staff')}>View all staff →</button></header><table><thead><tr><th>Staff Member</th><th>Role</th><th>Jobs Completed</th><th>Rating</th></tr></thead><tbody>{tailorRows.map((person, index) => <tr key={person.id}><td><i>{person.displayName?.slice(0, 1)}</i>{person.displayName}</td><td>Tailor</td><td>{productionJobs.filter((job) => worksOnJob(job, person.displayName) && job.status === 'Ready').length}</td><td>{(() => { const average = averageScore(productionJobs, person.displayName); return average === null ? <span style={{ color: '#8a7a6a' }}>Not scored</span> : `★ ${average.toFixed(1)} / 10`; })()}</td></tr>)}</tbody></table></section>
       </section>
     </div>
   );
@@ -872,7 +932,7 @@ function OwnerStoresPage({ sentInvoices = [] }) {
 
 function TailorOverview({ currentRole, productionJobs = [], onUpdateJob }) {
   const tailorName = currentRole?.name?.split(' (')[0] || '';
-  const myJobs = productionJobs.filter((job) => job.tailor === tailorName);
+  const myJobs = productionJobs.filter((job) => worksOnJob(job, tailorName));
   const readyJobs = myJobs.filter((job) => job.status === 'Ready');
   const activeJobs = myJobs.filter((job) => job.status !== 'Ready');
   const inProgressJobs = myJobs.filter((job) => job.status === 'In Progress');
@@ -1498,13 +1558,10 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
 
   const downloadInvoicePdf = async (invoice) => {
     setRowNotice('');
-    // Opened before awaiting the server, or the browser blocks it as a popup.
-    const tab = openDocumentTab();
     try {
       const response = await api.post('/oms/invoices/html-preview', invoiceDocumentPayload(invoice), { responseType: 'text' });
-      presentInvoiceDocument(response.data, invoice.invoiceNumber, tab);
+      await saveInvoicePdf(response.data, invoice.invoiceNumber);
     } catch (error) {
-      tab?.close();
       setRowNotice(error.response?.data?.message || 'Could not prepare that invoice PDF.');
     }
   };
@@ -2105,13 +2162,14 @@ function InvoiceDocumentPreview({ html, invoiceNumber }) {
         <button type="button" onClick={() => setZoom(null)}>Fit Width</button>
         <span />
         {/* There were two icon buttons here that did exactly the same thing. */}
+        <button type="button" onClick={() => saveInvoicePdf(html, invoiceNumber)}>⇩ Download</button>
         <button
           type="button"
           onClick={() => {
             const tab = openDocumentTab();
             presentInvoiceDocument(html, invoiceNumber, tab);
           }}
-        >⇩ Download</button>
+        >⎙ Print</button>
       </div>
       <div className="invoice-document-frame" ref={frameRef} style={{ height: INVOICE_PREVIEW_HEIGHT }}>
         <iframe
@@ -2135,21 +2193,29 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     invoiceNumber: invoiceSeed(),
     trackingToken: trackingTokenSeed(),
     invoiceDate: todayIso(),
-    dueDate: todayIso(),
+    // An invoice stands for 48 hours, so the due date follows from the day it
+    // was raised rather than being set by hand to today.
+    dueDate: addDaysIso(todayIso(), 2),
     // Arrives filled in when the invoice was started from a customer profile.
     customerName: prefillCustomer?.fullName || '',
     customerPhone: prefillCustomer?.phone || '',
     customerEmail: prefillCustomer?.email || '',
     paymentStatus: '',
     paymentMethod: '',
-    eliteDiscountEnabled: false,
-    eliteDiscountAmount: 0,
+    // What the customer actually handed over, recorded as the invoice is
+    // raised. Before this the status said "part paid" with no figure behind it.
+    amountReceived: '',
     storeCreditApplied: 0,
     trackingUrl: '',
-    notes: 'Your order will be ready in 3-4 weeks from date of payment and measurements.\nThis invoice is only valid for 48 hours.',
+    // Left empty: whatever is typed here is what the customer reads.
+    notes: '',
   });
   const [customers, setCustomers] = useState([]);
   const [customerSearch, setCustomerSearch] = useState('');
+  // The customer record behind the typed name, so the invoice knows which tier
+  // they are on without the person raising it having to say.
+  const [chosenCustomer, setChosenCustomer] = useState(prefillCustomer || null);
+  const [elitePercent, setElitePercent] = useState(0);
   const customerSuggestionsRef = useRef(null);
 
   useEffect(() => {
@@ -2157,6 +2223,19 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
       .then((response) => setCustomers(response.data?.data?.customers || []))
       .catch(() => {});
   }, []);
+
+  // The discount an elite member gets is whatever the Memberships screen says
+  // it is, so changing it there changes it on every invoice raised afterwards.
+  useEffect(() => {
+    if (!isEliteCustomer(chosenCustomer)) { setElitePercent(0); return; }
+    api.get('/oms/membership-tiers')
+      .then((response) => {
+        const tiers = response.data?.data?.tiers || [];
+        const elite = tiers.find((tier) => /elite/i.test(tier.name || tier.id || ''));
+        setElitePercent(Number(elite?.discountPercent || 0));
+      })
+      .catch(() => setElitePercent(0));
+  }, [chosenCustomer]);
 
   const customerSuggestions = useMemo(() => {
     if (!customerSearch.trim()) return [];
@@ -2167,6 +2246,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   }, [customers, customerSearch]);
 
   const selectCustomer = (customer) => {
+    setChosenCustomer(customer);
     setForm((current) => ({
       ...current,
       customerName: customer.fullName || '',
@@ -2185,12 +2265,18 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
 
-  const subtotal = items.reduce((sum, item) => sum + (toNumber(item.rate) * toNumber(item.quantity)), 0);
-  const itemDiscountTotal = items.reduce((sum, item) => {
+  // Only lines that reach the invoice count toward it. A row with a rate but no
+  // description was adding to the total while never appearing on the document,
+  // so the printed figures could not be reconciled by hand.
+  const billableItems = items.filter((item) => item.description.trim());
+  const subtotal = billableItems.reduce((sum, item) => sum + (toNumber(item.rate) * toNumber(item.quantity)), 0);
+  const itemDiscountTotal = billableItems.reduce((sum, item) => {
     const gross = toNumber(item.rate) * toNumber(item.quantity);
     return sum + ((gross * toNumber(item.discountPercent)) / 100);
   }, 0);
-  const eliteDiscountAmount = form.eliteDiscountEnabled ? toNumber(form.eliteDiscountAmount) : 0;
+  // The elite discount follows the customer's membership rather than being
+  // typed in — see the tier the customer is on, resolved below.
+  const eliteDiscountAmount = Math.round(((subtotal - itemDiscountTotal) * elitePercent) / 100);
   const balanceDue = Math.max(subtotal - itemDiscountTotal - eliteDiscountAmount - toNumber(form.storeCreditApplied), 0);
 
   const updateForm = (field, value) => {
@@ -2245,6 +2331,10 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     subtotal,
     eliteDiscountAmount,
     storeCreditApplied: toNumber(form.storeCreditApplied),
+    // Fully paid means the whole balance unless a smaller figure was typed.
+    amountReceived: form.paymentStatus === 'fully_paid' && !toNumber(form.amountReceived)
+      ? balanceDue
+      : toNumber(form.amountReceived),
     balanceDue,
     trackingUrl: form.trackingUrl || trackingUrlForToken(form.trackingToken),
     notes: form.notes.split('\n').map((note) => note.trim()).filter(Boolean),
@@ -2272,6 +2362,15 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     if (!form.customerName.trim() || !form.customerEmail.trim()) return 'Select a customer and provide their email address.';
     if (!items.some((item) => item.description.trim())) return 'Add at least one invoice item.';
     if (evidenceRequired && !paymentEvidence) return 'Upload payment evidence for a partially or fully paid invoice.';
+    // A part paid invoice with no figure is what left Accounts unable to
+    // reconcile and production unable to tell whether it may start.
+    const received = toNumber(form.amountReceived);
+    if (form.paymentStatus === 'partial_paid' && received <= 0) {
+      return 'Enter how much the customer paid.';
+    }
+    if (received > balanceDue) {
+      return `That is more than the ${money.format(balanceDue)} this invoice comes to.`;
+    }
     return '';
   };
 
@@ -2335,9 +2434,9 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     return <div className="invoice-preview-page-v2">
       <header><button type="button" onClick={() => setPreviewMode(false)}>← &nbsp; Back to Invoice</button><div><small>INVOICE</small><strong>{form.invoiceNumber}</strong><Status>Not Sent Yet</Status></div></header>
       <section className="invoice-preview-title"><div><h2>{previewTab === 'invoice' ? 'Invoice Preview' : 'Email Preview'}</h2><p>This is how your {previewTab === 'invoice' ? 'invoice' : 'email'} will appear to the customer.</p></div><nav><button className={previewTab === 'invoice' ? 'active' : ''} onClick={() => setPreviewTab('invoice')}>Invoice Preview</button><button className={previewTab === 'email' ? 'active' : ''} onClick={() => setPreviewTab('email')}>Email Preview</button></nav></section>
-      {previewTab === 'invoice' ? <InvoiceDocumentPreview html={previewHtml} invoiceNumber={form.invoiceNumber} /> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], ['Amount Due', money.format(balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div>{/* These two are part of the picture of the email, not controls on this screen — clicking them here did nothing. */}<span>Download Invoice PDF</span><span>Track Your Order</span></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>Balance Due</span><strong>{money.format(balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your TWIF Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
+      {previewTab === 'invoice' ? <InvoiceDocumentPreview html={previewHtml} invoiceNumber={form.invoiceNumber} /> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your twif Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], ['Amount Due', money.format(balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div>{/* These two are part of the picture of the email, not controls on this screen — clicking them here did nothing. */}<span>Download Invoice PDF</span><span>Track Your Order</span></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>Balance Due</span><strong>{money.format(balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your twif Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
       {message ? <div className="invoice-message">{message}</div> : null}
-      <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => { const tab = openDocumentTab(); presentInvoiceDocument(previewHtml, form.invoiceNumber, tab); }}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
+      <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => saveInvoicePdf(previewHtml, form.invoiceNumber)}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
     </div>;
   }
 
@@ -2496,21 +2595,22 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
                   <option value="cash">Cash</option>
                 </select>
               </label>
+              {/* There was nowhere to write down what the customer paid, so an
+                  invoice could say "part paid" with no figure behind it. */}
+              <label className="os-field">
+                <span>Amount Received (₦){form.paymentStatus === 'partial_paid' ? <span style={{ color: '#d62828' }}> *</span> : null}</span>
+                <input
+                  type="number"
+                  min="0"
+                  max={balanceDue}
+                  value={form.amountReceived}
+                  onChange={(event) => updateForm('amountReceived', event.target.value)}
+                  placeholder={form.paymentStatus === 'fully_paid' ? String(balanceDue) : '0'}
+                />
+              </label>
               <label className="os-field">
                 <span>Store Credit Applied (₦)</span>
                 <input type="number" min="0" value={form.storeCreditApplied} onChange={(event) => updateForm('storeCreditApplied', event.target.value)} />
-              </label>
-              <label className="os-field" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span>Elite Discount</span>
-                <div className="os-checkbox-row">
-                  <label>
-                    <input type="checkbox" checked={form.eliteDiscountEnabled} onChange={(event) => updateForm('eliteDiscountEnabled', event.target.checked)} />
-                    Apply 5% Elite discount
-                  </label>
-                </div>
-                {form.eliteDiscountEnabled && (
-                  <input type="number" value={form.eliteDiscountAmount} onChange={(event) => updateForm('eliteDiscountAmount', event.target.value)} placeholder="Discount amount" />
-                )}
               </label>
               <label className="os-field">
                 <span>Invoice Date</span>
@@ -2838,10 +2938,11 @@ const emptyOrderItem = () => ({
   item: '',
   pieces: 1,
   delivery: todayIso(),
+  // Fabric is chosen by Production or Inventory, not by the store raising the
+  // sheet, so it starts at Nil and the sheet can be completed without it.
   fabric: '',
   fabricId: '',
   fabricUnit: '',
-  measurements: '',
   designNotes: '',
   styleImages: [null, null, null, null, null],
 });
@@ -2851,8 +2952,14 @@ const emptySheetForm = () => ({
   trackingToken: '',
   trackingUrl: '',
   customer: '',
+  customerId: '',
   store: 'Lekki',
   itemNote: '',
+  // One set of measurements for the whole order rather than one per garment.
+  // It is taken from the customer's profile and may be adjusted here for this
+  // order; changing it does not touch the profile.
+  measurements: '',
+  measurementDetails: {},
   items: [emptyOrderItem()],
 });
 
@@ -2860,7 +2967,17 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
   const [sheetForm, setSheetForm] = useState(emptySheetForm);
+  const [customers, setCustomers] = useState([]);
   const [message, setMessage] = useState('');
+
+  // Measurements come from the customer's own profile rather than being typed
+  // in fresh for every order, so the figures a tailor works to are the figures
+  // the shop took.
+  useEffect(() => {
+    api.get('/oms/customers')
+      .then((response) => setCustomers(response.data?.data?.customers || []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -2931,12 +3048,38 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     });
   };
 
+  // A customer counts as having a profile when there is a real record for them,
+  // rather than a name that only exists because an invoice was raised.
+  const profileFor = (invoice) => customers.find((customer) => (
+    !String(customer.id).startsWith('sent-')
+    && (customer.fullName === invoice.customer
+      || (invoice.customerEmail && customer.email === invoice.customerEmail))
+  ));
+
   const selectInvoice = (invoiceNumber) => {
     const invoice = sentInvoices.find((item) => item.invoiceNumber === invoiceNumber);
     if (!invoice) {
       updateSheetForm('invoiceNumber', '');
       return;
     }
+
+    const profile = profileFor(invoice);
+    if (!profile) {
+      setSheetForm((current) => ({ ...current, invoiceNumber: '' }));
+      setMessage(`${invoice.customer} has no customer profile yet. Create one — with their measurements — before raising an order sheet.`);
+      return;
+    }
+    setMessage('');
+
+    // Whatever the shop measured, in the order the measurement sheet lists it.
+    const stored = profile.measurements || {};
+    const measurementDetails = Object.fromEntries(
+      Object.entries(stored).filter(([key, value]) => key !== 'profile' && String(value ?? '').trim())
+    );
+    const written = Object.entries(measurementDetails)
+      .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
+      .join(', ');
+
     const resolvedToken = invoice.trackingToken || trackingTokenSeed();
 
     // Prefill one garment row per line on the invoice, so a five-item invoice
@@ -2949,8 +3092,11 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       trackingToken: resolvedToken,
       trackingUrl: invoice.trackingUrl || trackingUrlForToken(resolvedToken),
       customer: invoice.customer || '',
+      customerId: profile.id,
       store: invoice.store || current.store,
       itemNote: invoice.itemNote || current.itemNote,
+      measurements: written,
+      measurementDetails,
       items: invoiceItems
         ? invoiceItems.map((line) => ({
           ...emptyOrderItem(),
@@ -3019,7 +3165,8 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       fabric: firstItem.fabric,
       fabricId: firstItem.fabricId,
       fabricUnit: firstItem.fabricUnit,
-      measurements: firstItem.measurements,
+      measurements: sheetForm.measurements,
+      measurementDetails: sheetForm.measurementDetails,
       designNotes: firstItem.designNotes,
       images: styleImagesFor(firstItem).length,
       styleImages: styleImagesFor(firstItem),
@@ -3126,13 +3273,60 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
             </div>
           </div>
 
+          {/* One set of measurements for the whole order, taken from the
+              customer's profile. Adjusting them here is for this order only —
+              the profile keeps the figures the shop measured. */}
+          {sheetForm.invoiceNumber ? (
+            <div className="os-card">
+              <div className="os-card-head">
+                <Ruler size={16} strokeWidth={1.5} style={{ color: '#c97b08' }} />
+                <div>
+                  <strong>Measurements</strong>
+                  <p>From {sheetForm.customer}&apos;s profile — edit for this order only</p>
+                </div>
+              </div>
+              <div className="os-card-body">
+                {Object.keys(sheetForm.measurementDetails || {}).length ? (
+                  <div className="sheet-measurements">
+                    {Object.entries(sheetForm.measurementDetails).map(([key, value]) => (
+                      <label className="os-field" key={key}>
+                        <span>{key.replace(/_/g, ' ')}</span>
+                        <input
+                          value={value}
+                          onChange={(event) => setSheetForm((current) => ({
+                            ...current,
+                            measurementDetails: { ...current.measurementDetails, [key]: event.target.value },
+                          }))}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="sheet-measurements-empty">
+                    Nothing has been measured for {sheetForm.customer} yet. Take their measurements on
+                    their customer profile first — a tailor cannot cut without them, and the order will
+                    be held until they are there.
+                  </p>
+                )}
+                <label className="os-field os-field-full">
+                  <span>Anything else the tailor should know about the fit</span>
+                  <textarea
+                    value={sheetForm.measurements}
+                    onChange={(event) => updateSheetForm('measurements', event.target.value)}
+                    rows={2}
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
+
           {sheetForm.items.map((orderItem, index) => (
             <div className="os-card os-item-card" key={orderItem.key}>
               <div className="os-card-head">
                 <span className="os-step-num">{index + 1}</span>
                 <div>
                   <strong>Item {index + 1}</strong>
-                  <p>Garment, fabric, measurements and design notes for this piece</p>
+                  <p>Garment, quantity, delivery and design notes for this piece</p>
                 </div>
                 {sheetForm.items.length > 1 ? (
                   <button type="button" className="os-item-remove" onClick={() => removeItem(index)}>
@@ -3164,7 +3358,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
                     onChange={(event) => selectFabric(index, event.target.value)}
                     disabled={inventoryLoading}
                   >
-                    <option value="">{inventoryLoading ? 'Loading inventory...' : 'Select fabric...'}</option>
+                    <option value="">{inventoryLoading ? 'Loading inventory...' : 'Nil — Production will choose'}</option>
                     <option value="client-supplied">Client supplied</option>
                     {inventory.map((fabric) => (
                       <option key={fabric.id} value={fabric.id} disabled={toNumber(fabric.quantity) <= 0}>
@@ -3172,16 +3366,17 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
                       </option>
                     ))}
                   </select>
-                  {orderItem.fabric && (
-                    <span className="os-fabric-hint">
-                      <Package size={11} />{orderItem.fabric === 'Client supplied' ? 'Customer will provide their own fabric' : `From inventory · ${orderItem.fabricUnit || 'rolls'}`}
-                    </span>
-                  )}
+                  <span className="os-fabric-hint">
+                    <Package size={11} />
+                    {orderItem.fabric === 'Client supplied'
+                      ? 'Customer will provide their own fabric'
+                      : orderItem.fabric
+                        ? `From inventory · ${orderItem.fabricUnit || 'rolls'}`
+                        : 'Left to Production or the Inventory Officer'}
+                  </span>
                 </label>
-                <label className="os-field os-field-full">
-                  <span>Measurements</span>
-                  <textarea value={orderItem.measurements} onChange={(event) => updateItem(index, { measurements: event.target.value })} placeholder="Chest, waist, inseam, sleeve, shoulder, neck…" rows={3} />
-                </label>
+                {/* Measurements used to sit here, once per garment. They are
+                    one set for the whole order now, above the garment list. */}
                 <label className="os-field os-field-full">
                   <span>Design Notes</span>
                   <textarea value={orderItem.designNotes} onChange={(event) => updateItem(index, { designNotes: event.target.value })} placeholder="Internal notes for the Production team — style, finishing, special instructions…" rows={3} />
@@ -3278,7 +3473,95 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
   );
 }
 
-function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, currentRole }) {
+// Assignment and scoring for one order, item by item. Reads and writes through
+// the two endpoints that enforce the rules — at most four tailors on an item,
+// and nothing scored before the work is marked ready — so the screen cannot
+// promise something the server will refuse.
+function TailorAssignmentPanel({ job, tailors, onSaved, onNotify }) {
+  const items = (job.items || []).length ? job.items : [{ item: job.item || 'Order', tailors: job.tailor && job.tailor !== 'Unassigned' ? [job.tailor] : [] }];
+  const [saving, setSaving] = useState(false);
+  const ready = ['Ready', 'Ready for Collection'].includes(job.status);
+
+  const write = async (path, body, successMessage) => {
+    setSaving(true);
+    try {
+      const response = await api.patch(`/oms/jobs/${job.invoiceNumber}/${path}`, body);
+      const sheet = response.data?.data?.orderSheet;
+      if (sheet) onSaved?.(sheet);
+      onNotify?.(successMessage, 'success');
+    } catch (error) {
+      onNotify?.(error.response?.data?.message || 'That could not be saved.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleTailor = (index, name) => {
+    const current = items[index].tailors || [];
+    const next = current.includes(name) ? current.filter((entry) => entry !== name) : [...current, name];
+    if (next.length > 4) {
+      onNotify?.('An item can be shared between at most 4 tailors.', 'error');
+      return;
+    }
+    write('assignments', { items: [{ index, tailors: next }] },
+      next.length ? `${items[index].item || 'Item'} assigned to ${next.join(', ')}` : 'Assignment removed');
+  };
+
+  const score = (index, name, value) => {
+    write('scores', { scores: [{ itemIndex: index, tailor: name, score: Number(value) }] },
+      `${name} scored ${value} out of 10`);
+  };
+
+  return (
+    <div className="tailor-assign">
+      {items.map((item, index) => (
+        <div className="tailor-assign-item" key={item.key || index}>
+          <header>
+            <strong>{item.item || `Item ${index + 1}`}</strong>
+            <span>{(item.tailors || []).length ? `${item.tailors.length} of 4 assigned` : 'Nobody assigned yet'}</span>
+          </header>
+          <div className="tailor-assign-picks">
+            {tailors.map((person) => {
+              const chosen = (item.tailors || []).includes(person.displayName);
+              return (
+                <button
+                  type="button"
+                  key={person.id}
+                  className={chosen ? 'is-chosen' : ''}
+                  disabled={saving}
+                  onClick={() => toggleTailor(index, person.displayName)}
+                >{person.displayName}</button>
+              );
+            })}
+            {tailors.length ? null : <span className="tailor-assign-empty">No tailors on the staff list yet.</span>}
+          </div>
+
+          {/* Scoring only makes sense once there is finished work to judge. */}
+          {ready && (item.tailors || []).length ? (
+            <div className="tailor-assign-scores">
+              {(item.tailors || []).map((name) => (
+                <label key={name}>
+                  <span>{name}</span>
+                  <select
+                    value={item.scores?.[name]?.score ?? ''}
+                    disabled={saving}
+                    onChange={(event) => score(index, name, event.target.value)}
+                  >
+                    <option value="" disabled>Score…</option>
+                    {Array.from({ length: 11 }, (_, mark) => <option key={mark} value={mark}>{mark} / 10</option>)}
+                  </select>
+                </label>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, currentRole, onOverrideHold }) {
+  const canOverrideHold = ['owner', 'admin'].includes(currentRole?.id);
   const [statusFilter, setStatusFilter] = useState('All');
   const [query, setQuery] = useState('');
   const [jobModal, setJobModal] = useState(null);
@@ -3487,6 +3770,18 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       fontSize: 11.5, fontWeight: 700, color: '#8a3520', background: '#fff5f0',
                       border: '1px solid #f0c8b8', borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap',
                     }}>{reason}</span>
+                    {/* Releasing a held order is the Owner's and Admin's call.
+                        Accounts approve the invoice; that is a separate thing. */}
+                    {canOverrideHold && !/measurements/i.test(reason) ? (
+                      <button
+                        type="button"
+                        onClick={() => onOverrideHold?.(job, reason)}
+                        style={{
+                          border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', color: '#1a1611',
+                          fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', whiteSpace: 'nowrap',
+                        }}
+                      >Send to production anyway</button>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -3775,28 +4070,22 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                 </div>
               ) : null}
 
+              {/* Who is making what. A suit's jacket and trousers are rarely
+                  the same pair of hands, so each item carries its own tailors —
+                  as many as four — and each of them is scored on the finished
+                  work once the order is ready. */}
+              <TailorAssignmentPanel
+                job={jobModal}
+                tailors={tailors}
+                onSaved={(sheet) => {
+                  setJobModal((current) => ({ ...current, ...sheet }));
+                  onUpdateJob(jobModal.id, sheet);
+                }}
+                onNotify={notify}
+              />
+
               {/* Controls */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <label className="os-field">
-                  <span>Assign Tailor</span>
-                  <select value={jobModal.tailor || 'Unassigned'} onChange={(e) => {
-                    const newTailor = e.target.value;
-                    const newStatus = newTailor === 'Unassigned' ? 'Order Sheet Confirmed' : 'Assigned';
-                    const updatedJob = { ...jobModal, tailor: newTailor, status: newStatus };
-                    setJobModal(updatedJob);
-                    onUpdateJob(jobModal.id, { tailor: newTailor, status: newStatus });
-                    notify(newTailor === 'Unassigned' ? 'Tailor assignment removed' : `Job assigned to ${newTailor}`, 'success');
-                    if (newTailor !== 'Unassigned') {
-                      api.post('/oms/notifications', {
-                        role: 'tailor', name: newTailor,
-                        message: `You have been assigned a new job: ${jobModal.customer}'s ${jobModal.item} (${jobModal.invoiceNumber})`,
-                      }).catch(() => {});
-                    }
-                  }}>
-                    <option>Unassigned</option>
-                    {tailors.map((t) => <option key={t.id}>{t.displayName}</option>)}
-                  </select>
-                </label>
                 <label className="os-field">
                   <span>Fabric</span>
                   <select disabled={jobModal.fabricAllocated} value={jobModal.fabric === 'Client supplied' ? 'client-supplied' : jobModal.fabricId || ''} onChange={(e) => {
@@ -3811,6 +4100,26 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                     <option value="client-supplied">Client supplied</option>
                     {inventory.map((f) => <option key={f.id} value={f.id} disabled={toNumber(f.quantity) <= 0}>{f.name} ({toNumber(f.quantity)} {f.unit}){toNumber(f.quantity) <= 0 ? ' · Out of stock' : ''}</option>)}
                   </select>
+                </label>
+                {/* The customer's delivery date is the shop's business. A
+                    tailor works to a date Production sets, which is normally
+                    earlier — it leaves room for checking and finishing. */}
+                <label className="os-field">
+                  <span>Tailor&apos;s due date</span>
+                  <input
+                    type="date"
+                    value={jobModal.tailorDueDate || ''}
+                    max={jobModal.delivery || undefined}
+                    onChange={(e) => {
+                      setJobModal((j) => ({ ...j, tailorDueDate: e.target.value }));
+                      onUpdateJob(jobModal.id, { tailorDueDate: e.target.value });
+                    }}
+                  />
+                  <span className="os-fabric-hint">
+                    {jobModal.delivery
+                      ? `Customer's delivery date is ${new Date(`${jobModal.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, which the tailor does not see.`
+                      : 'The tailor does not see the customer\'s delivery date.'}
+                  </span>
                 </label>
                 <label className="os-field">
                   <span>Quantity used</span>
@@ -4777,7 +5086,7 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
         {/* Tab bar */}
         <div style={{ padding: '0 18px', borderBottom: '1px solid #eee5da' }}>
           <nav style={{ display: 'flex', gap: 4, overflowX: 'auto' }}>
-            {['Commercial Activity', 'Payments', 'Inventory Reconciliation', 'Store Performance', 'Exports'].map((tab) => (
+            {['Commercial Activity', 'Payments', 'Lead Time', 'Inventory Reconciliation', 'Store Performance', 'Exports'].map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -4789,6 +5098,79 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
             ))}
           </nav>
         </div>
+
+        {/* How long an order actually takes, from the day the order sheet was
+            raised to the day production marked it ready. Only finished orders
+            count — one still in the shop has no lead time yet. */}
+        {activeTab === 'Lead Time' && (() => {
+          const lead = report.leadTime;
+          if (!lead || !lead.completedCount) {
+            return (
+              <div style={{ padding: '40px 24px', textAlign: 'center', color: '#8a7a6a', fontSize: 14 }}>
+                No orders were completed in this period, so there is no lead time to report.
+              </div>
+            );
+          }
+          return (
+            <div style={{ padding: 18, display: 'grid', gap: 16 }}>
+              <div className="tailor-figures">
+                <div className="tailor-figure green">
+                  <small>Within the {lead.targetDays / 7}-week standard</small>
+                  <strong>{lead.withinTargetPercent}%</strong>
+                  <span>{lead.completedCount} order{lead.completedCount === 1 ? '' : 's'} completed</span>
+                </div>
+                <div className="tailor-figure blue">
+                  <small>Delivered by the promised date</small>
+                  <strong>{lead.onPromisePercent === null ? '—' : `${lead.onPromisePercent}%`}</strong>
+                  <span>{lead.promisedCount} carried a delivery date</span>
+                </div>
+                <div className="tailor-figure gold">
+                  <small>Average lead time</small>
+                  <strong>{lead.averageDays} days</strong>
+                  <span>Against a {lead.targetDays}-day standard</span>
+                </div>
+                <div className="tailor-figure purple">
+                  <small>Longest in the period</small>
+                  <strong>{lead.slowest[0] ? `${lead.slowest[0].days} days` : '—'}</strong>
+                  <span>{lead.slowest[0]?.customer || 'Nothing to show'}</span>
+                </div>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>{['Order', 'Customer', 'Days taken', 'Within standard', 'Promised date'].map((heading) => (
+                      <th key={heading} style={thStyle}>{heading}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody>
+                    {lead.slowest.map((order) => (
+                      <tr key={order.invoiceNumber} style={{ background: 'white' }} {...trHover}>
+                        <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 12 }}>{order.invoiceNumber}</td>
+                        <td style={tdStyle}>{order.customer}</td>
+                        <td style={tdStyle}>{order.days}</td>
+                        <td style={tdStyle}>
+                          <span style={{ color: order.withinTarget ? '#2a7d4f' : '#8a3520', fontWeight: 700 }}>
+                            {order.withinTarget ? 'Yes' : 'No'}
+                          </span>
+                        </td>
+                        <td style={tdStyle}>
+                          {order.promised
+                            ? `${new Date(`${order.promised}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}${order.onPromise ? '' : ' · late'}`
+                            : 'None given'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: '#8a7a6a', lineHeight: 1.55 }}>
+                The standard comes from Settings — Production, standard lead time. Change it there and
+                this percentage is measured against the new figure.
+              </p>
+            </div>
+          );
+        })()}
 
         {/* Tab: Commercial Activity */}
         {activeTab === 'Commercial Activity' && (
@@ -5104,7 +5486,7 @@ function ReportsView({ role }) {
     const storeRows = report.storeBreakdown.map((store) => `<tr><td>${escape(store.store)}</td><td>${escape(store.invoices)}</td><td>${escape(money.format(store.total))}</td></tr>`).join('');
     const invoiceRows = report.invoices.map((invoice) => `<tr><td>${escape(invoice.invoiceNumber)}</td><td>${escape(new Date(invoice.date).toLocaleDateString('en-GB'))}</td><td>${escape(invoice.customer)}</td><td>${escape(invoice.store)}</td><td>${escape(money.format(invoice.total))}</td><td>${escape(invoice.paymentStatus)}</td><td>${escape(invoice.orderStatus)}</td></tr>`).join('');
     const allocationRows = report.allocations.map((allocation) => `<tr><td>${escape(new Date(allocation.date).toLocaleDateString('en-GB'))}</td><td>${escape(allocation.fabricName)}</td><td>${escape(`${allocation.quantity} ${allocation.unit}`)}</td><td>${escape(allocation.invoiceNumber)}</td><td>${escape(allocation.customerName)}</td><td>${escape(allocation.tailorName)}</td></tr>`).join('');
-    popup.document.write(`<!doctype html><html><head><title>TWIF End-of-Period Report</title><style>body{font-family:Arial,sans-serif;color:#171717;padding:32px}h1{margin-bottom:4px}p{color:#666}table{width:100%;border-collapse:collapse;margin:22px 0}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#171717;color:#fff}@media print{body{padding:0}}</style></head><body><h1>TWIF End-of-Period Report</h1><p>${escape(from)} to ${escape(to)}</p><h2>Summary</h2><table><tbody>${summaryRows}</tbody></table><h2>Store Performance</h2><table><thead><tr><th>Store</th><th>Invoices</th><th>Total Invoiced</th></tr></thead><tbody>${storeRows}</tbody></table><h2>Invoices and Orders</h2><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Store</th><th>Total</th><th>Payment</th><th>Order</th></tr></thead><tbody>${invoiceRows}</tbody></table><h2>Inventory Allocations</h2><table><thead><tr><th>Date</th><th>Fabric</th><th>Quantity</th><th>Order</th><th>Customer</th><th>Tailor</th></tr></thead><tbody>${allocationRows}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`);
+    popup.document.write(`<!doctype html><html><head><title>twif End-of-Period Report</title><style>body{font-family:Arial,sans-serif;color:#171717;padding:32px}h1{margin-bottom:4px}p{color:#666}table{width:100%;border-collapse:collapse;margin:22px 0}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#171717;color:#fff}@media print{body{padding:0}}</style></head><body><h1>twif End-of-Period Report</h1><p>${escape(from)} to ${escape(to)}</p><h2>Summary</h2><table><tbody>${summaryRows}</tbody></table><h2>Store Performance</h2><table><thead><tr><th>Store</th><th>Invoices</th><th>Total Invoiced</th></tr></thead><tbody>${storeRows}</tbody></table><h2>Invoices and Orders</h2><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Store</th><th>Total</th><th>Payment</th><th>Order</th></tr></thead><tbody>${invoiceRows}</tbody></table><h2>Inventory Allocations</h2><table><thead><tr><th>Date</th><th>Fabric</th><th>Quantity</th><th>Order</th><th>Customer</th><th>Tailor</th></tr></thead><tbody>${allocationRows}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`);
     popup.document.close();
   };
 
@@ -5343,6 +5725,12 @@ const notificationDestination = (item, role) => {
     case 'invoice_created':
     case 'account_approval':
       return { view: 'Invoices', params: invoiceParams };
+    case 'payment_recorded':
+      // Accounts and the Owner keep the payment screens; a store manager is
+      // told about the money against the order they raised.
+      return { view: ['accounts', 'owner', 'admin'].includes(role) ? 'Payments' : 'Orders', params: invoiceParams };
+    case 'production_override':
+      return { view: ['production_manager'].includes(role) ? 'Production' : 'Orders', params: invoiceParams };
     case 'order_sheet_created':
     case 'order_sheet_released':
     case 'production_ready':
@@ -5414,17 +5802,25 @@ function NotificationPanel({ role, currentRole, onNavigate }) {
     }
   };
 
-  const openNotification = (item) => {
+  // Where the notification's own destination is a screen this role does not
+  // have, it falls back to one they do — a row that names an order should not
+  // be dead just because the reader cannot reach Production.
+  const reachable = (item) => {
     const destination = notificationDestination(item, role);
-    // Only navigate somewhere this role can actually reach.
-    if (!destination || !visibleNavForRole.includes(destination.view)) return;
+    if (destination && visibleNavForRole.includes(destination.view)) return destination;
+    const { invoiceNumber } = item?.metadata || {};
+    if (!invoiceNumber) return null;
+    const fallback = ['Orders', 'Invoices', 'Production'].find((view) => visibleNavForRole.includes(view));
+    return fallback ? { view: fallback, params: { invoice: invoiceNumber } } : null;
+  };
+
+  const openNotification = (item) => {
+    const destination = reachable(item);
+    if (!destination) return;
     onNavigate?.(destination.view, destination.params);
   };
 
-  const isActionable = (item) => {
-    const destination = notificationDestination(item, role);
-    return Boolean(destination && visibleNavForRole.includes(destination.view));
-  };
+  const isActionable = (item) => Boolean(reachable(item));
 
   if (role === 'store_manager' || role === 'accounts' || role === 'production_manager') {
     const notificationCategory = (item) => {
@@ -5676,7 +6072,7 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
     return (
       <main className="tracking-page">
         <section className="tracking-card">
-          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>TWIF</strong></div>
+          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>twif</strong></div>
           <p>Loading order status...</p>
         </section>
       </main>
@@ -5687,7 +6083,7 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
     return (
       <main className="tracking-page">
         <section className="tracking-card">
-          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>TWIF</strong></div>
+          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>twif</strong></div>
           <h1>Tracking Link Not Found</h1>
           <p>Please confirm the invoice link with The Way It Fits.</p>
         </section>
@@ -5702,7 +6098,7 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
           <div className="brand-lockup tracking-brand">
             <div className="mark">TW</div>
             <div>
-              <strong>TWIF</strong>
+              <strong>twif</strong>
               <span>The Way It Fits</span>
             </div>
           </div>
@@ -5735,7 +6131,7 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
         </dl>
 
         <p className="tracking-note">
-          This page updates from the order sheet and production status managed by TWIF staff.
+          This page updates from the order sheet and production status managed by twif.
         </p>
 
         {/* "Back to tracking" sat on the tracking page itself and went nowhere. */}
@@ -5789,7 +6185,7 @@ function CustomerPortalPage({ token, sentInvoices = [] }) {
     return (
       <main className="tracking-page">
         <section className="tracking-card">
-          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>TWIF</strong></div>
+          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>twif</strong></div>
           <h1>{loading ? 'Loading your profile...' : 'Customer Profile Not Found'}</h1>
           {!loading && <a className="tracking-profile-link portal-back-link" href={`/c/${encodeURIComponent(token)}`}>Back to tracking</a>}
         </section>
@@ -5808,7 +6204,7 @@ function CustomerPortalPage({ token, sentInvoices = [] }) {
 
   return (
     <main className="client-portal-shell">
-      <aside className="client-portal-nav"><div className="brand-lockup tracking-brand"><div className="mark">TW</div><div><strong>TWIF</strong><span>The Way It Fits</span></div></div><nav>{[['⌂','Dashboard'],['▣','My Orders'],['▤','Invoices'],['⌕','Measurements'],['♙','Profile & Contacts'],['♧','Membership'],['⌖','Address Book'],['♡','Saved Styles'],['⚙','Preferences']].map(([icon,label],index)=><a className={index===0?'active':''} href={`#${label.toLowerCase().replaceAll(' ','-')}`} key={label}><i>{icon}</i>{label}</a>)}</nav><section><strong>Need help?</strong><small>Chat with us on WhatsApp</small><a href="https://wa.me/2347056336710">◉ &nbsp; Chat Now</a></section><a className="portal-logout" href={`/c/${encodeURIComponent(token)}`}>← &nbsp; Back to tracking</a></aside>
+      <aside className="client-portal-nav"><div className="brand-lockup tracking-brand"><div className="mark">TW</div><div><strong>twif</strong><span>The Way It Fits</span></div></div><nav>{[['⌂','Dashboard'],['▣','My Orders'],['▤','Invoices'],['⌕','Measurements'],['♙','Profile & Contacts'],['♧','Membership'],['⌖','Address Book'],['♡','Saved Styles'],['⚙','Preferences']].map(([icon,label],index)=><a className={index===0?'active':''} href={`#${label.toLowerCase().replaceAll(' ','-')}`} key={label}><i>{icon}</i>{label}</a>)}</nav><section><strong>Need help?</strong><small>Chat with us on WhatsApp</small><a href="https://wa.me/2347056336710">◉ &nbsp; Chat Now</a></section><a className="portal-logout" href={`/c/${encodeURIComponent(token)}`}>← &nbsp; Back to tracking</a></aside>
       <section className="client-portal-workspace"><header><div><span>Client Portal</span><strong>{profile.name}</strong></div><a className="client-portal-back" href={`/c/${encodeURIComponent(token)}`}>← &nbsp;Back to tracking</a></header><div className="client-portal-welcome"><p>Welcome back,</p><h1>{profile.name}</h1><span>⌕ &nbsp; {profile.phone || 'Phone not added'} &nbsp;&nbsp;·&nbsp;&nbsp; ✉ &nbsp; {profile.email}</span></div>
         <div className="client-portal-dashboard">
           <main>
@@ -5850,13 +6246,13 @@ function renderView(activeView, role, viewProps = {}) {
     return <OrdersView sentInvoices={viewProps.sentInvoices} />;
   }
   if (activeView === 'Orders') return role === 'store_manager' || role === 'owner' ? <StoreManagerOrdersPage sentInvoices={viewProps.sentInvoices} /> : <OrdersView sentInvoices={viewProps.sentInvoices} />;
-  if (activeView === 'Customers') return role === 'store_manager' || role === 'owner' ? <StoreManagerCustomersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} /> : <CustomersView />;
+  if (activeView === 'Customers') return role === 'store_manager' || role === 'owner' || role === 'admin' ? <StoreManagerCustomersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} currentRole={viewProps.currentRole} /> : <CustomersView />;
   if (activeView === 'New Invoice') return <NewInvoiceView currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
   if (activeView === 'Order Sheet') return <OrderSheetView sentInvoices={viewProps.sentInvoices} onCreateJob={viewProps.onCreateJob} />;
   if (activeView === 'Payments') return role === 'accounts' || role === 'owner'
     ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} onInvoiceUpdated={viewProps.onInvoiceUpdated} />
     : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
-  if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} blockedJobs={viewProps.blockedProductionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} />;
+  if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} blockedJobs={viewProps.blockedProductionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} onOverrideHold={viewProps.onOverrideHold} />;
   if (activeView === 'Inventory') return role === 'accounts' ? <AccountsInventoryReconciliationPage /> : role === 'inventory_manager' ? <InventoryListPage currentRole={viewProps.currentRole} /> : role === 'owner' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode /> : <InventoryView />;
   if (activeView === 'Reconciliations') return <InventoryView />;
   if (activeView === 'Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
@@ -5867,7 +6263,9 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Settings') return <SettingsPage />;
   if (activeView === 'Reports') return <ReportsView role={role} />;
   if (activeView === 'My Tasks') return <MyTasksPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
-  if (activeView === 'Weekly Log') return <WeeklyLogPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} />;
+  if (activeView === 'My Log') return <WeeklyLogPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} />;
+  if (activeView === 'Tailor List') return <TailorReportsPage mode="list" productionJobs={viewProps.productionJobs} />;
+  if (activeView === 'Tailor Performance') return <TailorReportsPage mode="performance" productionJobs={viewProps.productionJobs} />;
   if (activeView === 'Notifications') return <NotificationPanel role={role} currentRole={viewProps.currentRole} onNavigate={viewProps.onNavigate} />;
   return <Overview role={role} />;
 }
@@ -5880,6 +6278,9 @@ function App() {
   const visibleNav = navByRole[role];
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sentInvoices, setSentInvoices] = useState([]);
+  // How much of an invoice has to be paid before production may start. Held in
+  // Settings so the shop can change it without a deploy.
+  const [releasePercent, setReleasePercent] = useState(DEFAULT_RELEASE_PERCENT);
   const [productionJobs, setProductionJobs] = useState([]);
   const [signedInAccount, setSignedInAccount] = useState(restoredSession);
   const [staffProfile, setStaffProfile] = useState(null);
@@ -5940,6 +6341,18 @@ function App() {
   // reflect what other staff have added rather than a snapshot taken at login.
   // Keyed on the view rather than the full path, so drilling into a record
   // does not re-request.
+  // The payment gate reads from Settings, so the board has to know what the
+  // threshold currently is rather than assuming the default.
+  useEffect(() => {
+    if (!signedIn) return;
+    api.get('/oms/settings')
+      .then((response) => {
+        const value = Number(response.data?.data?.settings?.paymentReleasePercent);
+        if (Number.isFinite(value)) setReleasePercent(value);
+      })
+      .catch(() => {});
+  }, [signedIn]);
+
   useEffect(() => {
     if (!signedIn) return;
 
@@ -6055,13 +6468,35 @@ function App() {
     }
   };
 
+  // An Owner or Admin releasing an order the payment gate is holding. The
+  // server records who did it and why, and tells the shop.
+  const overrideProductionHold = async (job, reason) => {
+    if (!job?.trackingToken) return;
+    const confirmed = window.confirm(
+      `${job.customer}'s order is held: ${reason}.\n\nSend it to production anyway? This is recorded against the order.`
+    );
+    if (!confirmed) return;
+    try {
+      const response = await api.patch(`/oms/tracking/order-sheet/${job.trackingToken}`, {
+        ...job,
+        overrideProductionHold: true,
+      });
+      const sheet = response.data?.data?.orderSheet;
+      setProductionJobs((current) => current.map((item) => (
+        item.id === job.id ? { ...item, productionOverride: sheet?.productionOverride || { reason } } : item
+      )));
+    } catch (error) {
+      window.alert(error.response?.data?.message || 'That order could not be released.');
+    }
+  };
+
   // Only jobs that may actually be worked reach the board and the tailors.
-  const approvedProductionJobs = productionJobs.filter((job) => canShowJobInProduction(job, sentInvoices));
+  const approvedProductionJobs = productionJobs.filter((job) => canShowJobInProduction(job, sentInvoices, releasePercent));
 
   // The rest are held, each with the reason, so Production can see what is
   // stuck and chase it rather than wondering where an order went.
   const blockedProductionJobs = productionJobs
-    .map((job) => ({ job, reason: productionBlockReason(job, sentInvoices) }))
+    .map((job) => ({ job, reason: productionBlockReason(job, sentInvoices, releasePercent) }))
     .filter((entry) => entry.reason);
 
   const handleLogin = (account) => {
@@ -6149,7 +6584,7 @@ function App() {
         <div className="brand-lockup">
           <div className="mark">TW</div>
           <div>
-            <strong>TWIF</strong>
+            <strong>twif</strong>
             <span>The Way It Fits</span>
           </div>
         </div>
@@ -6219,7 +6654,7 @@ function App() {
             {/* On a phone the wordmark told the user nothing they did not
                 already know; their own name and role is worth the line. */}
             <span className="mobile-app-label">
-              {currentRole?.name?.split(' (')[0] || 'TWIF OMS'}
+              {currentRole?.name?.split(' (')[0] || 'twif OMS'}
               {accountTypeByRole[role]?.short ? <em> · {accountTypeByRole[role].short}</em> : null}
             </span>
             <h1>{activeView === 'Portal Preview' ? 'Customer Tracking Preview' : role === 'accounts' && activeView === 'Overview' ? 'Account Dashboard' : role === 'accounts' && activeView === 'Inventory' ? 'Inventory Reconciliation' : role === 'inventory_manager' && activeView === 'Overview' ? 'Inventory Dashboard' : (role === 'inventory_manager' || role === 'owner') && activeView === 'Inventory' ? 'Inventory List' : activeView}</h1>
@@ -6235,7 +6670,7 @@ function App() {
             {role === 'store_manager' && activeView === 'Invoices' ? <p className="topbar-subtitle">View sent invoices, monitor approvals and create new invoices.</p> : null}
             {role === 'owner' && activeView === 'Overview' ? <p className="topbar-subtitle">Real-time summary of your business performance and activity.</p> : null}
             {role === 'tailor' && activeView === 'My Tasks' ? <p className="topbar-subtitle">Jobs assigned to you. Start work and mark ready when done.</p> : null}
-            {role === 'tailor' && activeView === 'Weekly Log' ? <p className="topbar-subtitle">Track your completed work and view your weekly performance.</p> : null}
+            {role === 'tailor' && activeView === 'My Log' ? <p className="topbar-subtitle">Your completed work, over any period you choose.</p> : null}
             {role === 'store_manager' && activeView === 'Overview' ? <p className="topbar-subtitle">Good morning, {currentRole?.name?.split(' (')[0] || 'Store Manager'}. Welcome to the store!</p> : null}
             {role === 'store_manager' && activeView === 'Customers' ? <p className="topbar-subtitle">Manage customer profiles and create new orders.</p> : null}
           </div>
@@ -6262,6 +6697,7 @@ function App() {
                 blockedProductionJobs,
                 onCreateJob: createProductionJob,
                 onUpdateJob: updateProductionJob,
+                onOverrideHold: overrideProductionHold,
               })}
             />
           ))}

@@ -49,7 +49,7 @@ export default function LoginPage({ onLogin, notice = '' }) {
       <section className="login-app-frame">
         <section className="login-story">
           <div className="login-brand-top">
-            <div className="app-mark">TWIF</div>
+            <div className="app-mark">twif</div>
             <div><strong>The Way It Fits</strong><span>Operations Management System</span></div>
           </div>
           <div className="login-welcome">

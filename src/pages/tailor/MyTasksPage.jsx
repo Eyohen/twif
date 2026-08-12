@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { CheckSquare, Clock, User, Package, ArrowRight, Play, CheckCircle, ChevronDown, ChevronUp, Calendar, Ruler, Image, Scissors, Filter } from 'lucide-react';
+import { worksOnJob } from '../../utils/oms';
 import JobCommentThread from '../../components/oms/JobCommentThread';
 
 export default function MyTasksPage({ compact = false, currentRole, productionJobs = [], onUpdateJob }) {
   const tailorName = currentRole?.name?.split(' (')[0] || '';
-  const allAssigned = productionJobs.filter((order) => order.tailor === tailorName);
+  const allAssigned = productionJobs.filter((order) => worksOnJob(order, tailorName));
   const [expandedId, setExpandedId] = useState(null);
   const [filter, setFilter] = useState('All tasks');
   const [viewingImage, setViewingImage] = useState(null);
@@ -120,8 +121,12 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                     <Calendar size={11} style={{ color: '#8a7a6a' }} />
+                    {/* The customer's delivery date is not a tailor's to see;
+                        Production sets the date they work to. */}
                     <span style={{ fontSize: 12, color: '#8a7a6a' }}>
-                      Due: {order.delivery ? new Date(`${order.delivery}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : 'Not set'}
+                      Due: {order.tailorDueDate
+                        ? new Date(`${order.tailorDueDate}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+                        : 'Ask your production manager'}
                     </span>
                   </div>
                 </div>

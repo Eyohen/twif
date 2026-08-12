@@ -5,6 +5,19 @@ export const money = new Intl.NumberFormat('en-NG', {
 });
 
 export const todayIso = () => new Date().toISOString().slice(0, 10);
+
+// An invoice stands for 48 hours, so its due date is derived from the day it
+// was raised rather than typed in.
+export const addDaysIso = (iso, days) => {
+  const date = new Date(`${iso}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+// Whether a customer is on the elite tier. The tier is set on the customer's
+// profile by an Owner or Admin, and the discount follows from it — it is not
+// something a store manager applies by hand on the invoice.
+export const isEliteCustomer = (customer) => /elite/i.test(String(customer?.category || ''));
 export const invoiceSeed = () => `INV${Math.floor(Math.random() * 90000) + 10000}`;
 export const invoiceItemSeed = () => `item-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 export const trackingTokenSeed = () => Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-8);
@@ -78,6 +91,16 @@ export const dueDateLabel = (value) => {
   if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`;
   if (days === 0) return 'Due today';
   return `${days} day${days === 1 ? '' : 's'} left`;
+};
+
+// The share of an invoice that has been paid, measured against what is payable
+// rather than against the headline total.
+export const DEFAULT_RELEASE_PERCENT = 70;
+
+export const paidPercent = (invoice) => {
+  const payable = invoicePayable(invoice);
+  if (payable <= 0) return 100;
+  return (toNumber(invoice?.paid) / payable) * 100;
 };
 
 // What the invoice is actually payable at, once its discounts are applied.
@@ -194,6 +217,68 @@ export const printInvoiceHtml = (html, invoiceNumber = 'invoice') => {
   frame.srcdoc = html;
 };
 
+// "Download PDF" opened a print dialog, which is not downloading. The invoice
+// document is laid out off-screen at its own width, photographed, and written
+// into a PDF the browser then saves — so the button produces a file.
+//
+// The libraries are pulled in only when the button is used: together they are
+// about a megabyte, and most sessions never download an invoice.
+export const downloadInvoicePdf = async (html, invoiceNumber = 'invoice') => {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import('html2canvas'),
+    import('jspdf'),
+  ]);
+
+  // Rendered in a real frame rather than a detached node: the invoice template
+  // is a full document with its own <head>, and its layout depends on that.
+  const frame = document.createElement('iframe');
+  frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:820px;height:1200px;border:0;';
+  document.body.appendChild(frame);
+
+  try {
+    await new Promise((resolve) => {
+      frame.onload = resolve;
+      frame.srcdoc = html;
+    });
+
+    const view = frame.contentWindow;
+    const body = view.document.body;
+    // Give webfonts and images a moment, or they photograph as blank boxes.
+    await view.document.fonts?.ready?.catch(() => {});
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+
+    const canvas = await html2canvas(body, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+      windowWidth: 820,
+      height: body.scrollHeight,
+    });
+
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imageHeight = (canvas.height * pageWidth) / canvas.width;
+    const image = canvas.toDataURL('image/jpeg', 0.92);
+
+    // A long invoice runs onto further pages rather than being squashed onto one.
+    let remaining = imageHeight;
+    let offset = 0;
+    while (remaining > 0) {
+      pdf.addImage(image, 'JPEG', 0, -offset, pageWidth, imageHeight);
+      remaining -= pageHeight;
+      offset += pageHeight;
+      if (remaining > 0) pdf.addPage();
+    }
+
+    pdf.save(`${invoiceNumber}.pdf`);
+    return 'downloaded';
+  } finally {
+    frame.remove();
+  }
+};
+
 // Measurements can arrive as a written note or as named figures; either counts.
 export const hasMeasurements = (job) => {
   if (job?.measurementDetails && typeof job.measurementDetails === 'object') {
@@ -206,22 +291,61 @@ export const hasMeasurements = (job) => {
 //
 // The rules, in the order they are checked:
 //   1. Accounts have to have approved the invoice.
-//   2. The customer has to have paid something — an unpaid order is not cut.
+//   2. Enough of the invoice has to have been paid — the threshold is set in
+//      Settings and defaults to 70%.
 //   3. The garment has to have measurements, since a tailor cannot cut without.
 //
 // A reason rather than a boolean, so the board can say why a job is held
 // instead of quietly leaving it out.
-export const productionBlockReason = (job, invoices) => {
+export const productionBlockReason = (job, invoices, releasePercent = DEFAULT_RELEASE_PERCENT) => {
   if (!job?.invoiceNumber) return null;
   const invoice = invoices.find((item) => item.invoiceNumber === job.invoiceNumber);
 
   if (!isInvoiceApproved(invoice)) return 'Awaiting Accounts approval';
-  if (isAwaitingPayment(invoice)) return 'Invoice unpaid';
+  // An Owner or Admin has already sent this one through knowing it was held.
+  if (job.productionOverride) return hasMeasurements(job) ? null : 'Measurements missing';
+
+  if (!isFullyPaid(invoice)) {
+    const percent = paidPercent(invoice);
+    if (percent < releasePercent) {
+      return percent > 0
+        ? `Only ${Math.floor(percent)}% paid — ${releasePercent}% needed`
+        : `Invoice unpaid — ${releasePercent}% needed`;
+    }
+  }
   if (!hasMeasurements(job)) return 'Measurements missing';
   return null;
 };
 
-export const canShowJobInProduction = (job, invoices) => productionBlockReason(job, invoices) === null;
+// An order item can be shared between several tailors, so "is this mine?" is a
+// question about the item list as well as the single name the board carries.
+export const jobTailors = (job) => {
+  const fromItems = (job?.items || []).flatMap((item) => item.tailors || []);
+  const named = job?.tailor && job.tailor !== 'Unassigned' ? [job.tailor] : [];
+  return [...new Set([...fromItems, ...named])];
+};
+
+export const worksOnJob = (job, tailorName) => (
+  Boolean(tailorName) && jobTailors(job).includes(tailorName)
+);
+
+// Every score this tailor was given on this order, out of ten.
+export const scoresForTailor = (job, tailorName) => (job?.items || [])
+  .map((item) => item.scores?.[tailorName]?.score)
+  .filter((score) => Number.isFinite(Number(score)))
+  .map(Number);
+
+// A tailor's average across a set of jobs, or null when nothing has been
+// scored — an unscored tailor is not a tailor who scored zero.
+export const averageScore = (jobs, tailorName) => {
+  const scores = jobs.flatMap((job) => scoresForTailor(job, tailorName));
+  if (!scores.length) return null;
+  return scores.reduce((sum, score) => sum + score, 0) / scores.length;
+};
+
+export const canShowJobInProduction = (job, invoices, releasePercent) => (
+  productionBlockReason(job, invoices, releasePercent) === null
+);
 
 export const productionJobFromInvoice = (invoice) => {
   if (!invoice?.orderSheet) return null;
@@ -285,8 +409,18 @@ export const PERIOD_OPTIONS = [
   ['today', 'Today'],
   ['week', 'This Week'],
   ['month', 'This Month'],
+  ['quarter', 'This Quarter'],
   ['year', 'This Year'],
   ['all', 'All Time'],
+];
+
+// The periods a tailor's log and the performance screens are read over.
+export const LOG_PERIODS = [
+  ['week', 'Week'],
+  ['month', 'Month'],
+  ['quarter', 'Quarter'],
+  ['year', 'Year'],
+  ['custom', 'Custom'],
 ];
 
 // Shared by the dashboard's overall filter and by each panel's own selector.
@@ -306,6 +440,12 @@ export const filterByPeriod = (records, getDate, period, customFrom, customTo) =
   if (period === 'today') return records.filter((record) => on(record) === today);
   if (period === 'week') return records.filter((record) => getDate(record) && new Date(getDate(record)) >= weekAgo);
   if (period === 'month') return records.filter((record) => on(record) >= monthStart);
+  if (period === 'quarter') {
+    const quarterStart = new Date();
+    quarterStart.setMonth(Math.floor(quarterStart.getMonth() / 3) * 3, 1);
+    const from = quarterStart.toISOString().slice(0, 10);
+    return records.filter((record) => on(record) >= from);
+  }
   if (period === 'year') return records.filter((record) => on(record) >= yearStart);
   if (period === 'custom' && customFrom) {
     return records.filter((record) => {
@@ -329,6 +469,7 @@ export const periodWindow = (period, customFrom, customTo) => {
   if (period === 'today') return { start, end };
   if (period === 'week') { start.setDate(start.getDate() - 6); return { start, end }; }
   if (period === 'month') { start.setDate(1); return { start, end }; }
+  if (period === 'quarter') { start.setMonth(Math.floor(start.getMonth() / 3) * 3, 1); return { start, end }; }
   if (period === 'year') { start.setMonth(0, 1); return { start, end }; }
   if (period === 'custom' && customFrom) {
     return {

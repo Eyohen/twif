@@ -10627,3 +10627,91 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   font-size: 12px; font-weight: 600; cursor: pointer;
 }
 .dup-row button:disabled { opacity: .55; cursor: not-allowed; }
+
+/* One measurement set for the whole order sheet, taken from the profile. */
+.sheet-measurements {
+  display: grid; gap: 10px; width: 100%;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+.sheet-measurements .os-field span { text-transform: capitalize; }
+.sheet-measurements-empty {
+  margin: 0; border: 1px solid #f0ddb0; border-radius: 8px; background: #fffbf0;
+  padding: 10px 12px; font-size: 12px; line-height: 1.55; color: #7a6030;
+}
+
+/* Who is making what, item by item. */
+.tailor-assign { display: grid; gap: 10px; }
+.tailor-assign-item { border: 1px solid #eee5da; border-radius: 10px; background: #faf7f3; padding: 12px; }
+.tailor-assign-item header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+.tailor-assign-item header strong { font-size: 13px; color: #1a1611; }
+.tailor-assign-item header span { font-size: 11px; color: #8a7a6a; white-space: nowrap; }
+.tailor-assign-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.tailor-assign-picks button {
+  border: 1px solid #ddd5c8; border-radius: 999px; background: #fff; color: #5a4e42;
+  font: inherit; font-size: 12px; font-weight: 600; padding: 6px 13px; cursor: pointer;
+}
+.tailor-assign-picks button.is-chosen { background: #1a1611; border-color: #1a1611; color: #fff; }
+.tailor-assign-picks button:disabled { opacity: .6; cursor: wait; }
+.tailor-assign-empty { font-size: 12px; color: #8a7a6a; }
+.tailor-assign-scores {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd5c8;
+}
+.tailor-assign-scores label { display: grid; gap: 4px; }
+.tailor-assign-scores span { font-size: 11px; font-weight: 700; color: #8a7a6a; }
+.tailor-assign-scores select {
+  border: 1px solid #ddd5c8; border-radius: 8px; background: #fff;
+  font: inherit; font-size: 12px; padding: 6px 9px; color: #1a1611;
+}
+
+/* Tailor list, performance and logs. */
+.tailor-period { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+.tailor-period nav { display: flex; flex-wrap: wrap; gap: 6px; }
+.tailor-period nav button {
+  border: 1px solid #ddd5c8; border-radius: 999px; background: #fff; color: #5a4e42;
+  font: inherit; font-size: 13px; font-weight: 500; padding: 7px 16px; cursor: pointer;
+}
+.tailor-period nav button.is-on { background: #1a1611; border-color: #1a1611; color: #fff; font-weight: 700; }
+.tailor-period-range { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.tailor-period-hint { font-size: 11px; color: #8a7a6a; padding-bottom: 10px; }
+
+.tailor-figures { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.tailor-figure { border: 1px solid #eee5da; border-radius: 12px; background: #fff; padding: 16px 18px; display: grid; gap: 3px; }
+.tailor-figure small { font-size: 11px; font-weight: 700; color: #8a7a6a; text-transform: uppercase; letter-spacing: .06em; }
+.tailor-figure strong { font-size: 24px; color: #1a1611; line-height: 1.1; }
+.tailor-figure span { font-size: 12px; color: #8a7a6a; }
+.tailor-figure.green { background: #f0faf4; border-color: #d3ecdd; }
+.tailor-figure.gold { background: #fffbf0; border-color: #f0e2c0; }
+.tailor-figure.blue { background: #eff6ff; border-color: #d5e4fb; }
+.tailor-figure.purple { background: #faf5ff; border-color: #e6d9fb; }
+
+.tailor-log-table { width: 100%; border-collapse: collapse; }
+.tailor-log-table th {
+  text-align: left; padding: 11px 14px; font-size: 11px; color: #8a7a6a;
+  text-transform: uppercase; letter-spacing: .08em; background: #faf7f3;
+  border-bottom: 1px solid #eee5da; white-space: nowrap;
+}
+.tailor-log-table td { padding: 12px 14px; font-size: 13px; color: #5a4e42; border-bottom: 1px solid #f3ede5; }
+.tailor-log-table td strong { color: #1a1611; }
+.tailor-log-table td small { margin-left: 7px; font-size: 11px; font-weight: 700; }
+.tailor-log-table td small.up { color: #2a7d4f; }
+.tailor-log-table td small.down { color: #8a3520; }
+.tailor-dept-score { margin-left: auto; font-size: 12px; font-weight: 700; color: #c97b08; white-space: nowrap; }
+.tailor-open {
+  display: inline-flex; align-items: center; gap: 5px; border: 1px solid #ddd5c8;
+  border-radius: 8px; background: #fff; color: #1a1611; font: inherit; font-size: 12px;
+  font-weight: 600; padding: 6px 11px; cursor: pointer; white-space: nowrap;
+}
+
+.tailor-period-inline { display: flex; flex-wrap: wrap; gap: 4px; }
+.tailor-period-inline button {
+  border: 1px solid #ddd5c8; border-radius: 999px; background: #fff; color: #5a4e42;
+  font: inherit; font-size: 12px; font-weight: 500; padding: 6px 13px; cursor: pointer;
+}
+.tailor-period-inline button.is-on { background: #1a1611; border-color: #1a1611; color: #fff; font-weight: 700; }
+
+.owner-panel-range { display: flex; align-items: center; gap: 8px; padding: 0 16px 10px; }
+.owner-panel-range input {
+  border: 1px solid #ddd5c8; border-radius: 8px; padding: 6px 9px; font-size: 12px; color: #1a1611;
+}
+.owner-panel-range span { color: #8a7a6a; font-size: 12px; }

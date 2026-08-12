@@ -46,6 +46,24 @@ Given('the Store Manager creates a customer', async function () {
   await form.getByRole('button', { name: /create|save|add/i }).last().click();
 
   await expect(this.page.getByText(new RegExp(`${this.customerName} was created`, 'i'))).toBeVisible({ timeout: 15000 });
+
+  // The shop measures the customer on their profile, and the order sheet reads
+  // from there. Taken through the API rather than the measurement screen, which
+  // has a feature of its own — this scenario is about the order's journey.
+  const client = await this.api('Store Manager');
+  const list = await client.get(`${API_URL}/oms/customers`);
+  const record = ((await list.json())?.data?.customers || [])
+    .find((customer) => customer.fullName === this.customerName);
+  expect(record, 'the customer was not created').toBeTruthy();
+  await client.patch(`${API_URL}/oms/customers/${record.id}`, {
+    data: {
+      fullName: this.customerName,
+      phone: this.customerPhone,
+      email: this.customerEmail,
+      measurements: { top_chest: '40', top_shoulder: '18', bottom_waist: '34', bottom_length: '40' },
+    },
+  });
+  await client.dispose();
 });
 
 Given('the Store Manager invoices that customer', async function () {
@@ -62,11 +80,14 @@ Given('the Store Manager invoices that customer', async function () {
   await item.locator('input').nth(1).fill('150000');
 
   // A part payment, because an unpaid order is now held out of production —
-  // this scenario is about an order that travels the whole way.
+  // this scenario is about an order that travels the whole way. The figure has
+  // to clear the release threshold, so it pays the 80% the invoice asks for.
   await this.page.locator('label').filter({ hasText: 'Payment Status' })
     .locator('select').selectOption('partial_paid');
   await this.page.locator('label').filter({ hasText: 'Payment Method' })
     .locator('select').selectOption('transfer');
+  await this.page.locator('label').filter({ hasText: 'Amount Received' })
+    .locator('input').fill('120000');
 
   // A part-paid invoice has to carry evidence of the payment. Scoped to the
   // Payment Evidence field: a bare input[type=file] also matches the profile
@@ -112,7 +133,8 @@ Given('the Store Manager raises an order sheet with fabric and measurements', as
 
   await fillLabelled('Garment', 'Three-piece suit');
   await fillLabelled('Item', 'Three-piece suit');
-  await fillLabelled('Measurements', 'Chest 40, Waist 34, Sleeve 24');
+  // Measurements are no longer typed onto the sheet — they come from the
+  // customer's profile, where the shop took them.
   await fillLabelled('Design', 'Notch lapel, single vent');
   await fillLabelled('Delivery', new Date(Date.now() + 12096e5).toISOString().slice(0, 10));
 
@@ -173,13 +195,17 @@ When('the Production Manager assigns the job to a tailor', async function () {
   await this.page.waitForSelector('.job-comments', { timeout: 15000 });
 
   // Assigned to the tailor this suite can sign in as, so the next step is
-  // taken by the person the job was actually given to.
-  const tailorPicker = this.page.locator('select').filter({ hasText: /unassigned/i }).first();
-  const options = await tailorPicker.locator('option').allTextContents();
+  // taken by the person the job was actually given to. Assignment is per item
+  // now — an order item can be shared between as many as four tailors — so the
+  // tailor is picked from the item's own list rather than a single select.
   this.tailorName = ACCOUNTS.Tailor.name;
-  expect(options.join(' | '), `${this.tailorName} is not on the tailor list`).toContain(this.tailorName);
-  await tailorPicker.selectOption({ label: this.tailorName });
-  await this.page.waitForTimeout(1500);
+  const panel = this.page.locator('.tailor-assign-item').first();
+  await expect(panel, 'the assignment panel did not open').toBeVisible({ timeout: 15000 });
+
+  const pick = panel.locator('.tailor-assign-picks button', { hasText: this.tailorName }).first();
+  await expect(pick, `${this.tailorName} is not on the tailor list`).toBeVisible({ timeout: 15000 });
+  await pick.click();
+  await expect(pick).toHaveClass(/is-chosen/, { timeout: 15000 });
 });
 
 Then('the job should be assigned to that tailor', async function () {

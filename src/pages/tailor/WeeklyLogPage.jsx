@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CheckCircle, Clock, BarChart2, TrendingUp, Calendar, ChevronLeft, ChevronRight, HelpCircle, Award } from 'lucide-react';
 import { Status } from '../../components/oms/Common';
+import { worksOnJob, LOG_PERIODS, periodWindow, todayIso } from '../../utils/oms';
 
 const SUMMARY_ITEMS = [
   { key: 'completed', icon: CheckCircle,  label: 'Jobs Completed',           tone: 'green'  },
@@ -20,6 +21,11 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
   // The arrows either side of the date did nothing, and the page showed every
   // job the tailor had ever been given whatever week it claimed to be showing.
   const [weeksBack, setWeeksBack] = useState(0);
+  // A week was the only period on offer. The same log is now read over a month,
+  // a quarter, a year, or a range of the tailor's own choosing.
+  const [period, setPeriod] = useState('week');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState(todayIso());
 
   const tailorName = currentRole?.name?.split(' (')[0] || '';
   const now = new Date();
@@ -33,12 +39,22 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
   const dateLabel = weeksBack === 0
     ? 'This week'
     : `${monday.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${sunday.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+  const periodLabel = period === 'week'
+    ? dateLabel.toLowerCase()
+    : (LOG_PERIODS.find(([key]) => key === period)?.[1] || 'period').toLowerCase();
 
-  const assignedJobs = productionJobs.filter((order) => order.tailor === tailorName);
+  const assignedJobs = productionJobs.filter((order) => worksOnJob(order, tailorName));
+
+  // A week is stepped through with the arrows; every other period is read as it
+  // stands, so "this quarter" means the quarter we are in.
+  const range = period === 'week'
+    ? { start: monday, end: sunday }
+    : periodWindow(period === 'custom' && !from ? 'month' : period, from, to);
+
   const inWeek = (value) => {
-    if (!value) return false;
+    if (!value || !range) return false;
     const at = new Date(value);
-    return !Number.isNaN(at.valueOf()) && at >= monday && at <= sunday;
+    return !Number.isNaN(at.valueOf()) && at >= range.start && at <= range.end;
   };
 
   // Finished work belongs to the week it was finished in; work still open is
@@ -57,8 +73,10 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
   // On-time was hard-coded to 100% the moment anything was finished. It is now
   // measured against the delivery date the order sheet carries; a job with no
   // date on it is left out rather than counted as a success.
-  const withDueDate = completedJobs.filter((job) => job.delivery);
-  const onTime = withDueDate.filter((job) => new Date(job.updatedAt) <= new Date(`${job.delivery}T23:59:59`));
+  // Measured against the date Production gave the tailor, not the customer's
+  // delivery date, which is not the tailor's to be judged on.
+  const withDueDate = completedJobs.filter((job) => job.tailorDueDate);
+  const onTime = withDueDate.filter((job) => new Date(job.updatedAt) <= new Date(`${job.tailorDueDate}T23:59:59`));
 
   // The trend showed 5 and 7 jobs for the two weeks before this one whatever
   // the tailor had actually done, and pinned a "Best" badge to the same box
@@ -94,10 +112,29 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
         <div className="os-page-title">
           <Calendar size={22} strokeWidth={1.5} style={{ color: '#c97b08' }} />
           <div>
-            <h2>Weekly Log</h2>
-            <p>Track your completed work this week</p>
+            <h2>My Log</h2>
+            <p>Your completed work — {periodLabel}</p>
           </div>
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <nav className="tailor-period-inline">
+          {LOG_PERIODS.map(([key, label]) => (
+            <button
+              type="button"
+              key={key}
+              className={period === key ? 'is-on' : ''}
+              onClick={() => setPeriod(key)}
+            >{label}</button>
+          ))}
+        </nav>
+        {period === 'custom' ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} style={{ border: '1px solid #ddd5c8', borderRadius: 8, padding: '6px 9px', fontSize: 13 }} />
+            <span style={{ color: '#8a7a6a' }}>→</span>
+            <input type="date" value={to} min={from} max={todayIso()} onChange={(event) => setTo(event.target.value)} style={{ border: '1px solid #ddd5c8', borderRadius: 8, padding: '6px 9px', fontSize: 13 }} />
+          </div>
+        ) : null}
+        {period === 'week' ? (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 2, padding: '3px 6px',
           border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
@@ -125,6 +162,8 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
           >
             <ChevronRight size={14} />
           </button>
+        </div>
+        ) : null}
         </div>
       </div>
 
@@ -162,8 +201,8 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
         <div className="os-card-head">
           <CheckCircle size={16} strokeWidth={1.5} style={{ color: '#2a7d4f' }} />
           <div>
-            <strong>Jobs Completed This Week</strong>
-            <p>All garments marked ready during this period</p>
+            <strong>Jobs completed</strong>
+            <p>Everything marked ready in this period</p>
           </div>
           <span style={{
             marginLeft: 'auto', background: '#1a1611', color: '#fff',

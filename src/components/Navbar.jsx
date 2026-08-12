@@ -26,7 +26,7 @@ const Navbar = () => {
       <div className="flex items-center justify-between px-6 py-3 bg-navy-800/80 backdrop-blur-md border border-white/10 rounded-full">
         {/* Logo */}
         <Link to="/" className="text-white font-extrabold text-lg tracking-wider">
-          TWIF
+          twif
         </Link>
 
         {/* Desktop Nav Links */}

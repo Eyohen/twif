@@ -11,14 +11,14 @@ import Pagination from '../../components/oms/Pagination';
 
 const KPI_COUNT = 4;
 
-const SORT_OPTIONS = ['Name (A–Z)', 'Name (Z–A)', 'Newest first', 'Oldest first'];
+const SORT_OPTIONS = ['Newest first', 'Oldest first', 'Name (A–Z)', 'Name (Z–A)'];
 
-export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigate }) {
+export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigate, currentRole }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [customers, setCustomers] = useState([]);
   const [search, setSearch] = useState('');
   const [segment, setSegment] = useState(searchParams.get('filter') || 'All Customers');
-  const [sortOrder, setSortOrder] = useState('Name (A–Z)');
+  const [sortOrder, setSortOrder] = useState('Newest first');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [measurementCustomer, setMeasurementCustomer] = useState(null);
@@ -101,12 +101,13 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
         || (segment === 'Measurements Saved' && customer.measurementsAdded)
         || (segment === 'No Measurements' && !customer.measurementsAdded);
       return matchesSearch && matchesSegment;
-    }).sort(comparators[sortOrder] || comparators['Name (A–Z)']);
+    }).sort(comparators[sortOrder] || comparators['Newest first']);
   }, [customers, search, segment, sortOrder]);
 
   if (editingCustomer) {
     return <EditCustomerPage
       customer={editingCustomer}
+      currentRole={currentRole}
       onCancel={() => setEditingCustomer(null)}
       // The edit screen is checked first below, so it has to stand down or
       // setting the measurement customer changes nothing on screen.

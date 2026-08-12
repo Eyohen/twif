@@ -23,6 +23,14 @@ const SECTIONS = [
       { key: 'invoicePrefix', label: 'Invoice prefix', type: 'text', hint: 'Leads every invoice number.' },
       { key: 'invoiceValidityHours', label: 'Quote valid for (hours)', type: 'number', min: 1 },
       { key: 'requirePaymentEvidence', label: 'Require proof of payment before an invoice can be sent as paid', type: 'toggle' },
+      {
+        key: 'paymentReleasePercent',
+        label: 'Payment needed before production starts (%)',
+        type: 'number',
+        min: 0,
+        max: 100,
+        hint: 'An order is held until this share of the invoice has been paid. The invoice asks the customer for 80% upfront. Only an Owner or Admin can send a held order through anyway.',
+      },
     ],
   },
   {
@@ -158,6 +166,7 @@ export default function SettingsPage() {
                     <input
                       type={field.type}
                       min={field.min}
+                      max={field.max}
                       placeholder={field.placeholder}
                       value={settings[field.key] ?? ''}
                       onChange={(event) => update(field.key, field.type === 'number' ? Number(event.target.value) : event.target.value)}

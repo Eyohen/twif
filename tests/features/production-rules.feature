@@ -16,9 +16,10 @@ Feature: The rules production runs on
       When the Production Manager opens Production
       Then that order should be listed as a production job
 
-  # An approved invoice is not enough on its own: nothing is cut for a customer
-  # who has paid nothing.
-  Rule: An unpaid order is held, however Accounts have marked it
+  # An approved invoice is not enough on its own. Enough of the money has to be
+  # in first — 70% by default, set in Settings. The invoice asks the customer
+  # for 80% upfront, which leaves a little room above the gate.
+  Rule: An order is held until enough of it has been paid
 
     Scenario: An unpaid order is kept out of production even once approved
       Given an approved order whose invoice is unpaid
@@ -29,6 +30,27 @@ Feature: The rules production runs on
     Scenario: An unpaid order cannot be given to a tailor
       Given an approved order whose invoice is unpaid
       Then assigning a tailor to it should be refused
+
+    Scenario: A part payment below the threshold is not enough
+      Given an approved order with 40% of the invoice paid
+      Then assigning a tailor to it should be refused
+
+    Scenario: A part payment at the threshold releases the order
+      Given an approved order with 70% of the invoice paid
+      Then assigning a tailor to it should be allowed
+
+    Scenario: A fully paid order goes through
+      Given an approved order with 100% of the invoice paid
+      Then assigning a tailor to it should be allowed
+
+  # Approving the invoice is Accounts' decision. Releasing an order the gate is
+  # holding is not — that is the Owner's and Admin's alone.
+  Rule: Only an Owner or Admin can release a held order
+
+    Scenario: Accounts cannot push a held order through, the Owner can
+      Given an approved order with 40% of the invoice paid
+      Then the Accountant should not be able to release it
+      And the Owner should be able to release it
 
   # A tailor cannot cut without measurements, so the job waits until it has them.
   Rule: An order with no measurements is held
