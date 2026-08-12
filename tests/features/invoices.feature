@@ -1,8 +1,10 @@
 Feature: Reviewing invoices
-  Accounts and the Owner work through invoices from this screen.
+  Accounts work through invoices from this screen. The Owner and the Admin have
+  the register instead, which is where an invoice is raised, edited or removed —
+  they can approve one from its row menu there.
 
   Background:
-    Given I am signed in as the Owner
+    Given I am signed in as the Accountant
     And I open the Invoices page
 
   # A panel used to open on the right the moment the page loaded, because the

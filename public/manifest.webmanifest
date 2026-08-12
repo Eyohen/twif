@@ -1,7 +1,7 @@
 {
-  "name": "Twif Operations Management System",
-  "short_name": "Twif OMS",
-  "description": "Internal operations platform for Twif invoices, payments, production, inventory, and tailoring.",
+  "name": "twif Operations Management System",
+  "short_name": "twif OMS",
+  "description": "Internal operations platform for twif invoices, payments, production, inventory, and tailoring.",
   "id": "/",
   "start_url": "/login",
   "scope": "/",

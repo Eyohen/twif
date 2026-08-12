@@ -53,3 +53,25 @@ After(async function (scenario) {
   await this.context?.close();
   await this.browser?.close();
 });
+
+// The Admin signs in with a second factor. A scenario that enrols it and then
+// fails would leave the seeded account needing a code that no later scenario
+// has, so it is always cleared before the suite starts.
+BeforeAll({ timeout: 30 * 1000 }, async function () {
+  const api = await request.newContext();
+  try {
+    const login = await api.post(`${API_URL}/oms/auth/login`, {
+      data: { phone: '08000000001', pin: 'owner26' },
+    });
+    const token = (await login.json())?.data?.token;
+    if (!token) return;
+    const owner = await request.newContext({ extraHTTPHeaders: { Authorization: `Bearer ${token}` } });
+    const staff = await owner.get(`${API_URL}/oms/staff`);
+    const admin = ((await staff.json())?.data?.staffUsers || []).find((person) => person.role === 'admin');
+    if (admin) await owner.post(`${API_URL}/oms/auth/2fa/disable`, { data: { staffId: admin.id } });
+    await owner.dispose();
+  } catch {
+    // The reachability check above reports a server that is not answering.
+  }
+  await api.dispose();
+});

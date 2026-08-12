@@ -53,7 +53,11 @@ Then('the refusal should read as an error, not a success', async function () {
 });
 
 When("I open the first customer's measurements", async function () {
-  await this.page.locator('.os-page').getByRole('button', { name: /view|open/i }).first().click();
+  // The list is fetched after the page paints, so the row buttons arrive a
+  // moment later — waiting for one keeps this from racing the request.
+  const openProfile = this.page.locator('.os-page').getByRole('button', { name: /view profile|view|open/i }).first();
+  await expect(openProfile).toBeVisible({ timeout: 30000 });
+  await openProfile.click();
   await this.page.waitForTimeout(1200);
   const measurements = this.page.getByRole('button', { name: /measurement/i }).first();
   if (await measurements.count()) {

@@ -1519,7 +1519,143 @@ function OrdersView({ sentInvoices }) {
   );
 }
 
-function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
+// Correcting an invoice after it has gone out: the lines, who it is for, when
+// it is due. Totals are recomputed by the server from the lines, so an edited
+// invoice cannot disagree with the sum of its own items, and it refuses to be
+// cut below what has already been paid against it.
+function EditInvoiceModal({ invoice, onClose, onSaved }) {
+  const [items, setItems] = useState(() => (invoice.items || []).map((item, index) => ({
+    key: `line-${index}`,
+    description: item.description || '',
+    quantity: toNumber(item.quantity) || 1,
+    rate: toNumber(item.rate),
+    discountPercent: toNumber(item.discountPercent),
+  })));
+  const [customerName, setCustomerName] = useState(invoice.customer || '');
+  const [customerPhone, setCustomerPhone] = useState(invoice.customerPhone || '');
+  const [dueDate, setDueDate] = useState(invoice.dueDate ? String(invoice.dueDate).slice(0, 10) : '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const subtotal = items.reduce((sum, item) => sum + (toNumber(item.rate) * toNumber(item.quantity)), 0);
+  const discounts = items.reduce((sum, item) => {
+    const gross = toNumber(item.rate) * toNumber(item.quantity);
+    return sum + ((gross * toNumber(item.discountPercent)) / 100);
+  }, 0);
+  const balance = Math.max(0, subtotal - discounts - toNumber(invoice.eliteDiscountAmount) - toNumber(invoice.storeCreditApplied));
+
+  const updateLine = (index, field, value) => setItems((current) => current.map((item, position) => (
+    position === index ? { ...item, [field]: value } : item
+  )));
+
+  const save = async () => {
+    setError('');
+    if (!items.some((item) => item.description.trim())) { setError('An invoice needs at least one line.'); return; }
+    setSaving(true);
+    try {
+      const response = await api.patch(`/oms/invoices/${invoice.invoiceNumber}`, {
+        items: items.filter((item) => item.description.trim()).map(({ key: _key, ...rest }) => rest),
+        customerName,
+        customerPhone,
+        dueDate,
+      });
+      onSaved?.(response.data?.data?.invoice);
+      onClose();
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'That invoice could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="os-confirm-backdrop" onClick={onClose}>
+      <div className="os-confirm edit-invoice" onClick={(event) => event.stopPropagation()}>
+        <h3>Edit {invoice.invoiceNumber}</h3>
+        <p className="edit-invoice-note">
+          {toNumber(invoice.paid) > 0
+            ? `${money.format(toNumber(invoice.paid))} has been paid against this invoice — it cannot be reduced below that.`
+            : 'Nothing has been paid against this invoice yet.'}
+        </p>
+
+        <div className="edit-invoice-grid">
+          <label className="os-field">
+            <span>Customer</span>
+            <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+          </label>
+          <label className="os-field">
+            <span>Phone</span>
+            <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} />
+          </label>
+          <label className="os-field">
+            <span>Due date</span>
+            <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+          </label>
+        </div>
+
+        <div className="edit-invoice-lines">
+          {items.map((item, index) => (
+            <div key={item.key}>
+              <input
+                value={item.description}
+                onChange={(event) => updateLine(index, 'description', event.target.value)}
+                placeholder="Description"
+                aria-label={`Line ${index + 1} description`}
+              />
+              <input type="number" min="1" value={item.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} aria-label={`Line ${index + 1} quantity`} />
+              <input type="number" min="0" value={item.rate} onChange={(event) => updateLine(index, 'rate', event.target.value)} aria-label={`Line ${index + 1} rate`} />
+              <input type="number" min="0" max="100" value={item.discountPercent} onChange={(event) => updateLine(index, 'discountPercent', event.target.value)} aria-label={`Line ${index + 1} discount percent`} />
+              <button type="button" onClick={() => setItems((current) => current.filter((_, position) => position !== index))} aria-label={`Remove line ${index + 1}`}>×</button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="edit-invoice-add"
+            onClick={() => setItems((current) => [...current, { key: `line-${Date.now()}`, description: '', quantity: 1, rate: 0, discountPercent: 0 }])}
+          >+ Add a line</button>
+        </div>
+
+        <dl className="edit-invoice-total">
+          <dt>Subtotal</dt><dd>{money.format(subtotal)}</dd>
+          {discounts > 0 ? <><dt>Item discounts</dt><dd>-{money.format(discounts)}</dd></> : null}
+          {toNumber(invoice.eliteDiscountAmount) > 0 ? <><dt>Elite discount</dt><dd>-{money.format(toNumber(invoice.eliteDiscountAmount))}</dd></> : null}
+          {toNumber(invoice.storeCreditApplied) > 0 ? <><dt>Store credit</dt><dd>-{money.format(toNumber(invoice.storeCreditApplied))}</dd></> : null}
+          <dt>Balance due</dt><dd><strong>{money.format(balance)}</strong></dd>
+        </dl>
+
+        {error ? <p className="edit-invoice-error">{error}</p> : null}
+
+        <div className="edit-invoice-actions">
+          <button type="button" onClick={onClose}>Cancel</button>
+          <button type="button" className="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save invoice'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onApproveInvoice, onInvoiceChanged, onInvoiceDeleted }) {
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  // An invoice belongs to whoever raised it and to the people who run the shop.
+  // Removing one is the Owner's and Admin's alone — a store manager cannot
+  // delete an invoice even if they raised it.
+  const mayEdit = (invoice) => ['owner', 'admin'].includes(currentRole?.id)
+    // Matched on the creator's id, as the server does — a display name is not
+    // unique, so it is not proof that this is your invoice.
+    || (Boolean(invoice.createdByStaffId) && invoice.createdByStaffId === currentRole?.staffId);
+  const mayDelete = ['owner', 'admin'].includes(currentRole?.id);
+
+  const removeInvoice = async (invoice) => {
+    if (!window.confirm(`Delete invoice ${invoice.invoiceNumber} for ${invoice.customer}? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/oms/invoices/${invoice.invoiceNumber}`);
+      onInvoiceDeleted?.(invoice.invoiceNumber);
+      setRowNotice(`${invoice.invoiceNumber} was deleted.`);
+    } catch (error) {
+      setRowNotice(error.response?.data?.message || 'That invoice could not be deleted.');
+    }
+  };
+
   const [searchParams, setSearchParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
@@ -1667,6 +1803,16 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
 
   return (
     <div className="os-page">
+      {editingInvoice ? (
+        <EditInvoiceModal
+          invoice={editingInvoice}
+          onClose={() => setEditingInvoice(null)}
+          onSaved={(updated) => {
+            if (updated) onInvoiceChanged?.(updated);
+            setRowNotice(`${editingInvoice.invoiceNumber} was updated.`);
+          }}
+        />
+      ) : null}
       <div className="os-page-header">
         <div className="os-page-title">
           <FileText size={22} strokeWidth={1.5} style={{ color: '#c97b08', flexShrink: 0 }} />
@@ -1863,6 +2009,11 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent }) {
                               ['View Invoice', <Eye size={12} strokeWidth={2} />, () => { window.scrollTo(0, 0); setSelectedInvoice(invoice); }],
                               ['Download PDF', <Download size={12} strokeWidth={2} />, () => downloadInvoicePdf(invoice)],
                               ['Resend Email', <RefreshCw size={12} strokeWidth={2} />, () => resendInvoiceEmail(invoice)],
+                              ...(mayEdit(invoice) ? [['Edit Invoice', <Edit2 size={12} strokeWidth={2} />, () => setEditingInvoice(invoice)]] : []),
+                              ...(onApproveInvoice && invoiceApprovalStatus(invoice) !== 'Approved'
+                                ? [['Approve', <CheckCircle size={12} strokeWidth={2} />, () => onApproveInvoice(invoice.invoiceNumber, 'Approved')]]
+                                : []),
+                              ...(mayDelete ? [['Delete Invoice', <Trash2 size={12} strokeWidth={2} />, () => removeInvoice(invoice)]] : []),
                             ].map(([label, icon, action]) => (
                               <button
                                 key={label}
@@ -6204,15 +6355,18 @@ function CustomerPortalPage({ token, sentInvoices = [] }) {
 
   return (
     <main className="client-portal-shell">
-      <aside className="client-portal-nav"><div className="brand-lockup tracking-brand"><div className="mark">TW</div><div><strong>twif</strong><span>The Way It Fits</span></div></div><nav>{[['⌂','Dashboard'],['▣','My Orders'],['▤','Invoices'],['⌕','Measurements'],['♙','Profile & Contacts'],['♧','Membership'],['⌖','Address Book'],['♡','Saved Styles'],['⚙','Preferences']].map(([icon,label],index)=><a className={index===0?'active':''} href={`#${label.toLowerCase().replaceAll(' ','-')}`} key={label}><i>{icon}</i>{label}</a>)}</nav><section><strong>Need help?</strong><small>Chat with us on WhatsApp</small><a href="https://wa.me/2347056336710">◉ &nbsp; Chat Now</a></section><a className="portal-logout" href={`/c/${encodeURIComponent(token)}`}>← &nbsp; Back to tracking</a></aside>
-      <section className="client-portal-workspace"><header><div><span>Client Portal</span><strong>{profile.name}</strong></div><a className="client-portal-back" href={`/c/${encodeURIComponent(token)}`}>← &nbsp;Back to tracking</a></header><div className="client-portal-welcome"><p>Welcome back,</p><h1>{profile.name}</h1><span>⌕ &nbsp; {profile.phone || 'Phone not added'} &nbsp;&nbsp;·&nbsp;&nbsp; ✉ &nbsp; {profile.email}</span></div>
+      <aside className="client-portal-nav"><div className="brand-lockup tracking-brand"><div className="mark">TW</div><div><strong>twif</strong><span>The Way It Fits</span></div></div>{/* Nine links pointed at anchors that did not exist, so only the first
+              one did anything. These are the sections the page actually has,
+              and each now scrolls to it. */}
+          <nav>{[['⌂','Dashboard','portal-top'],['▣','Order History','order-history'],['♙','Contact Details','contact-details'],['♧','Membership','membership'],['♡','Saved Styles','saved-styles']].map(([icon,label,anchor],index)=><a className={index===0?'active':''} href={`#${anchor}`} key={label}><i>{icon}</i>{label}</a>)}</nav><section><strong>Need help?</strong><small>Chat with us on WhatsApp</small><a href="https://wa.me/2347056336710">◉ &nbsp; Chat Now</a></section><a className="portal-logout" href={`/c/${encodeURIComponent(token)}`}>← &nbsp; Back to tracking</a></aside>
+      <section className="client-portal-workspace" id="portal-top"><header><div><span>Client Portal</span><strong>{profile.name}</strong></div><a className="client-portal-back" href={`/c/${encodeURIComponent(token)}`}>← &nbsp;Back to tracking</a></header><div className="client-portal-welcome"><p>Welcome back,</p><h1>{profile.name}</h1><span>⌕ &nbsp; {profile.phone || 'Phone not added'} &nbsp;&nbsp;·&nbsp;&nbsp; ✉ &nbsp; {profile.email}</span></div>
         <div className="client-portal-dashboard">
           <main>
             <article className="client-current-order"><header><div><h2>Your Current Order</h2><strong>{currentOrder?.items?.map((item)=>item.description).join(', ') || 'No active order'}</strong><p>Order No. {currentOrder?.invoiceNumber || '—'} &nbsp; • &nbsp; {(() => { const qty = currentOrder?.items?.reduce((sum,item)=>sum+toNumber(item.quantity),0)||0; return <>{qty} {qty === 1 ? 'piece' : 'pieces'}</>; })()} &nbsp; • &nbsp; {currentOrder?.store || '—'} Store</p></div><Status>{currentOrder?.orderStatus || 'No order'}</Status></header><div className="client-portal-steps">{CUSTOMER_TRACKING_STEPS.map((step,index)=>{const current=Math.max(0,CUSTOMER_TRACKING_STEPS.indexOf(customerStatus(currentOrder?.orderStatus)));return <div className={classNames('tracking-step',index===current&&'active',index<current&&'done')} key={step}><span>{index<current?'✓':index+1}</span><strong>{step}</strong></div>;})}</div><dl><div><dt>Delivery Date</dt><dd>{currentOrder?.deliveryDate ? new Date(`${String(currentOrder.deliveryDate).slice(0,10)}T00:00:00`).toLocaleDateString('en-GB') : 'To be confirmed'}</dd></div><div><dt>Tailor</dt><dd>{currentOrder?.tailor || 'To be assigned'}</dd></div><div><dt>Fabric</dt><dd>{currentOrder?.fabric || 'To be confirmed'}</dd></div><div><dt>Style Images</dt><dd>{currentOrder?.styleImages?.length || 0} uploaded</dd></div></dl><a href="#order-history">View Order Details &nbsp;›</a></article>
             <section className="client-portal-triple" id="order-history"><article><header><h2>Order History</h2></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{invoice.items.map((item)=>item.description).join(', ')}</strong><small>{(() => { const qty = invoice.items.reduce((sum,item)=>sum+toNumber(item.quantity),0); return <>{qty} {qty === 1 ? 'piece' : 'pieces'}</>; })()} &nbsp; • &nbsp; {invoice.store} Store</small></span><Status>{invoice.orderStatus}</Status></div>)}</article><article><header><h2>Invoices</h2></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{money.format(invoice.total)}</strong><small>{invoice.paymentStatus}</small></span><time>{new Date(invoice.invoiceDate).toLocaleDateString('en-GB')}</time></div>)}</article><article><header><h2>Measurements</h2></header><div className="client-measure-card"><i>⌁</i><strong>Your measurements</strong><p>{Object.keys(measurements).filter((key)=>key!=='profile').length ? 'We have your latest measurements saved.' : 'Measurements have not been saved yet.'}</p></div></article></section>
-            <section className="client-portal-bottom"><article><header><h2>Contact Details</h2></header><p>⌕ &nbsp; {profile.phone || 'Not provided'}</p><p>✉ &nbsp; {profile.email}</p><p>⌖ &nbsp; {details.address || 'Address not provided'}</p></article><article><header><h2>Saved Styles</h2></header><div className="client-saved-styles">{savedStyles.length ? savedStyles.map((image,index)=><img src={image.url || image.dataUrl || image} alt={`Saved style ${index+1}`} key={image.url || image.dataUrl || index}/>) : <p>Your saved style references will appear here.</p>}</div></article><article><header><h2>Address Book</h2></header><p><strong>⌖ &nbsp; Home</strong><br/>{details.address || 'No saved address'}</p><p><strong>⌖ &nbsp; Preferred Store</strong><br/>{details.preferredStore || currentOrder?.store || 'Lekki'} Store</p></article></section>
+            <section className="client-portal-bottom"><article id="contact-details"><header><h2>Contact Details</h2></header><p>⌕ &nbsp; {profile.phone || 'Not provided'}</p><p>✉ &nbsp; {profile.email}</p><p>⌖ &nbsp; {details.address || 'Address not provided'}</p></article><article id="saved-styles"><header><h2>Saved Styles</h2></header><div className="client-saved-styles">{savedStyles.length ? savedStyles.map((image,index)=><img src={image.url || image.dataUrl || image} alt={`Saved style ${index+1}`} key={image.url || image.dataUrl || index}/>) : <p>Your saved style references will appear here.</p>}</div></article><article><header><h2>Address Book</h2></header><p><strong>⌖ &nbsp; Home</strong><br/>{details.address || 'No saved address'}</p><p><strong>⌖ &nbsp; Preferred Store</strong><br/>{details.preferredStore || currentOrder?.store || 'Lekki'} Store</p></article></section>
           </main>
-          <aside className="client-membership"><header>♕ &nbsp; Your membership — Regular</header><p>Here’s where you stand this year:</p><label>Spend <strong>{money.format(profile.totalSpend)} of {money.format(spendGoal)}</strong><span><i style={{width:`${spendProgress}%`}}/></span><b>{spendProgress}%</b></label><label>Purchases <strong>{profile.totalOrders} of {purchaseGoal}</strong><span><i style={{width:`${purchaseProgress}%`}}/></span><b>{purchaseProgress}%</b></label><p>You need both <strong>{money.format(Math.max(0,spendGoal-profile.totalSpend))}</strong> more in spend and <strong>{Math.max(0,purchaseGoal-profile.totalOrders)} more purchases</strong> to qualify for Elite membership.</p></aside>
+          <aside className="client-membership" id="membership"><header>♕ &nbsp; Your membership — Regular</header><p>Here’s where you stand this year:</p><label>Spend <strong>{money.format(profile.totalSpend)} of {money.format(spendGoal)}</strong><span><i style={{width:`${spendProgress}%`}}/></span><b>{spendProgress}%</b></label><label>Purchases <strong>{profile.totalOrders} of {purchaseGoal}</strong><span><i style={{width:`${purchaseProgress}%`}}/></span><b>{purchaseProgress}%</b></label><p>You need both <strong>{money.format(Math.max(0,spendGoal-profile.totalSpend))}</strong> more in spend and <strong>{Math.max(0,purchaseGoal-profile.totalOrders)} more purchases</strong> to qualify for Elite membership.</p></aside>
         </div>
       </section>
     </main>
@@ -6241,8 +6395,19 @@ function OrderTableLike({ columns, rows }) {
 function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Overview') return <Overview role={role} currentRole={viewProps.currentRole} sentInvoices={viewProps.sentInvoices} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} onApproveInvoice={viewProps.onApproveInvoice} onNavigate={viewProps.onNavigate} />;
   if (activeView === 'Invoices') {
-    if (role === 'store_manager') return <StoreInvoicesView sentInvoices={viewProps.sentInvoices} currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
-    if (role === 'accounts' || role === 'owner') return <AccountsInvoicesPage sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
+    if (role === 'accounts') return <AccountsInvoicesPage sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
+    if (['store_manager', 'owner', 'admin'].includes(role)) {
+      return (
+        <StoreInvoicesView
+          sentInvoices={viewProps.sentInvoices}
+          currentRole={viewProps.currentRole}
+          onInvoiceSent={viewProps.onInvoiceSent}
+          onApproveInvoice={viewProps.onApproveInvoice}
+          onInvoiceChanged={viewProps.onInvoiceUpdated}
+          onInvoiceDeleted={viewProps.onInvoiceDeleted}
+        />
+      );
+    }
     return <OrdersView sentInvoices={viewProps.sentInvoices} />;
   }
   if (activeView === 'Orders') return role === 'store_manager' || role === 'owner' ? <StoreManagerOrdersPage sentInvoices={viewProps.sentInvoices} /> : <OrdersView sentInvoices={viewProps.sentInvoices} />;
@@ -6334,6 +6499,9 @@ function App() {
       ...signedInAccount,
       name: staffProfile?.displayName || roleDetails.name,
       profileImageUrl: staffProfile?.profileImageUrl || '',
+      // Who this actually is, as the server knows them. Used where ownership
+      // matters — a display name is not unique enough to decide that.
+      staffId: staffProfile?.id || null,
     };
   }, [role, signedInAccount, staffProfile]);
 
@@ -6692,6 +6860,10 @@ function App() {
                 onInvoiceSent: recordSentInvoice,
                 onApproveInvoice: updateInvoiceApproval,
                 onInvoiceUpdated: applyInvoiceUpdate,
+                onInvoiceDeleted: (invoiceNumber) => {
+                  setSentInvoices((current) => current.filter((item) => item.invoiceNumber !== invoiceNumber));
+                  setProductionJobs((current) => current.filter((job) => job.invoiceNumber !== invoiceNumber));
+                },
                 sentInvoices,
                 productionJobs: approvedProductionJobs,
                 blockedProductionJobs,

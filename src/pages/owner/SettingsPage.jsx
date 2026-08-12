@@ -54,6 +54,87 @@ const SECTIONS = [
   },
 ];
 
+
+// An Admin signs in with a code from an authenticator app as well as a PIN.
+// This is where they see that it is on, how many recovery codes they have left,
+// and where they turn it off if they are moving to a new phone.
+function TwoFactorPanel() {
+  const [account, setAccount] = useState(null);
+  const [code, setCode] = useState('');
+  const [notice, setNotice] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = () => api.get('/oms/auth/me')
+    .then((response) => setAccount(response.data?.data?.staff || null))
+    .catch(() => setAccount(null));
+
+  useEffect(() => { load(); }, []);
+
+  if (!account?.twoFactorRequired) return null;
+
+  const turnOff = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await api.post('/oms/auth/2fa/disable', { code: code.trim() });
+      setCode('');
+      await load();
+      setNotice({ tone: 'success', text: 'Two-factor sign-in is off. You will be asked to set it up again next time you sign in.' });
+    } catch (error) {
+      setNotice({ tone: 'error', text: error.response?.data?.message || 'That could not be turned off.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="os-card">
+      <div className="os-card-head">
+        <Shield size={16} strokeWidth={1.6} style={{ color: '#c97b08' }} />
+        <div>
+          <strong>Two-factor sign-in</strong>
+          <p>Required on an Admin account</p>
+        </div>
+      </div>
+      <div className="os-card-body" style={{ gap: 12 }}>
+        {notice ? (
+          <div className={`os-row-notice${notice.tone === 'error' ? ' is-error' : ''}`} role="status">
+            <span>{notice.text}</span>
+            <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss">×</button>
+          </div>
+        ) : null}
+
+        {account.twoFactorEnabled ? (
+          <>
+            <p className="dup-clean"><CheckCircle size={15} strokeWidth={1.8} /> On, with {account.recoveryCodesLeft} recovery code{account.recoveryCodesLeft === 1 ? '' : 's'} left.</p>
+            {account.recoveryCodesLeft <= 2 ? (
+              <p className="sheet-measurements-empty">
+                You are nearly out of recovery codes. Turn two-factor off and set it up again to be
+                issued a fresh set.
+              </p>
+            ) : null}
+            {/* Changing phone: turn it off with a current code, then set the new
+                phone up at the next sign-in. */}
+            <div className="two-factor-off">
+              <label className="os-field">
+                <span>Code from your app, or a recovery code</span>
+                <input value={code} onChange={(event) => setCode(event.target.value)} autoComplete="one-time-code" />
+              </label>
+              <button type="button" onClick={turnOff} disabled={busy || !code.trim()}>
+                {busy ? 'Turning off…' : 'Turn off'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="sheet-measurements-empty">
+            Not set up yet. You will be asked to scan a barcode the next time you sign in.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
   const [saved, setSaved] = useState(null);
@@ -183,6 +264,8 @@ export default function SettingsPage() {
       {/* Every control in this panel is a plain button, so it cannot submit
           the settings form it sits inside. */}
       <CustomerRecordsPanel />
+
+      <TwoFactorPanel />
 
       {dirty ? <div className="settings-dirty-bar">You have unsaved changes.</div> : null}
     </form>
