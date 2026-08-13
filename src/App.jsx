@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors, Ruler, Award } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors, Ruler, Award, Camera, Image } from 'lucide-react';
 import { api, getStoredAccessToken, setStoredAccessToken } from './lib/api';
 import LoginPage from './pages/auth/LoginPage';
 import MyTasksPage from './pages/tailor/MyTasksPage';
@@ -1537,24 +1537,19 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const subtotal = items.reduce((sum, item) => sum + (toNumber(item.rate) * toNumber(item.quantity)), 0);
-  const discounts = items.reduce((sum, item) => {
-    const gross = toNumber(item.rate) * toNumber(item.quantity);
-    return sum + ((gross * toNumber(item.discountPercent)) / 100);
-  }, 0);
-  const balance = Math.max(0, subtotal - discounts - toNumber(invoice.eliteDiscountAmount) - toNumber(invoice.storeCreditApplied));
-
   const updateLine = (index, field, value) => setItems((current) => current.map((item, position) => (
     position === index ? { ...item, [field]: value } : item
   )));
 
   const save = async () => {
     setError('');
-    if (!items.some((item) => item.description.trim())) { setError('An invoice needs at least one line.'); return; }
+    if (items.some((item) => !item.description.trim())) { setError('Every line needs a description.'); return; }
     setSaving(true);
     try {
       const response = await api.patch(`/oms/invoices/${invoice.invoiceNumber}`, {
-        items: items.filter((item) => item.description.trim()).map(({ key: _key, ...rest }) => rest),
+        // Only the wording travels. The figures are the invoice's own and are
+        // left exactly as they were.
+        items: items.map((item) => ({ description: item.description, note: item.note })),
         customerName,
         customerPhone,
         dueDate,
@@ -1573,9 +1568,8 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
       <div className="os-confirm edit-invoice" onClick={(event) => event.stopPropagation()}>
         <h3>Edit {invoice.invoiceNumber}</h3>
         <p className="edit-invoice-note">
-          {toNumber(invoice.paid) > 0
-            ? `${money.format(toNumber(invoice.paid))} has been paid against this invoice — it cannot be reduced below that.`
-            : 'Nothing has been paid against this invoice yet.'}
+          What this invoice is for can be corrected. What it comes to cannot — the
+          rates, quantities and discounts stay as they were sent to the customer.
         </p>
 
         <div className="edit-invoice-grid">
@@ -1602,25 +1596,18 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
                 placeholder="Description"
                 aria-label={`Line ${index + 1} description`}
               />
-              <input type="number" min="1" value={item.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} aria-label={`Line ${index + 1} quantity`} />
-              <input type="number" min="0" value={item.rate} onChange={(event) => updateLine(index, 'rate', event.target.value)} aria-label={`Line ${index + 1} rate`} />
-              <input type="number" min="0" max="100" value={item.discountPercent} onChange={(event) => updateLine(index, 'discountPercent', event.target.value)} aria-label={`Line ${index + 1} discount percent`} />
-              <button type="button" onClick={() => setItems((current) => current.filter((_, position) => position !== index))} aria-label={`Remove line ${index + 1}`}>×</button>
+              {/* Shown so the reader knows which line they are correcting, but
+                  not editable — changing any of these changes the money. */}
+              <span title="Quantity">{toNumber(item.quantity)}</span>
+              <span title="Rate">{money.format(toNumber(item.rate))}</span>
+              <span title="Discount">{toNumber(item.discountPercent) ? `${toNumber(item.discountPercent)}%` : '—'}</span>
             </div>
           ))}
-          <button
-            type="button"
-            className="edit-invoice-add"
-            onClick={() => setItems((current) => [...current, { key: `line-${Date.now()}`, description: '', quantity: 1, rate: 0, discountPercent: 0 }])}
-          >+ Add a line</button>
         </div>
 
         <dl className="edit-invoice-total">
-          <dt>Subtotal</dt><dd>{money.format(subtotal)}</dd>
-          {discounts > 0 ? <><dt>Item discounts</dt><dd>-{money.format(discounts)}</dd></> : null}
-          {toNumber(invoice.eliteDiscountAmount) > 0 ? <><dt>Elite discount</dt><dd>-{money.format(toNumber(invoice.eliteDiscountAmount))}</dd></> : null}
-          {toNumber(invoice.storeCreditApplied) > 0 ? <><dt>Store credit</dt><dd>-{money.format(toNumber(invoice.storeCreditApplied))}</dd></> : null}
-          <dt>Balance due</dt><dd><strong>{money.format(balance)}</strong></dd>
+          <dt>Balance due</dt><dd><strong>{money.format(toNumber(invoice.total))}</strong></dd>
+          <dt>Recorded as paid</dt><dd>{money.format(toNumber(invoice.paid))}</dd>
         </dl>
 
         {error ? <p className="edit-invoice-error">{error}</p> : null}
@@ -1643,7 +1630,24 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
     // Matched on the creator's id, as the server does — a display name is not
     // unique, so it is not proof that this is your invoice.
     || (Boolean(invoice.createdByStaffId) && invoice.createdByStaffId === currentRole?.staffId);
-  const mayDelete = ['owner', 'admin'].includes(currentRole?.id);
+  // Once Accounts have approved an invoice it is part of the books, so it can
+  // no longer be deleted by anyone — the server refuses it either way.
+  const mayDelete = (invoice) => ['owner', 'admin'].includes(currentRole?.id)
+    && invoiceApprovalStatus(invoice) !== 'Approved';
+
+  // Held in one place so the phone offers exactly what the desktop does. The
+  // three-dot menu existed only in the table, so on a phone there was no way to
+  // download an invoice, resend it, edit it or delete it.
+  const invoiceActions = (invoice) => [
+    ['View Invoice', <Eye size={12} strokeWidth={2} />, () => { window.scrollTo(0, 0); setSelectedInvoice(invoice); }],
+    ['Download PDF', <Download size={12} strokeWidth={2} />, () => downloadInvoicePdf(invoice)],
+    ['Resend Email', <RefreshCw size={12} strokeWidth={2} />, () => resendInvoiceEmail(invoice)],
+    ...(mayEdit(invoice) ? [['Edit Invoice', <Edit2 size={12} strokeWidth={2} />, () => setEditingInvoice(invoice)]] : []),
+    ...(onApproveInvoice && invoiceApprovalStatus(invoice) !== 'Approved'
+      ? [['Approve', <CheckCircle size={12} strokeWidth={2} />, () => onApproveInvoice(invoice.invoiceNumber, 'Approved')]]
+      : []),
+    ...(mayDelete(invoice) ? [['Delete Invoice', <Trash2 size={12} strokeWidth={2} />, () => removeInvoice(invoice)]] : []),
+  ];
 
   const removeInvoice = async (invoice) => {
     if (!window.confirm(`Delete invoice ${invoice.invoiceNumber} for ${invoice.customer}? This cannot be undone.`)) return;
@@ -1773,7 +1777,29 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
               <div><dt>Payment Status</dt><dd><Status>{invoice.paymentStatus}</Status></dd><dt>Payment Method</dt><dd>{invoice.paymentMethod || '—'}</dd><dt>Store</dt><dd>{invoice.store} Store</dd><dt>Customer Phone</dt><dd>{invoice.phone || job.phone || '—'}</dd></div>
               <div><dt>Invoice Number</dt><dd><strong>{invoice.invoiceNumber}</strong></dd><dt>Sales Person</dt><dd>{invoice.createdBy || '—'}</dd><dt>Customer Email</dt><dd>{invoice.email || '—'}</dd></div>
             </dl></section>
-            <section className="store-detail-panel order-timeline"><h3>Timeline</h3><div><article className="done"><i>✓</i><span><strong>Invoice Created</strong><small>{invoice.createdBy ? `by ${invoice.createdBy}` : `${invoice.store} store`}</small></span><time>{formatMoment(invoice.createdAt)}</time></article>{isAwaitingPayment(invoice) ? null : <article className="paid"><i>●</i><span><strong>Payment Recorded ({invoice.paymentStatus})</strong><small>{paidAmount === null ? 'Amount not recorded' : `${money.format(paidAmount)} received`}{invoice.paymentMethod ? ` · ${invoice.paymentMethod}` : ''}</small></span><time>—</time></article>}<article><i>○</i><span><strong>{invoiceApprovalStatus(invoice) === 'Approved' ? 'Accounts Approved' : 'Awaiting Approval'}</strong><small>{invoiceApprovalStatus(invoice) === 'Approved' ? 'Invoice approved by accounts' : 'Waiting for accounts approval'}</small></span><time>—</time></article></div></section>
+            <section className="store-detail-panel order-timeline"><h3>Timeline</h3><div><article className="done"><i>✓</i><span><strong>Invoice Created</strong><small>{invoice.createdBy ? `by ${invoice.createdBy}` : `${invoice.store} store`}</small></span><time>{formatMoment(invoice.createdAt)}</time></article>{isAwaitingPayment(invoice) ? null : <article className="paid"><i>●</i><span><strong>Payment Recorded ({invoice.paymentStatus})</strong><small>{paidAmount === null ? 'Amount not recorded' : `${money.format(paidAmount)} received`}{invoice.paymentMethod ? ` · ${invoice.paymentMethod}` : ''}</small></span><time>—</time></article>}{/* This step was fixed at a hollow marker with a dash for the time, so
+                  the timeline never moved on however the invoice stood. */}
+              {(() => {
+                const approval = invoiceApprovalStatus(invoice);
+                const approved = approval === 'Approved';
+                const refused = ['Flagged', 'Rejected'].includes(approval);
+                return (
+                  <article className={approved ? 'done' : refused ? 'flagged' : ''}>
+                    <i>{approved ? '✓' : refused ? '!' : '○'}</i>
+                    <span>
+                      <strong>{approved ? 'Accounts Approved' : refused ? `Accounts ${approval}` : 'Awaiting Approval'}</strong>
+                      <small>
+                        {approved
+                          ? `Approved by ${invoice.accountApprovedBy || 'Accounts'}`
+                          : refused
+                            ? invoice.accountApprovalNote || 'Sent back by Accounts'
+                            : 'Waiting for accounts approval'}
+                      </small>
+                    </span>
+                    <time>{invoice.accountApprovedAt ? formatMoment(invoice.accountApprovedAt) : '—'}</time>
+                  </article>
+                );
+              })()}</div></section>
           </div>
           <aside className="store-detail-rail">
             <section className="store-detail-panel order-summary"><h3>Invoice Summary</h3><dl><div><dt>Invoice Total</dt><dd>{money.format(invoice.total)}</dd></div><div><dt>Amount Paid</dt><dd className={paidAmount === null ? '' : 'green'}>{asMoney(paidAmount)}</dd></div><div><dt>Balance Due</dt><dd className={balance === null ? '' : 'red'}>{asMoney(balance)}</dd></div></dl><div><span>Balance Due</span><strong>{asMoney(balance)}</strong></div></section>
@@ -2005,16 +2031,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                         </button>
                         {openMenu === invoice.invoiceNumber && (
                           <div className="customer-action-menu" style={{ right: 0, left: 'auto' }}>
-                            {[
-                              ['View Invoice', <Eye size={12} strokeWidth={2} />, () => { window.scrollTo(0, 0); setSelectedInvoice(invoice); }],
-                              ['Download PDF', <Download size={12} strokeWidth={2} />, () => downloadInvoicePdf(invoice)],
-                              ['Resend Email', <RefreshCw size={12} strokeWidth={2} />, () => resendInvoiceEmail(invoice)],
-                              ...(mayEdit(invoice) ? [['Edit Invoice', <Edit2 size={12} strokeWidth={2} />, () => setEditingInvoice(invoice)]] : []),
-                              ...(onApproveInvoice && invoiceApprovalStatus(invoice) !== 'Approved'
-                                ? [['Approve', <CheckCircle size={12} strokeWidth={2} />, () => onApproveInvoice(invoice.invoiceNumber, 'Approved')]]
-                                : []),
-                              ...(mayDelete ? [['Delete Invoice', <Trash2 size={12} strokeWidth={2} />, () => removeInvoice(invoice)]] : []),
-                            ].map(([label, icon, action]) => (
+                            {invoiceActions(invoice).map(([label, icon, action]) => (
                               <button
                                 key={label}
                                 type="button"
@@ -2053,13 +2070,41 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                 }}
                 onClick={() => { window.scrollTo(0, 0); setSelectedInvoice(invoice); }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 800, color: '#0f0b06', marginBottom: 2 }}>{invoice.invoiceNumber}</div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: '#3d352c' }}>{invoice.customer}</div>
                     <div style={{ fontSize: 12, color: '#8a7a6a' }}>{invoice.store} Store</div>
                   </div>
-                  <Status>{invoice.paymentStatus}</Status>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <Status>{invoice.paymentStatus}</Status>
+                    {/* The same actions the desktop row carries. Without this
+                        an invoice could not be downloaded from a phone. */}
+                    <div style={{ position: 'relative' }} onClick={(event) => event.stopPropagation()}>
+                      <button
+                        type="button"
+                        aria-label={`Actions for ${invoice.invoiceNumber}`}
+                        onClick={() => setOpenMenu(openMenu === `m-${invoice.invoiceNumber}` ? null : `m-${invoice.invoiceNumber}`)}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          width: 34, height: 34, border: '1px solid #ddd5c8', borderRadius: 8,
+                          background: '#fff', color: '#5a4e42', cursor: 'pointer',
+                        }}
+                      >
+                        <MoreHorizontal size={15} strokeWidth={2} />
+                      </button>
+                      {openMenu === `m-${invoice.invoiceNumber}` && (
+                        <div className="customer-action-menu" style={{ right: 0, left: 'auto' }}>
+                          {invoiceActions(invoice).map(([label, icon, action]) => (
+                            <button key={label} type="button" onClick={() => { setOpenMenu(null); action(); }}>
+                              <i style={{ display: 'flex' }}>{icon}</i>
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, paddingTop: 10, borderTop: '1px solid #f3ede5' }}>
                   <div>
@@ -2462,7 +2507,10 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     dueDate: form.dueDate,
     recipientEmail: form.customerEmail,
     createdByName: currentRole?.name || 'Store Manager',
-    paymentStatus: paymentStatusLabels[form.paymentStatus] || form.paymentStatus,
+    // The key, not the label. Sending "Fully Paid" where the server expects
+    // "fully_paid" fell through its default and stored the invoice as part
+    // paid — on the record and on the emailed invoice both.
+    paymentStatus: form.paymentStatus,
     paymentMethod: form.paymentMethod,
     trackingToken: form.trackingToken,
     customer: {
@@ -2775,7 +2823,22 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
                 <label className="os-field os-field-full">
                   <span>Payment Evidence <span style={{ color: '#d62828' }}>*</span></span>
                   <div style={{ border: '1px dashed #ddd5c8', borderRadius: 8, padding: 14, background: '#faf7f3' }}>
-                    <input type="file" accept="image/*" onChange={selectEvidence} style={{ fontSize: 13 }} />
+                    {/* iOS offers Take Photo alongside the library from a
+                        single input; Android often shows only the library, so
+                        the camera was unreachable at the counter. Two explicit
+                        choices behave the same way on both. */}
+                    <div className="evidence-picker">
+                      <label>
+                        <Camera size={14} strokeWidth={1.8} />
+                        Take a photo
+                        <input type="file" accept="image/*" capture="environment" onChange={selectEvidence} />
+                      </label>
+                      <label>
+                        <Image size={14} strokeWidth={1.8} />
+                        Choose a file
+                        <input type="file" accept="image/*" onChange={selectEvidence} />
+                      </label>
+                    </div>
                     {paymentEvidence && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
                         <img src={paymentEvidence.dataUrl} alt="Payment evidence preview" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, border: '1px solid #eee5da' }} />
@@ -5586,7 +5649,7 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
 
 function ReportsView({ role }) {
   const now = new Date();
-  const [from, setFrom] = useState(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10));
+  const [from, setFrom] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
   const [to, setTo] = useState(todayIso());
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -6521,6 +6584,10 @@ function App() {
       .catch(() => {});
   }, [signedIn]);
 
+  // Bumped to ask for the orders again without changing view — used when the
+  // app comes back to the foreground.
+  const [refreshTick, setRefreshTick] = useState(0);
+
   useEffect(() => {
     if (!signedIn) return;
 
@@ -6540,7 +6607,40 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [signedIn, activeView]);
+  }, [signedIn, activeView, refreshTick]);
+
+  // A phone that has been asleep wakes showing whatever was on screen when it
+  // slept: nothing refetches, because the view has not changed. Coming back to
+  // the app asks for the orders again, which is what the reader expects to see.
+  useEffect(() => {
+    if (!signedIn) return undefined;
+
+    // Only when it has been away long enough to have missed something —
+    // otherwise switching apps for a moment would refetch on every return.
+    let leftAt = 0;
+    const STALE_AFTER = 30 * 1000;
+
+    const onHidden = () => { leftAt = Date.now(); };
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return onHidden();
+      if (leftAt && Date.now() - leftAt < STALE_AFTER) return undefined;
+      leftAt = 0;
+      setRefreshTick((tick) => tick + 1);
+      return undefined;
+    };
+
+    document.addEventListener('visibilitychange', onVisible);
+    // iOS Safari does not always fire visibilitychange when returning from the
+    // lock screen, but it does fire pageshow.
+    window.addEventListener('pageshow', onVisible);
+    window.addEventListener('focus', onVisible);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [signedIn]);
 
   useEffect(() => {
     if (!signedIn || !signedInAccount?.phone) return;

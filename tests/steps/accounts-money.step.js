@@ -115,3 +115,73 @@ Then('the invoice should still have nothing recorded against it', async function
 Then('the API should refuse the payment as not theirs to record', function () {
   expect(this.response.status(), 'a tailor was allowed to record a payment').toBe(403);
 });
+
+// What an invoice is for can be corrected; what it comes to cannot.
+const editInvoice = async function (body) {
+  const client = await this.api('Owner');
+  this.response = await client.patch(`${API_URL}/oms/invoices/${this.invoiceNumber}`, { data: body });
+  this.body = await this.response.json().catch(() => null);
+  await client.dispose();
+};
+
+When('the Owner renames the first line to {string}', async function (description) {
+  await editInvoice.call(this, { items: [{ description }] });
+});
+
+When('the Owner tries to change the rate while renaming the line', async function () {
+  await editInvoice.call(this, {
+    items: [{ description: 'Renamed', rate: 1, quantity: 1, discountPercent: 99 }],
+  });
+});
+
+When('the Owner tries to add a second line', async function () {
+  await editInvoice.call(this, {
+    items: [{ description: 'One' }, { description: 'Two' }],
+  });
+});
+
+Then('the line should read {string}', async function (description) {
+  const invoice = await readInvoice(this);
+  expect(invoice?.items?.[0]?.description).toBe(description);
+});
+
+Then('the invoice should still come to {int}', async function (total) {
+  const invoice = await readInvoice(this);
+  expect(Number(invoice?.total), 'the total moved when only the wording should have').toBe(total);
+});
+
+Then('the change should be refused', function () {
+  expect(this.response.status()).toBe(409);
+});
+
+Then('the Owner should be able to delete it', async function () {
+  const client = await this.api('Owner');
+  const response = await client.delete(`${API_URL}/oms/invoices/${this.invoiceNumber}`);
+  await client.dispose();
+  expect(response.status()).toBe(200);
+});
+
+Given('the Accountant approves it', async function () {
+  const client = await this.api('Accountant');
+  const response = await client.patch(`${API_URL}/oms/invoices/${this.invoiceNumber}/account-approval`, {
+    data: { status: 'Approved' },
+  });
+  await client.dispose();
+  expect(response.status()).toBe(200);
+});
+
+Then('deleting it should be refused', async function () {
+  const client = await this.api('Owner');
+  const response = await client.delete(`${API_URL}/oms/invoices/${this.invoiceNumber}`);
+  const body = await response.json().catch(() => null);
+  await client.dispose();
+  expect(response.status(), 'an approved invoice was deleted').toBe(409);
+  expect(String(body?.message)).toMatch(/approved/i);
+});
+
+// The timeline showed a hollow marker and a dash whatever the invoice's state.
+Then('the timeline should record who approved it and when', async function () {
+  const invoice = await readInvoice(this);
+  expect(invoice?.accountApprovedBy, 'nobody was recorded as approving it').toBeTruthy();
+  expect(invoice?.accountApprovedAt, 'no approval time was recorded').toBeTruthy();
+});

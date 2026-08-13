@@ -4,14 +4,33 @@ export const money = new Intl.NumberFormat('en-NG', {
   maximumFractionDigits: 0,
 });
 
-export const todayIso = () => new Date().toISOString().slice(0, 10);
+// The calendar date here, not in UTC. toISOString() reports the UTC day, so
+// between midnight and 01:00 in Lagos this returned yesterday — which set the
+// invoice date a day back and capped every date picker a day short.
+const localIso = (date) => {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+};
+
+export const todayIso = () => {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+};
 
 // An invoice stands for 48 hours, so its due date is derived from the day it
 // was raised rather than typed in.
 export const addDaysIso = (iso, days) => {
   const date = new Date(`${iso}T00:00:00`);
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  // Built from the local parts, not toISOString(). Midnight in Lagos is the
+  // previous day in UTC, so serialising through UTC shifted every date back
+  // one — a 48-hour due date printed as 24.
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
 };
 
 // Whether a customer is on the elite tier. The tier is set on the customer's
@@ -443,7 +462,7 @@ export const filterByPeriod = (records, getDate, period, customFrom, customTo) =
   if (period === 'quarter') {
     const quarterStart = new Date();
     quarterStart.setMonth(Math.floor(quarterStart.getMonth() / 3) * 3, 1);
-    const from = quarterStart.toISOString().slice(0, 10);
+    const from = localIso(quarterStart);
     return records.filter((record) => on(record) >= from);
   }
   if (period === 'year') return records.filter((record) => on(record) >= yearStart);

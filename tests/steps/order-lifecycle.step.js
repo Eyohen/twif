@@ -92,7 +92,9 @@ Given('the Store Manager invoices that customer', async function () {
   // A part-paid invoice has to carry evidence of the payment. Scoped to the
   // Payment Evidence field: a bare input[type=file] also matches the profile
   // photo control that now sits in the sidebar.
-  await this.page.locator('label').filter({ hasText: 'Payment Evidence' })
+  // Two pickers now: photograph it, or choose a file already on the device.
+  // A test has no camera, so it takes the file route.
+  await this.page.locator('.evidence-picker label').filter({ hasText: 'Choose a file' })
     .locator('input[type="file"]').setInputFiles({
     name: 'payment-evidence.png',
     mimeType: 'image/png',

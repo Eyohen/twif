@@ -2215,7 +2215,7 @@ dd {
 .order-summary > div { display: grid; gap: 7px; margin-top: 14px; border-radius: 6px; background: linear-gradient(145deg, #080b0c, #111519); color: #fff; padding: 18px; text-transform: uppercase; }.order-summary > div span { font-size: 8px; letter-spacing: .1em; }.order-summary > div strong { color: #f0b625; font-family: var(--font-display); font-size: 24px; }
 .detail-actions { display: grid; gap: 9px; }.detail-actions h3 { margin-bottom: 4px; }.detail-actions button { min-height: 38px; border: 1px solid #e8e0d5; border-radius: 5px; background: #fff; padding: 0 12px; font-size: 8px; text-align: left; }.detail-actions button.danger { color: #df3029; }
 .detail-documents article { display: grid; grid-template-columns: 20px 1fr; gap: 9px; align-items: center; margin-top: 8px; border: 1px solid #eee5da; border-radius: 5px; padding: 10px; }.detail-documents article i { font-style: normal; }.detail-documents article span { display: grid; gap: 4px; font-size: 8px; }.detail-documents article small { color: #a76900; font-size: 7px; }
-.order-timeline > div { position: relative; display: grid; gap: 0; }.order-timeline article { display: grid; grid-template-columns: 24px 1fr auto; gap: 10px; align-items: start; min-height: 64px; }.order-timeline article > i { z-index: 1; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: #fff; color: #555; font-style: normal; }.order-timeline article:not(:last-child)::before { content: ''; position: absolute; left: 9px; width: 1px; height: 64px; background: #e3ddd5; }.order-timeline article.done > i { background: #15904b; color: #fff; }.order-timeline article.paid > i { color: #bd7d0a; }.order-timeline article span { display: grid; gap: 5px; font-size: 8px; }.order-timeline article small, .order-timeline time { color: #777; font-size: 7px; }
+.order-timeline > div { position: relative; display: grid; gap: 0; }.order-timeline article { display: grid; grid-template-columns: 24px 1fr auto; gap: 10px; align-items: start; min-height: 64px; }.order-timeline article > i { z-index: 1; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: #fff; color: #555; font-style: normal; }.order-timeline article:not(:last-child)::before { content: ''; position: absolute; left: 9px; width: 1px; height: 64px; background: #e3ddd5; }.order-timeline article.done > i { background: #15904b; color: #fff; }.order-timeline article.paid > i { color: #bd7d0a; }.order-timeline article.flagged > i { background: #b3402a; color: #fff; font-weight: 800; }.order-timeline article span { display: grid; gap: 5px; font-size: 8px; }.order-timeline article small, .order-timeline time { color: #777; font-size: 7px; }
 .store-notifications { min-height: 650px; border: 1px solid #eee5da; border-radius: 9px; background: #fff; padding: 0 20px 20px; }
 .store-notifications > header { min-height: 82px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #eee5da; }
 .store-notifications > header span { color: #b1740d; font-size: 9px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
@@ -10722,7 +10722,13 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 .edit-invoice-note { margin: 0; font-size: 12px; color: #7a6030; background: #fffbf0; border: 1px solid #f0ddb0; border-radius: 8px; padding: 9px 11px; }
 .edit-invoice-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .edit-invoice-lines { display: grid; gap: 8px; }
-.edit-invoice-lines > div { display: grid; grid-template-columns: minmax(0, 1fr) 64px 100px 72px 32px; gap: 6px; }
+.edit-invoice-lines > div { display: grid; grid-template-columns: minmax(0, 1fr) 52px 100px 64px; gap: 6px; align-items: center; }
+/* The figures are shown beside the wording, but they are not the reader's to
+   change — an invoice's total is fixed once it has gone to the customer. */
+.edit-invoice-lines > div > span {
+  font-size: 12px; color: #8a7a6a; text-align: right; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 .edit-invoice-lines input {
   border: 1px solid #ddd5c8; border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px; min-width: 0;
 }
@@ -10746,8 +10752,8 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 .edit-invoice-actions .primary { background: #1a1611; border-color: #1a1611; color: #fff; }
 
 @media (max-width: 620px) {
-  .edit-invoice-lines > div { grid-template-columns: minmax(0, 1fr) 32px; grid-auto-rows: auto; }
-  .edit-invoice-lines > div input:nth-child(n+2):nth-child(-n+4) { grid-column: 1 / 2; }
+  .edit-invoice-lines > div { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
+  .edit-invoice-lines > div > span { text-align: left; }
 }
 
 /* ── Wide tables on a desktop screen ──────────────────────────────────────
@@ -10828,3 +10834,13 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   color: #8a3520; font: inherit; font-size: 13px; font-weight: 700; padding: 0 16px; cursor: pointer;
 }
 .two-factor-off button:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Payment evidence: photograph it, or pick a file already on the device. */
+.evidence-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.evidence-picker label {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  border: 1px solid #ddd5c8; border-radius: 8px; background: #fff;
+  padding: 9px 14px; font-size: 13px; font-weight: 600; color: #1a1611;
+}
+.evidence-picker label:active { background: #f3ede5; }
+.evidence-picker input { display: none; }

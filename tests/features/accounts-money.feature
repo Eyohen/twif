@@ -26,3 +26,35 @@ Feature: Recording what a customer actually paid
     Given an invoice for 50000 that nothing has been paid against
     When the Tailor tries to record 20000 received on it
     Then the API should refuse the payment as not theirs to record
+
+  # Settled with Henry on 13 August: what an invoice is for can be corrected,
+  # what it comes to cannot, and once Accounts have approved it, it stays.
+  Rule: An invoice's figures are fixed once it has been sent
+
+    Scenario: The wording of a line can be corrected
+      Given an invoice for 50000 that nothing has been paid against
+      When the Owner renames the first line to "Three-piece suit (navy)"
+      Then the line should read "Three-piece suit (navy)"
+      And the invoice should still come to 50000
+
+    Scenario: Figures sent with the correction are ignored
+      Given an invoice for 50000 that nothing has been paid against
+      When the Owner tries to change the rate while renaming the line
+      Then the invoice should still come to 50000
+
+    Scenario: Lines cannot be added or removed
+      Given an invoice for 50000 that nothing has been paid against
+      When the Owner tries to add a second line
+      Then the change should be refused
+
+  Rule: An approved invoice cannot be deleted
+
+    Scenario: An invoice Accounts have not seen can be deleted
+      Given an invoice for 50000 that nothing has been paid against
+      Then the Owner should be able to delete it
+
+    Scenario: An approved invoice cannot be deleted, even by the Owner
+      Given an invoice for 50000 that nothing has been paid against
+      And the Accountant approves it
+      Then deleting it should be refused
+      And the timeline should record who approved it and when
