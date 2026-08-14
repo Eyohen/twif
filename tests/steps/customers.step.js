@@ -1,5 +1,6 @@
 import { When, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
+import { API_URL } from '../support/world.js';
 
 When('I start creating a customer', async function () {
   await this.page.getByRole('button', { name: /new customer|add customer/i }).first().click();
@@ -72,4 +73,46 @@ Then('no measurement should be filled in', async function () {
   for (const invented of ['16"', '42"', '34"', '16 in', '42 in']) {
     expect(text, `a measurement of ${invented} appears without anyone taking it`).not.toContain(invented);
   }
+});
+
+// Only an Owner or Admin can give the tag, and it drives an automatic discount,
+// so it has to be visible wherever the customer is.
+When('the Owner tags the first customer an elite member', async function () {
+  const client = await this.api('Owner');
+  const list = await client.get(`${API_URL}/oms/customers`);
+  const customer = ((await list.json())?.data?.customers || [])
+    .find((entry) => !String(entry.id).startsWith('sent-'));
+  expect(customer, 'there is no customer with a profile to tag').toBeTruthy();
+
+  this.eliteCustomer = customer;
+  const response = await client.patch(`${API_URL}/oms/customers/${customer.id}`, {
+    data: {
+      fullName: customer.fullName,
+      phone: customer.phone,
+      email: customer.email,
+      customerType: 'Elite Member',
+    },
+  });
+  await client.dispose();
+  expect(response.status(), 'the Owner could not tag an elite member').toBe(200);
+
+  await this.page.reload();
+  await this.page.waitForLoadState('networkidle');
+
+  // The list is paginated and sorted newest first, so the customer is searched
+  // for rather than assumed to be on the first page.
+  const search = this.page.getByPlaceholder(/search/i).first();
+  await search.fill(customer.fullName);
+  await this.page.waitForTimeout(800);
+});
+
+Then('the customer list should show them as an elite member', async function () {
+  const row = this.page.locator('tbody tr').filter({ hasText: this.eliteCustomer.fullName }).first();
+  await expect(row, 'the tag saved but the list gives no sign of it').toContainText(/elite/i);
+});
+
+Then('their profile should show them as an elite member', async function () {
+  const row = this.page.locator('tbody tr').filter({ hasText: this.eliteCustomer.fullName }).first();
+  await row.getByRole('button', { name: /view profile/i }).click();
+  await expect(this.page.locator('.os-page'), 'the profile gives no sign of the tag').toContainText(/elite/i);
 });

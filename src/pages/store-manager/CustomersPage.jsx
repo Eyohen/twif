@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Users, UserCheck, Ruler, Calendar, Search, Plus, ChevronRight, User, FileText, Package, Edit2, Trash2, Eye } from 'lucide-react';
 import { api } from '../../lib/api';
+import { isEliteCustomer, customerTierLabel } from '../../utils/oms';
 import CustomerProfilePage from './CustomerProfilePage';
 import EditCustomerPage from './EditCustomerPage';
 import MeasurementsPage from './MeasurementsPage';
@@ -324,7 +325,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                           <div>
                             <div style={{ fontWeight: 800, fontSize: 14, color: '#0f0b06' }}>{customer.fullName}</div>
                             <div style={{ fontSize: 11, color: '#8a7a6a' }}>
-                              {Number(customer.totalOrders) > 1 ? 'Returning' : 'New'} · since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'unknown'}
+                              {isEliteCustomer(customer) ? <span className="elite-flag">★ Elite member</span> : customerTierLabel(customer)} · since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'unknown'}
                             </div>
                           </div>
                         </div>
@@ -415,7 +416,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                       background: Number(customer.totalOrders) > 1 ? '#f0faf4' : '#fffbf0',
                       color: Number(customer.totalOrders) > 1 ? '#2a7d4f' : '#7a6030',
                     }}>
-                      {Number(customer.totalOrders) > 1 ? 'Returning' : 'New'}
+                      {isEliteCustomer(customer) ? '★ Elite member' : customerTierLabel(customer)}
                     </span>
                   </div>
                   <div style={{ borderTop: '1px solid #f3ede5', display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 16px', gap: 8 }}>

@@ -10889,3 +10889,7 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   .fabric-chosen li { grid-template-columns: minmax(0, 1fr) 32px; }
   .fabric-chosen label { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+/* An elite member gets a discount on every invoice, so the tag is worth seeing
+   at a glance rather than only inside the edit screen. */
+.elite-flag { color: #a5730a; font-weight: 700; white-space: nowrap; }

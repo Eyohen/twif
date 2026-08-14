@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, Search, Package, ChevronRight, User, Phone, MapPin, TrendingUp, Calendar, CreditCard, BarChart2 } from 'lucide-react';
-import { money, daysUntilDue, dueDateLabel } from '../../utils/oms';
+import { money, daysUntilDue, dueDateLabel, isEliteCustomer, customerTierLabel } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 
 function normalizeOrder(invoice) {
@@ -89,7 +89,7 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
                 background: Number(customer.totalOrders) > 1 ? '#f0faf4' : '#fffbf0',
                 color: Number(customer.totalOrders) > 1 ? '#2a7d4f' : '#7a6030',
               }}>
-                {Number(customer.totalOrders) > 1 ? 'Returning' : 'New'}
+                {isEliteCustomer(customer) ? '★ Elite member' : customerTierLabel(customer)}
               </span>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 5 }}>

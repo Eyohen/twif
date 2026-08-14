@@ -42,6 +42,15 @@ export const CUSTOMER_STATUSES = ['Contact', 'Potential', 'Paying', 'Lost', 'Act
 // profile by an Owner or Admin, and the discount follows from it — it is not
 // something a store manager applies by hand on the invoice.
 export const isEliteCustomer = (customer) => /elite/i.test(String(customer?.category || ''));
+
+// What to call a customer on a list. The tier they have been given comes first —
+// an elite member is an elite member however many orders they have — and the
+// order count only decides between New and Returning when nothing was set.
+export const customerTierLabel = (customer) => {
+  const category = String(customer?.category || '').trim();
+  if (category && !['New', 'Returning'].includes(category)) return category;
+  return Number(customer?.totalOrders) > 1 ? 'Returning' : 'New';
+};
 export const invoiceSeed = () => `INV${Math.floor(Math.random() * 90000) + 10000}`;
 export const invoiceItemSeed = () => `item-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 export const trackingTokenSeed = () => Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-8);

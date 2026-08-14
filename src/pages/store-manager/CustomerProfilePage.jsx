@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { ArrowLeft, Edit2, Plus, User, Ruler, ShoppingBag, FileText, Clock, StickyNote, Save, X, MapPin, Phone, Star, ChevronRight } from 'lucide-react';
-import { money, invoiceApprovalStatus } from '../../utils/oms';
+import { money, invoiceApprovalStatus, isEliteCustomer, customerTierLabel } from '../../utils/oms';
 import { MEASUREMENT_FIELDS } from './MeasurementsPage';
 import { Status } from '../../components/oms/Common';
 import { api } from '../../lib/api';
@@ -132,10 +132,10 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
               <strong style={{ fontSize: 18, fontFamily: 'var(--font-display)' }}>{customer.fullName}</strong>
               <span style={{
                 padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                background: Number(customer.totalOrders) > 1 ? '#f0faf4' : '#fffbf0',
-                color: Number(customer.totalOrders) > 1 ? '#2a7d4f' : '#7a6030',
+                background: isEliteCustomer(customer) ? '#fff4dc' : Number(customer.totalOrders) > 1 ? '#f0faf4' : '#fffbf0',
+                color: isEliteCustomer(customer) ? '#a5730a' : Number(customer.totalOrders) > 1 ? '#2a7d4f' : '#7a6030',
               }}>
-                {Number(customer.totalOrders) > 1 ? 'Returning' : 'New'}
+                {isEliteCustomer(customer) ? '★ Elite member' : customerTierLabel(customer)}
               </span>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 6 }}>
@@ -237,7 +237,7 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
                   ['Address', customer.address || '—'],
                   ['Preferred Contact', customer.communicationPreference || 'WhatsApp'],
                   ['Customer ID', customer.customerNumber || `CUST-${String(customer.id).slice(-6)}`],
-                  ['Customer Type', Number(customer.totalOrders) > 1 ? 'Returning' : 'New'],
+                  ['Customer Type', customerTierLabel(customer)],
                   ['Registration Date', customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB') : '—'],
                   ['Referred By', customer.referredBy || 'Walk-in'],
                   ['Preferred Store', `${customer.stores?.[0] || 'Lekki'} Store`],

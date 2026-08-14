@@ -22,3 +22,14 @@ Feature: Customer records
   Scenario: A new customer has no measurements until someone takes them
     When I open the first customer's measurements
     Then no measurement should be filled in
+
+  # An elite member gets a discount on every invoice they are sent. The tag was
+  # saving and then showing nowhere — the list and the profile both worked the
+  # label out from the order count and ignored the tier — which is
+  # indistinguishable from it not having saved.
+  Scenario: Tagging a customer an elite member shows on their record
+    Given I am signed in as the Owner
+    And I open the Customers page
+    When the Owner tags the first customer an elite member
+    Then the customer list should show them as an elite member
+    And their profile should show them as an elite member
