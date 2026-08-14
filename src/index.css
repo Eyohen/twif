@@ -10893,3 +10893,8 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 /* An elite member gets a discount on every invoice, so the tag is worth seeing
    at a glance rather than only inside the edit screen. */
 .elite-flag { color: #a5730a; font-weight: 700; white-space: nowrap; }
+
+.tailor-assign-note {
+  margin: 9px 0 0; padding-top: 9px; border-top: 1px dashed #ddd5c8;
+  font-size: 11px; color: #8a7a6a;
+}

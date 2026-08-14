@@ -424,6 +424,16 @@ export const productionJobFromInvoice = (invoice) => {
     fabricAllocated: Boolean(sheet.fabricAllocated),
     fabricUsage: sheet.fabricUsage || '',
     fabricUnit: sheet.fabricUnit || '',
+    // These are all set on the order sheet and were not carried across when the
+    // job list was rebuilt from it, so each was lost on the next load: the date
+    // Production gave the tailor (who then saw "ask your production manager"),
+    // the fabrics an order needs, what has already been allocated, and an
+    // Owner's decision to release a held order — which was silently re-held.
+    tailorDueDate: sheet.tailorDueDate || '',
+    fabrics: Array.isArray(sheet.fabrics) ? sheet.fabrics : [],
+    fabricAllocations: Array.isArray(sheet.fabricAllocations) ? sheet.fabricAllocations : [],
+    tailors: Array.isArray(sheet.tailors) ? sheet.tailors : [],
+    productionOverride: sheet.productionOverride || null,
     assignedAt: sheet.assignedAt || 'Pending assignment',
     updatedAt: sheet.updatedAt,
   };
@@ -468,7 +478,16 @@ export const filterByPeriod = (records, getDate, period, customFrom, customTo) =
   const monthStart = `${today.slice(0, 7)}-01`;
   const yearStart = `${today.slice(0, 4)}-01-01`;
 
-  const on = (record) => String(getDate(record) || '').slice(0, 10);
+  // The record's own calendar date where the shop is, not in UTC. Slicing the
+  // timestamp gives the UTC day, so an order taken after midnight in Lagos
+  // counted as the day before.
+  const on = (record) => {
+    const value = getDate(record);
+    if (!value) return '';
+    const at = new Date(value);
+    if (Number.isNaN(at.valueOf())) return String(value).slice(0, 10);
+    return localIso(at);
+  };
 
   if (period === 'today') return records.filter((record) => on(record) === today);
   if (period === 'week') return records.filter((record) => getDate(record) && new Date(getDate(record)) >= weekAgo);

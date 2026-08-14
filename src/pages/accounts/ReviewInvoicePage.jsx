@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Flag, XCircle, HelpCircle, Download, Maximize2, User, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
 import { money, invoiceApprovalStatus, amountReceived, invoicePayable, formatMoment } from '../../utils/oms';
+import { usePaymentEvidence } from '../../hooks/usePaymentEvidence';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 
@@ -27,6 +28,9 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
     : null;
   const status = invoiceApprovalStatus(invoice) === 'Pending Accounts' ? 'Awaiting Review' : invoiceApprovalStatus(invoice);
   const evidence = invoice.paymentEvidence || null;
+  // The image is fetched on opening rather than travelling with every invoice
+  // in the list — see usePaymentEvidence.
+  const { url: evidenceUrl } = usePaymentEvidence(invoice.invoiceNumber, Boolean(evidence));
   const storeNote = invoice.itemNote || (Array.isArray(invoice.notes) ? invoice.notes[0] : invoice.notes) || '';
   const items = (invoice.items?.length ? invoice.items : []).map((line) => ([
     line.description || line.name || 'Item',
@@ -270,24 +274,24 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
                     <div><dt>Amount recorded</dt><dd>{asMoney(paid)}</dd></div>
                   </dl>
 
-                  {evidence.dataUrl ? (
+                  {evidenceUrl ? (
                     <button
                       type="button"
                       className="review-evidence-frame"
                       onClick={() => setEvidenceOpen(true)}
                       aria-label="Open payment evidence full size"
                     >
-                      <img src={evidence.dataUrl} alt={`Payment evidence for ${invoice.invoiceNumber}`} />
+                      <img src={evidenceUrl} alt={`Payment evidence for ${invoice.invoiceNumber}`} />
                       <span className="review-evidence-zoom"><Maximize2 size={13} /></span>
                     </button>
                   ) : (
                     <p className="review-evidence-empty">The attachment could not be previewed.</p>
                   )}
 
-                  {evidence.dataUrl ? (
+                  {evidenceUrl ? (
                     <a
                       className="review-evidence-download"
-                      href={evidence.dataUrl}
+                      href={evidenceUrl}
                       download={evidence.name || `${invoice.invoiceNumber}-payment-evidence`}
                     >
                       <Download size={14} /> Download evidence
@@ -432,7 +436,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
 
       {/* Proof of payment at full size — a thumbnail is not enough to check a
           teller slip against an amount. */}
-      {evidenceOpen && evidence?.dataUrl ? (
+      {evidenceOpen && evidenceUrl ? (
         <div
           className="review-evidence-lightbox"
           role="dialog"
@@ -441,7 +445,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
           onClick={() => setEvidenceOpen(false)}
         >
           <button type="button" className="review-evidence-close" onClick={() => setEvidenceOpen(false)} aria-label="Close">×</button>
-          <img src={evidence.dataUrl} alt={`Payment evidence for ${invoice.invoiceNumber}`} onClick={(event) => event.stopPropagation()} />
+          <img src={evidenceUrl} alt={`Payment evidence for ${invoice.invoiceNumber}`} onClick={(event) => event.stopPropagation()} />
         </div>
       ) : null}
 
