@@ -33,6 +33,11 @@ export const addDaysIso = (iso, days) => {
   return `${date.getFullYear()}-${month}-${day}`;
 };
 
+// Where a customer sits with the shop. Replaces the old Active / Inactive /
+// Archived select: archiving is the Archive button's job, not a status, and
+// having both meant two fields called Status on the same screen.
+export const CUSTOMER_STATUSES = ['Contact', 'Potential', 'Paying', 'Lost', 'Active', 'Periodic'];
+
 // Whether a customer is on the elite tier. The tier is set on the customer's
 // profile by an Owner or Admin, and the discount follows from it — it is not
 // something a store manager applies by hand on the invoice.

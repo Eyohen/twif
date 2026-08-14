@@ -3178,6 +3178,10 @@ const emptySheetForm = () => ({
 });
 
 function OrderSheetView({ sentInvoices = [], onCreateJob }) {
+  // Arriving from an invoice — "raise an order sheet for this one" — rather
+  // than from the menu, so the picker does not have to be searched again.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedInvoice = searchParams.get('invoice');
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
   const [sheetForm, setSheetForm] = useState(emptySheetForm);
@@ -3204,6 +3208,16 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       .finally(() => active && setInventoryLoading(false));
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!requestedInvoice || !sentInvoices.length) return;
+    if (sheetForm.invoiceNumber === requestedInvoice) return;
+    selectInvoice(requestedInvoice);
+    setSearchParams({}, { replace: true });
+    // selectInvoice is rebuilt on every render; the invoice number is what
+    // decides whether this still has anything to do.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedInvoice, sentInvoices, customers]);
 
   const updateSheetForm = (field, value) => {
     setSheetForm((current) => ({ ...current, [field]: value }));
@@ -6473,7 +6487,7 @@ function renderView(activeView, role, viewProps = {}) {
     }
     return <OrdersView sentInvoices={viewProps.sentInvoices} />;
   }
-  if (activeView === 'Orders') return role === 'store_manager' || role === 'owner' ? <StoreManagerOrdersPage sentInvoices={viewProps.sentInvoices} /> : <OrdersView sentInvoices={viewProps.sentInvoices} />;
+  if (activeView === 'Orders') return ['store_manager', 'owner', 'admin'].includes(role) ? <StoreManagerOrdersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} /> : <OrdersView sentInvoices={viewProps.sentInvoices} />;
   if (activeView === 'Customers') return role === 'store_manager' || role === 'owner' || role === 'admin' ? <StoreManagerCustomersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} currentRole={viewProps.currentRole} /> : <CustomersView />;
   if (activeView === 'New Invoice') return <NewInvoiceView currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
   if (activeView === 'Order Sheet') return <OrderSheetView sentInvoices={viewProps.sentInvoices} onCreateJob={viewProps.onCreateJob} />;

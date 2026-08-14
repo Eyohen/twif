@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock, Package, CheckCircle, AlertCircle, Search, ChevronRight, Eye } from 'lucide-react';
+import { Clock, Package, CheckCircle, AlertCircle, Search, ChevronRight, Eye, Plus } from 'lucide-react';
 import { money, invoiceApprovalStatus, amountReceived, formatMoment, daysUntilDue, dueDateLabel, toNumber } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import OrderDetailsPage from './OrderDetailsPage';
@@ -7,7 +7,7 @@ import Pagination from '../../components/oms/Pagination';
 
 const KPI_COUNT = 4;
 
-export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
+export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -38,6 +38,10 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
       && `${order.invoiceNumber} ${order.customer} ${order.phone || ''}`.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (sortOrder === 'Oldest First' ? orderedAt(a) - orderedAt(b) : orderedAt(b) - orderedAt(a))),
   [orders, search, filter, sortOrder]);
+
+  // An order sheet is what Production works from, so an invoice without one
+  // has not become an order yet however it is paid.
+  const awaitingSheet = orders.filter((order) => !order.job?.status);
 
   const PAGE_SIZE = 10;
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -78,7 +82,40 @@ export default function StoreManagerOrdersPage({ sentInvoices = [] }) {
             <p>Track production, payments and deliveries across all orders</p>
           </div>
         </div>
+        <button
+          type="button"
+          className="os-release-btn"
+          style={{ width: 'auto', padding: '10px 20px', fontSize: 14 }}
+          onClick={() => onNavigate?.('Order Sheet')}
+        >
+          <Plus size={15} strokeWidth={2} />
+          New Order
+        </button>
       </div>
+
+      {/* An invoice with no order sheet is not yet an order: nothing has been
+          written down for Production to work from. They are called out here
+          because the register gives no other sign of it. */}
+      {awaitingSheet.length ? (
+        <div className="orders-awaiting">
+          <div>
+            <strong>{awaitingSheet.length} invoice{awaitingSheet.length === 1 ? '' : 's'} without an order sheet</strong>
+            <p>Raise one and it goes to Production as soon as Accounts approve the invoice.</p>
+          </div>
+          <div className="orders-awaiting-list">
+            {awaitingSheet.slice(0, 6).map((order) => (
+              <button
+                type="button"
+                key={order.invoiceNumber}
+                onClick={() => onNavigate?.('Order Sheet', { invoice: order.invoiceNumber })}
+              >
+                <span>{order.customer}</span>
+                <small>{order.invoiceNumber}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* KPI stat cards */}
       <div className="os-kpi-row" ref={kpiScrollRef} onScroll={handleKpiScroll}>

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { ArrowLeft, Save, X, User, Settings, Star, Ruler, StickyNote, Edit2, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react';
-import { money } from '../../utils/oms';
+import { money, CUSTOMER_STATUSES } from '../../utils/oms';
 import { api } from '../../lib/api';
 
 export default function EditCustomerPage({ customer, onCancel, onSave, onViewMeasurements, currentRole }) {
@@ -23,7 +23,8 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
     preferredContactMethod: customer.preferredContactMethod || 'WhatsApp',
     preferredFit: customer.preferredFit || 'Regular Fit',
     preferredStyle: customer.preferredStyle || 'Classic',
-    status: customer.status || 'Active',
+    status: customer.status || '',
+    website: customer.website || '',
     elite: Boolean(customer.eliteMember),
   });
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
@@ -73,6 +74,7 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
     ['Date of Birth', 'dateOfBirth', 'date'], ['Preferred Store', 'preferredStore', 'select', ['Lekki', 'Ikeja', 'Surulere']],
     ['Gender', 'gender', 'select', ['Male', 'Female', 'Other']], ['Communication Preference', 'communicationPreference', 'select', ['WhatsApp', 'Phone', 'Email']],
     ['Occupation', 'occupation', 'input'], ['Preferred Contact Time', 'preferredContactTime', 'select', ['Anytime', 'Morning', 'Afternoon', 'Evening']],
+    ['Website', 'website', 'input'],
     ['Address', 'address', 'textarea'],
     ['Preferred Contact Method', 'preferredContactMethod', 'select', ['WhatsApp', 'Phone', 'Email']],
   ];
@@ -244,15 +246,16 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
               <label className="os-field">
                 <span>Status</span>
                 <select value={form.status} onChange={(event) => update('status', event.target.value)}>
-                  <option>Active</option>
-                  <option>Inactive</option>
-                  <option>Archived</option>
+                  <option value="">— No status —</option>
+                  {CUSTOMER_STATUSES.map((option) => <option key={option}>{option}</option>)}
                 </select>
               </label>
             </div>
             <dl>
+              <dt>Last Activity</dt>
+              <dd>{customer.lastActivityAt ? new Date(customer.lastActivityAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'None yet'}</dd>
               <dt>Customer Since</dt>
-              <dd>{customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Jan 2025'}</dd>
+              <dd>{customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : '—'}</dd>
               <dt>Total Orders</dt>
               <dd>{customer.totalOrders || 0}</dd>
               <dt>Total Spent</dt>

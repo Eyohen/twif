@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Printer, CheckCircle, Package, CreditCard, Ruler, FileText, Clock, User, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Download, CheckCircle, Package, CreditCard, Ruler, FileText, Clock, User, AlertCircle } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money, formatMoment, amountReceived, invoicePayable, invoiceDocumentPayload, downloadInvoicePdf, daysUntilDue, dueDateLabel } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
@@ -63,7 +63,7 @@ export default function OrderDetailsPage({ order, onBack }) {
     ['Ready for Collection', ready ? 'Ready for the customer' : 'Awaiting production', '', ready ? 'done' : 'pending'],
   ];
 
-  const printInvoice = async () => {
+  const saveInvoicePdf = async () => {
     setNotice('');
     try {
       const response = await api.post('/oms/invoices/html-preview', invoiceDocumentPayload(order), { responseType: 'text' });
@@ -100,8 +100,8 @@ export default function OrderDetailsPage({ order, onBack }) {
           </div>
         </div>
         {/* Resend Invoice and More Actions did nothing at all; printing is real. */}
-        <button type="button" onClick={printInvoice} style={outlineButton}>
-          <Printer size={13} strokeWidth={1.8} /> Print Invoice
+        <button type="button" onClick={saveInvoicePdf} style={outlineButton}>
+          <Download size={13} strokeWidth={1.8} /> Download Invoice
         </button>
       </div>
 

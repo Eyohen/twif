@@ -1,20 +1,20 @@
 import { useRef, useState } from 'react';
 import { ArrowLeft, Edit2, Plus, User, Ruler, ShoppingBag, FileText, Clock, StickyNote, Save, X, MapPin, Phone, Star, ChevronRight } from 'lucide-react';
 import { money, invoiceApprovalStatus } from '../../utils/oms';
+import { MEASUREMENT_FIELDS } from './MeasurementsPage';
 import { Status } from '../../components/oms/Common';
 import { api } from '../../lib/api';
 
 export default function CustomerProfilePage({ customer, sentInvoices = [], onBack, onEdit, onViewOrders, onOpenOrder, onNewInvoice }) {
   const invoices = sentInvoices.filter((invoice) => invoice.customer === customer.fullName);
   const measurements = customer.measurements || {};
-  // These fell back to invented figures — 178 cm, 42 in and so on — which a
-  // tailor could easily have cut against. An empty value is shown as empty.
-  const measurementRows = [
-    ['Height', measurements.height], ['Chest', measurements.chest],
-    ['Waist', measurements.waist], ['Hip', measurements.hip],
-    ['Shoulder', measurements.shoulder], ['Sleeve', measurements.sleeve],
-    ['Neck', measurements.neck], ['Trouser', measurements.trouser],
-  ].map(([label, value]) => [label, value || '—']);
+  // Read from the same list the measurement screen writes. This used to name
+  // eight fields of its own — chest, waist, neck — which stopped existing when
+  // the set was rebuilt, so a customer with measurements showed none of them
+  // and the save looked as though it had done nothing.
+  const measurementRows = MEASUREMENT_FIELDS
+    .filter((field) => String(measurements[field.key] ?? '').trim())
+    .map((field) => [`${field.group} · ${field.label}`, measurements[field.key]]);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState(customer.notes || '');
   const [notesDraft, setNotesDraft] = useState(customer.notes || '');
@@ -231,7 +231,7 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
                   ['Full Name', customer.fullName],
                   ['Phone Number', customer.phone || '—'],
                   ['Email Address', customer.email || '—'],
-                  ['Date of Birth', customer.dateOfBirth ? new Date(customer.dateOfBirth).toLocaleDateString('en-GB') : '12 Mar 1988'],
+                  ['Date of Birth', customer.dateOfBirth ? new Date(customer.dateOfBirth).toLocaleDateString('en-GB') : 'Not recorded'],
                   ['Gender', customer.gender || 'Not specified'],
                   ['Occupation', customer.occupation || '—'],
                   ['Address', customer.address || '—'],
@@ -351,6 +351,11 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
             </header>
             <div style={{ padding: '6px 0 2px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+                {measurementRows.length === 0 ? (
+                  <div style={{ gridColumn: '1 / -1', padding: '14px 16px', fontSize: 12, color: '#8a7a6a' }}>
+                    Nothing has been measured for this customer yet.
+                  </div>
+                ) : null}
                 {measurementRows.map(([label, value]) => (
                   <div key={label} style={{ padding: '8px 16px', borderBottom: '1px solid #f3ede5' }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
@@ -359,7 +364,7 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
                 ))}
               </div>
               <div style={{ padding: '8px 16px', fontSize: 11, color: '#8a7a6a' }}>
-                Last updated: {customer.updatedAt ? new Date(customer.updatedAt).toLocaleDateString('en-GB') : 'Recently'} by Store Manager
+                {customer.updatedAt ? `Last updated ${new Date(customer.updatedAt).toLocaleDateString('en-GB')}` : 'Not updated yet'}
               </div>
             </div>
           </div>

@@ -44,11 +44,20 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
   const showError = (text) => { setMessage(text); setMessageIsError(true); };
   const showSuccess = (text) => { setMessage(text); setMessageIsError(false); };
 
+  const loadCustomers = () => api.get('/oms/customers')
+    .then((response) => {
+      const list = response.data?.data?.customers || [];
+      setCustomers(list);
+      return list;
+    })
+    .catch((error) => {
+      showError(error.response?.data?.message || 'Unable to load customers.');
+      return [];
+    });
+
   useEffect(() => {
-    api.get('/oms/customers')
-      .then((response) => setCustomers(response.data?.data?.customers || []))
-      .catch((error) => showError(error.response?.data?.message || 'Unable to load customers.'))
-      .finally(() => setLoading(false));
+    loadCustomers().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const createCustomer = async (event) => {
@@ -120,7 +129,29 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
   }
 
   if (measurementCustomer) {
-    return <MeasurementsPage customer={measurementCustomer} onBack={() => setMeasurementCustomer(null)} />;
+    return (
+      <MeasurementsPage
+        customer={measurementCustomer}
+        onBack={() => setMeasurementCustomer(null)}
+        // Nothing was told about the save, so the list kept the customer as
+        // they were before it — and reopening their measurements showed the
+        // old figures, which read as the save having done nothing. Saving can
+        // also create the profile for an invoice-only customer, which gives
+        // them a new id, so the list is read again rather than patched.
+        onSaved={async () => {
+          const list = await loadCustomers();
+          const refreshed = list.find((entry) => (
+            entry.id === measurementCustomer.id
+            || (measurementCustomer.email && entry.email === measurementCustomer.email)
+            || entry.fullName === measurementCustomer.fullName
+          ));
+          if (refreshed) {
+            setMeasurementCustomer(refreshed);
+            setSelectedCustomer((current) => (current ? refreshed : current));
+          }
+        }}
+      />
+    );
   }
 
   if (ordersCustomer) {
@@ -267,7 +298,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#faf7f3' }}>
-                  {['Customer', 'Phone', 'Status', 'Last Visit', 'Measurements', 'Store', 'Actions'].map((col) => (
+                  {['Customer', 'Phone', 'Status', 'Last Activity', 'Measurements', 'Store', 'Actions'].map((col) => (
                     <th key={col} style={{ padding: '11px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>{col}</th>
                   ))}
                 </tr>
@@ -292,23 +323,19 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                           <div>
                             <div style={{ fontWeight: 800, fontSize: 14, color: '#0f0b06' }}>{customer.fullName}</div>
                             <div style={{ fontSize: 11, color: '#8a7a6a' }}>
-                              Since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'unknown'}
+                              {Number(customer.totalOrders) > 1 ? 'Returning' : 'New'} · since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'unknown'}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{customer.phone || '—'}</td>
                       <td style={{ padding: '12px 14px' }}>
-                        <span style={{
-                          padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                          background: Number(customer.totalOrders) > 1 ? '#f0faf4' : '#fffbf0',
-                          color: Number(customer.totalOrders) > 1 ? '#2a7d4f' : '#7a6030',
-                        }}>
-                          {Number(customer.totalOrders) > 1 ? 'Returning' : 'New'}
-                        </span>
+                        {customer.status
+                          ? <Status>{customer.status}</Status>
+                          : <span style={{ fontSize: 12, color: '#8a7a6a' }}>No status</span>}
                       </td>
                       <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>
-                        {customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No visit yet'}
+                        {customer.lastActivityAt ? new Date(customer.lastActivityAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'None yet'}
                       </td>
                       <td style={{ padding: '12px 14px' }}>
                         <span style={{
@@ -392,9 +419,9 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                   </div>
                   <div style={{ borderTop: '1px solid #f3ede5', display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 16px', gap: 8 }}>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Last Visit</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Last Activity</div>
                       <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>
-                        {customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No visit yet'}
+                        {customer.lastActivityAt ? new Date(customer.lastActivityAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'None yet'}
                       </div>
                     </div>
                     <div>
