@@ -8,6 +8,7 @@ import MeasurementsPage from './MeasurementsPage';
 import CustomerOrdersPage from './CustomerOrdersPage';
 import OrderDetailsPage from './OrderDetailsPage';
 import Pagination from '../../components/oms/Pagination';
+import { Status } from '../../components/oms/Common';
 
 const KPI_COUNT = 4;
 

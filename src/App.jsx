@@ -3154,6 +3154,10 @@ const emptyOrderItem = () => ({
   delivery: todayIso(),
   // Fabric is chosen by Production or Inventory, not by the store raising the
   // sheet, so it starts at Nil and the sheet can be completed without it.
+  // Several fabrics can go into one garment — a shell and a lining, say — so
+  // each carries its own quantity. Empty is fine: choosing fabric is
+  // Production's or Inventory's job, not the store's.
+  fabrics: [],
   fabric: '',
   fabricId: '',
   fabricUnit: '',
@@ -3210,10 +3214,13 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
   }, []);
 
   useEffect(() => {
-    if (!requestedInvoice || !sentInvoices.length) return;
-    if (sheetForm.invoiceNumber === requestedInvoice) return;
-    selectInvoice(requestedInvoice);
-    setSearchParams({}, { replace: true });
+    if (!requestedInvoice || sheetForm.invoiceNumber === requestedInvoice) return;
+    // Both lists have to be in before the invoice can be matched to a customer
+    // profile. Waiting for them rather than trying early matters because the
+    // parameter is cleared once it has been used — an attempt made too soon
+    // would clear it and lose the selection for good.
+    if (!sentInvoices.length || !customers.length) return;
+    if (selectInvoice(requestedInvoice)) setSearchParams({}, { replace: true });
     // selectInvoice is rebuilt on every render; the invoice number is what
     // decides whether this still has anything to do.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3263,17 +3270,46 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     }));
   };
 
-  const selectFabric = (index, fabricId) => {
-    if (fabricId === 'client-supplied') {
-      updateItem(index, { fabric: 'Client supplied', fabricId: '', fabricUnit: '' });
-      return;
-    }
-    const selected = inventory.find((fabric) => fabric.id === fabricId);
-    updateItem(index, {
-      fabric: selected?.name || '',
-      fabricId: selected?.id || '',
-      fabricUnit: selected?.unit || '',
-    });
+  // The board, the tracking page and the tailor's list were all built around a
+  // single fabric name, so the first choice is mirrored onto the old fields and
+  // they keep working unchanged.
+  const withFabricSummary = (fabrics) => {
+    const [first] = fabrics;
+    return {
+      fabrics,
+      fabric: first?.name || '',
+      fabricId: first?.fabricId || '',
+      fabricUnit: first?.unit || '',
+      fabricUsage: first?.quantity || '',
+    };
+  };
+
+  const addFabric = (index, fabricId) => {
+    if (!fabricId) return;
+    const current = sheetForm.items[index].fabrics || [];
+    if (current.some((entry) => entry.fabricId === fabricId || (fabricId === 'client-supplied' && entry.clientSupplied))) return;
+
+    const chosen = fabricId === 'client-supplied'
+      ? { fabricId: '', name: 'Client supplied', unit: '', quantity: '', clientSupplied: true }
+      : (() => {
+        const item = inventory.find((fabric) => fabric.id === fabricId);
+        return item ? { fabricId: item.id, name: item.name, unit: item.unit, quantity: '' } : null;
+      })();
+    if (!chosen) return;
+
+    updateItem(index, withFabricSummary([...current, chosen]));
+  };
+
+  const updateFabricQuantity = (index, fabricId, quantity) => {
+    const next = (sheetForm.items[index].fabrics || []).map((entry) => (
+      entry.fabricId === fabricId ? { ...entry, quantity } : entry
+    ));
+    updateItem(index, withFabricSummary(next));
+  };
+
+  const removeFabric = (index, fabricId) => {
+    const next = (sheetForm.items[index].fabrics || []).filter((entry) => entry.fabricId !== fabricId);
+    updateItem(index, withFabricSummary(next));
   };
 
   // A customer counts as having a profile when there is a real record for them,
@@ -3288,14 +3324,14 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     const invoice = sentInvoices.find((item) => item.invoiceNumber === invoiceNumber);
     if (!invoice) {
       updateSheetForm('invoiceNumber', '');
-      return;
+      return false;
     }
 
     const profile = profileFor(invoice);
     if (!profile) {
       setSheetForm((current) => ({ ...current, invoiceNumber: '' }));
       setMessage(`${invoice.customer} has no customer profile yet. Create one — with their measurements — before raising an order sheet.`);
-      return;
+      return false;
     }
     setMessage('');
 
@@ -3341,6 +3377,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
           designNotes: invoice.itemNote || item.designNotes,
         } : item)),
     }));
+    return true;
   };
 
   const submitOrderSheet = async (event) => {
@@ -3351,9 +3388,20 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       setMessage('Select an invoice and confirm the customer before releasing the order sheet.');
       return;
     }
-    const incomplete = items.findIndex((item) => !item.item || !item.fabric);
+    // Fabric is Production's and Inventory's to choose, so a sheet can be
+    // released without one — this still demanded it, which made the Nil option
+    // decorative: you could pick it and then not save.
+    const incomplete = items.findIndex((item) => !item.item);
     if (incomplete !== -1) {
-      setMessage(`Item ${incomplete + 1} needs a garment name and a fabric before the order sheet can be released.`);
+      setMessage(`Item ${incomplete + 1} needs a garment name before the order sheet can be released.`);
+      return;
+    }
+
+    // A fabric chosen with no quantity against it tells Inventory nothing.
+    const missingQuantity = items.findIndex((item) => (item.fabrics || [])
+      .some((entry) => !entry.clientSupplied && !(Number(entry.quantity) > 0)));
+    if (missingQuantity !== -1) {
+      setMessage(`Item ${missingQuantity + 1} has a fabric with no quantity against it. Say how much is needed, or take it off.`);
       return;
     }
 
@@ -3393,6 +3441,10 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       fabric: firstItem.fabric,
       fabricId: firstItem.fabricId,
       fabricUnit: firstItem.fabricUnit,
+      fabricUsage: firstItem.fabricUsage || '',
+      // Every fabric across every garment, so Production and Inventory can see
+      // what the order needs without walking the item list.
+      fabrics: items.flatMap((item) => item.fabrics || []),
       measurements: sheetForm.measurements,
       measurementDetails: sheetForm.measurementDetails,
       designNotes: firstItem.designNotes,
@@ -3579,30 +3631,83 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
               </div>
 
               <div className="os-card-body os-grid-2" style={{ paddingTop: 0 }}>
-                <label className="os-field">
+                {/* One garment can take several fabrics — a shell and a lining,
+                    or two colours — so they are chosen one at a time and each
+                    carries how much of it this order needs. Leaving it empty is
+                    still fine: the choice is Production's or Inventory's. */}
+                <div className="os-field os-field-full fabric-picker">
                   <span>Fabric{inventoryLoading ? ' (loading…)' : ''}</span>
+
+                  {(orderItem.fabrics || []).length ? (
+                    <ul className="fabric-chosen">
+                      {(orderItem.fabrics || []).map((entry) => {
+                        const stock = inventory.find((fabric) => fabric.id === entry.fabricId);
+                        const available = toNumber(stock?.quantity);
+                        const wanted = toNumber(entry.quantity);
+                        const short = Boolean(entry.fabricId) && wanted > available;
+                        return (
+                          <li key={entry.fabricId || 'client-supplied'}>
+                            <div>
+                              <strong>{entry.name}</strong>
+                              <small>
+                                {entry.clientSupplied
+                                  ? 'The customer is bringing this'
+                                  : `${available} ${stock?.unit || entry.unit} in stock`}
+                              </small>
+                            </div>
+                            {entry.clientSupplied ? <span className="fabric-supplied">Customer&apos;s own</span> : (
+                              <label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={entry.quantity}
+                                  onChange={(event) => updateFabricQuantity(index, entry.fabricId, event.target.value)}
+                                  placeholder="0"
+                                  aria-label={`How much ${entry.name} this order needs`}
+                                />
+                                <span>{entry.unit || 'units'}</span>
+                              </label>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeFabric(index, entry.fabricId)}
+                              aria-label={`Remove ${entry.name}`}
+                            >×</button>
+                            {short ? <p>Only {available} {stock?.unit} left — Inventory will refuse this when it is allocated.</p> : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+
                   <select
-                    value={orderItem.fabric === 'Client supplied' ? 'client-supplied' : orderItem.fabricId}
-                    onChange={(event) => selectFabric(index, event.target.value)}
+                    value=""
+                    onChange={(event) => { addFabric(index, event.target.value); event.target.value = ''; }}
                     disabled={inventoryLoading}
                   >
-                    <option value="">{inventoryLoading ? 'Loading inventory...' : 'Nil — Production will choose'}</option>
+                    <option value="">
+                      {inventoryLoading
+                        ? 'Loading inventory...'
+                        : (orderItem.fabrics || []).length ? 'Add another fabric…' : 'Nil — Production will choose'}
+                    </option>
                     <option value="client-supplied">Client supplied</option>
-                    {inventory.map((fabric) => (
-                      <option key={fabric.id} value={fabric.id} disabled={toNumber(fabric.quantity) <= 0}>
-                        {fabric.name} ({toNumber(fabric.quantity)} {fabric.unit}){toNumber(fabric.quantity) <= 0 ? ' · Out of stock' : ''}
-                      </option>
-                    ))}
+                    {inventory
+                      .filter((fabric) => !(orderItem.fabrics || []).some((entry) => entry.fabricId === fabric.id))
+                      .map((fabric) => (
+                        <option key={fabric.id} value={fabric.id} disabled={toNumber(fabric.quantity) <= 0}>
+                          {fabric.name} ({toNumber(fabric.quantity)} {fabric.unit}){toNumber(fabric.quantity) <= 0 ? ' · Out of stock' : ''}
+                        </option>
+                      ))}
                   </select>
+
                   <span className="os-fabric-hint">
                     <Package size={11} />
-                    {orderItem.fabric === 'Client supplied'
-                      ? 'Customer will provide their own fabric'
-                      : orderItem.fabric
-                        ? `From inventory · ${orderItem.fabricUnit || 'rolls'}`
-                        : 'Left to Production or the Inventory Officer'}
+                    {(orderItem.fabrics || []).length
+                      ? `${orderItem.fabrics.length} fabric${orderItem.fabrics.length === 1 ? '' : 's'} on this garment`
+                      : 'Left to Production or the Inventory Officer'}
                   </span>
-                </label>
+                </div>
                 {/* Measurements used to sit here, once per garment. They are
                     one set for the whole order now, above the garment list. */}
                 <label className="os-field os-field-full">
@@ -3850,15 +3955,31 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
     notify(message);
   };
 
+  // Everything this garment needs, from the list the order sheet carries. An
+  // older order that named a single fabric arrives here as a list of one.
+  const fabricLinesFor = (order) => {
+    const chosen = (order.items || []).flatMap((item) => item.fabrics || []);
+    const lines = chosen.length ? chosen : (order.fabrics || []);
+    if (lines.length) {
+      return lines
+        .filter((line) => line.fabricId && Number(line.quantity) > 0)
+        .map((line) => ({ fabricId: line.fabricId, quantity: Number(line.quantity), name: line.name, unit: line.unit }));
+    }
+    const single = inventory.find((fabric) => fabric.id === order.fabricId)
+      || inventory.find((fabric) => fabric.name === order.fabric);
+    const usage = Number(order.fabricUsage);
+    return single && Number.isFinite(usage) && usage > 0
+      ? [{ fabricId: single.id, quantity: usage, name: single.name, unit: single.unit }]
+      : [];
+  };
+
   const allocateFabric = async (order) => {
     if (order.fabric === 'Client supplied') {
       updateJobWithToast(order, { fabricConfirmed: true, fabricAllocated: true }, 'Client-supplied fabric confirmed');
       return;
     }
-    const selectedFabric = inventory.find((fabric) => fabric.id === order.fabricId)
-      || inventory.find((fabric) => fabric.name === order.fabric);
-    const usage = Number(order.fabricUsage);
-    if (!selectedFabric || !Number.isFinite(usage) || usage <= 0) {
+    const lines = fabricLinesFor(order);
+    if (!lines.length) {
       notify('Select inventory fabric and enter the quantity used');
       return;
     }
@@ -3874,20 +3995,22 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
     setAllocatingJobId(order.id);
     try {
       const response = await api.post('/oms/fabrics/allocate', {
-        fabricId: selectedFabric.id,
-        quantity: usage,
+        fabrics: lines.map((line) => ({ fabricId: line.fabricId, quantity: line.quantity })),
         trackingToken: order.trackingToken,
         tailorName: order.tailor,
       });
-      const updatedFabric = response.data?.data?.fabric;
-      setInventory((current) => current.map((fabric) => fabric.id === updatedFabric.id ? updatedFabric : fabric));
+      const allocated = response.data?.data?.allocated || [];
+      // Stock moved for each of them, so the list on screen is read again
+      // rather than patched one item at a time.
+      api.get('/oms/fabrics')
+        .then((fresh) => setInventory(fresh.data?.data?.fabrics || []))
+        .catch(() => {});
       onUpdateJob(order.id, {
         fabricConfirmed: true,
         fabricAllocated: true,
-        fabricId: selectedFabric.id,
-        fabricUnit: selectedFabric.unit,
+        fabricAllocations: allocated,
       });
-      notify(`${usage} ${selectedFabric.unit} allocated to ${order.invoiceNumber}`);
+      notify(`${allocated.map((line) => `${line.quantity} ${line.unit} of ${line.name}`).join(', ')} allocated to ${order.invoiceNumber}`);
     } catch (error) {
       notify(error.response?.data?.message || 'Unable to allocate fabric');
     } finally {

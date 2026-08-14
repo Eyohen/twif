@@ -10859,3 +10859,33 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 }
 .orders-awaiting-list span { font-size: 13px; font-weight: 600; color: #1a1611; }
 .orders-awaiting-list small { font-size: 11px; color: #8a7a6a; font-family: ui-monospace, Menlo, monospace; }
+
+/* Several fabrics on one garment, each with how much of it is needed. */
+.fabric-picker { display: grid; gap: 8px; }
+.fabric-chosen { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.fabric-chosen li {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto 32px; gap: 10px; align-items: center;
+  border: 1px solid #eee5da; border-radius: 10px; background: #faf7f3; padding: 9px 11px;
+}
+.fabric-chosen li > div { display: grid; gap: 1px; min-width: 0; }
+.fabric-chosen strong { font-size: 13px; color: #1a1611; }
+.fabric-chosen small { font-size: 11px; color: #8a7a6a; }
+.fabric-chosen label { display: flex; align-items: center; gap: 6px; }
+.fabric-chosen label input {
+  width: 84px; border: 1px solid #ddd5c8; border-radius: 8px;
+  padding: 7px 9px; font: inherit; font-size: 13px; text-align: right;
+}
+.fabric-chosen label > span { font-size: 11px; color: #8a7a6a; }
+.fabric-supplied { font-size: 11px; color: #7a6030; white-space: nowrap; }
+.fabric-chosen li > button {
+  width: 30px; height: 30px; border: 1px solid #f0c8b8; border-radius: 8px;
+  background: #fff5f0; color: #8a3520; font-size: 15px; cursor: pointer;
+}
+.fabric-chosen li > p {
+  grid-column: 1 / -1; margin: 0; font-size: 11px; color: #8a3520;
+}
+
+@media (max-width: 620px) {
+  .fabric-chosen li { grid-template-columns: minmax(0, 1fr) 32px; }
+  .fabric-chosen label { grid-column: 1 / -1; justify-content: flex-start; }
+}
