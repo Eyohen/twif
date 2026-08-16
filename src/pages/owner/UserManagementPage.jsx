@@ -10,6 +10,19 @@ import { downloadCsv, csvStamp } from '../../utils/csv';
 import { formatMoment } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 
+// The shop's two stores, plus production and everywhere. These are the values
+// the staff record actually holds — the select used to show names like
+// "Victoria Island" and "Yaba Store", which are neither places the shop has nor
+// values the column accepts, so every save was refused.
+const STAFF_STORES = [
+  ['all', 'All stores'],
+  ['lekki', 'Lekki'],
+  ['ikeja', 'Ikeja'],
+  ['production', 'Production'],
+];
+
+const storeLabel = (store) => STAFF_STORES.find(([value]) => value === store)?.[1] || store || '—';
+
 const roleLabel = (role) => ({
   admin: 'Admin',
   accounts: 'Accountant',
@@ -30,7 +43,7 @@ const roleStyle = {
 
 const blankForm = {
   displayName: '', fullName: '', phone: '', dateOfBirth: '',
-  role: 'tailor', store: 'Lekki Store', tailorDepartment: 'native',
+  role: 'tailor', store: 'all', tailorDepartment: 'native',
   tailorGrade: '1', pin: '', confirmPin: '', authCode: '',
 };
 
@@ -540,10 +553,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
                 <label className="os-field">
                   <span>Assigned Store <span style={{ color: '#e05252' }}>*</span></span>
                   <select value={form.store} onChange={(e) => update('store', e.target.value)}>
-                    <option>Lekki Store</option>
-                    <option>Head Office</option>
-                    <option>Victoria Island</option>
-                    <option>Yaba Store</option>
+                    {STAFF_STORES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </label>
                 {form.role === 'tailor' && (
@@ -774,7 +784,7 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setSt
               </div>
               {[
                 ['Role', roleLabel(person.role)],
-                ['Store', person.store],
+                ['Store', storeLabel(person.store)],
                 ...(person.role === 'tailor' ? [['Department', person.tailorDepartment || 'Native'], ['Tailor Grade', `Grade ${person.tailorGrade || 1}`]] : []),
                 ['Account Status', person.status],
                 // Was fixed at "22 May 2024" for every member of staff.

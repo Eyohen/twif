@@ -45,3 +45,15 @@ Feature: Who may reach the shop's records
       When the Owner resets their PIN
       Then their old session should stop working
       And their old PIN should no longer sign them in
+
+  # The Add Staff form offered store names the database has never accepted, so
+  # every save came back with a raw Postgres enum error. Nothing covered it.
+  Rule: A staff account can actually be created
+
+    Scenario: The Owner adds a member of staff to each place they can work
+      When the Owner adds a member of staff to every store in turn
+      Then each one should be created
+
+    Scenario: An unknown store is refused in words a person can act on
+      When the Owner adds a member of staff to "Head Office"
+      Then the refusal should name the places staff can be assigned

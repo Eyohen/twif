@@ -141,3 +141,68 @@ Then('their old PIN should no longer sign them in', async function () {
   await owner.delete(`${API_URL}/oms/staff/${this.probeId}`);
   await owner.dispose();
 });
+
+// Staff are attached to one of the shop's stores, to production, or to all of
+// them. The form used to offer names like "Victoria Island" — neither a place
+// the shop has nor a value the column accepts.
+const STORES = ['all', 'lekki', 'ikeja', 'production'];
+
+When('the Owner adds a member of staff to every store in turn', async function () {
+  const client = await this.api('Owner');
+  this.created = [];
+  this.results = [];
+
+  for (const store of STORES) {
+    const tag = `${Date.now()}${STORES.indexOf(store)}`.slice(-8);
+    const response = await client.post(`${API_URL}/oms/staff`, {
+      data: {
+        displayName: `Store Probe ${tag}`,
+        phone: `0817${tag}`,
+        pin: 'probe26',
+        role: 'tailor',
+        tailorDepartment: 'native',
+        store,
+      },
+    });
+    const body = await response.json().catch(() => null);
+    this.results.push({ store, status: response.status(), stored: body?.data?.staffUser?.store, message: body?.message });
+    if (body?.data?.staffUser?.id) this.created.push(body.data.staffUser.id);
+  }
+  await client.dispose();
+});
+
+When('the Owner adds a member of staff to {string}', async function (store) {
+  const client = await this.api('Owner');
+  const tag = String(Date.now()).slice(-7);
+  this.response = await client.post(`${API_URL}/oms/staff`, {
+    data: {
+      displayName: `Store Probe ${tag}`,
+      phone: `0818${tag}`,
+      pin: 'probe26',
+      role: 'tailor',
+      tailorDepartment: 'native',
+      store,
+    },
+  });
+  this.body = await this.response.json().catch(() => null);
+  await client.dispose();
+});
+
+Then('each one should be created', async function () {
+  const refused = this.results.filter((result) => result.status !== 201);
+  expect(refused, `these were refused: ${refused.map((r) => `${r.store} — ${r.message}`).join('; ')}`).toEqual([]);
+  this.results.forEach((result) => expect(result.stored).toBe(result.store));
+
+  // Tidy up, so a run does not leave staff behind.
+  const owner = await this.api('Owner');
+  for (const id of this.created) await owner.delete(`${API_URL}/oms/staff/${id}`);
+  await owner.dispose();
+});
+
+// A raw "invalid input value for enum" is not something a person can act on.
+Then('the refusal should name the places staff can be assigned', function () {
+  expect(this.response.status()).toBe(400);
+  const message = String(this.body?.message || '');
+  expect(message, `the message was: ${message}`).not.toMatch(/enum|invalid input value/i);
+  STORES.forEach((store) => expect(message).toContain(store));
+});
