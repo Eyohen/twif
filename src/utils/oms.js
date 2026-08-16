@@ -110,12 +110,17 @@ export const formatMoment = (value) => {
 // Whole days between now and a delivery date. Order lists were labelling rows
 // from their position in the table — the fourth row and beyond read "Overdue"
 // whatever its date said, and the first three counted down 4, 3, 2 days.
+// Counted in whole days on the calendar, the way a person counts them: an
+// invoice raised on the 16th and due on the 18th has two days left, not three.
+// Measuring from the current moment to the last second of the due date and
+// rounding up added a day to every order on the board.
 export const daysUntilDue = (value) => {
   if (!value) return null;
-  const raw = String(value);
-  const due = new Date(raw.length <= 10 ? `${raw.slice(0, 10)}T23:59:59` : raw);
+  const due = new Date(`${String(value).slice(0, 10)}T00:00:00`);
   if (Number.isNaN(due.getTime())) return null;
-  return Math.ceil((due.getTime() - Date.now()) / 86400000);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((due.getTime() - today.getTime()) / 86400000);
 };
 
 export const dueDateLabel = (value) => {
@@ -380,10 +385,28 @@ export const canShowJobInProduction = (job, invoices, releasePercent) => (
   productionBlockReason(job, invoices, releasePercent) === null
 );
 
-export const productionJobFromInvoice = (invoice) => {
+// The figures a customer's profile holds now, written the way the order sheet
+// writes them.
+const measurementsWrittenOut = (profile) => Object.entries(profile?.measurements || {})
+  .filter(([key, value]) => key !== 'profile' && String(value ?? '').trim())
+  .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
+  .join(', ');
+
+export const productionJobFromInvoice = (invoice, customers = []) => {
   if (!invoice?.orderSheet) return null;
   const sheet = invoice.orderSheet;
   const styleImages = Array.isArray(sheet.styleImages) ? sheet.styleImages : [];
+  // Measurements are copied onto the order sheet at the moment it is raised.
+  // A shop that raises the invoice first and measures the customer afterwards
+  // — the ordinary way round — left the job held on "Measurements missing" for
+  // good, because nothing ever looked at the profile again. If the sheet has
+  // none, read what the customer has now.
+  const measurements = String(sheet.measurements ?? '').trim() || measurementsWrittenOut(
+    customers.find((entry) => (
+      (sheet.customerId && entry.id === sheet.customerId)
+      || (sheet.customer && entry.fullName === sheet.customer)
+    ))
+  );
   return {
     id: sheet.id || `JOB-${invoice.invoiceNumber}`,
     invoiceNumber: invoice.invoiceNumber,
@@ -400,7 +423,7 @@ export const productionJobFromInvoice = (invoice) => {
       pieces: toNumber(sheet.pieces || invoice.pieces) || 1,
       delivery: sheet.delivery || dateInputValue(invoice.deliveryDate),
       fabric: sheet.fabric || '',
-      measurements: sheet.measurements || '',
+      measurements,
       designNotes: sheet.designNotes || '',
       styleImages: Array.isArray(sheet.styleImages) ? sheet.styleImages : [],
     }],
@@ -416,7 +439,7 @@ export const productionJobFromInvoice = (invoice) => {
     tailor: sheet.tailor || 'Unassigned',
     images: toNumber(sheet.images) || styleImages.length,
     styleImages,
-    measurements: sheet.measurements || '',
+    measurements,
     designNotes: sheet.designNotes || '',
     note: sheet.note || sheet.designNotes || invoice.itemNote || '',
     productionNote: sheet.productionNote || '',

@@ -331,8 +331,10 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate }
                   <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>
                     {delivery ? new Date(`${String(delivery).slice(0, 10)}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Not set'}
                   </div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: index > 2 ? '#8a3520' : '#2a7d4f', marginTop: 1 }}>
-                    {index > 2 ? 'Overdue' : `${Math.max(1, 4 - index)} days left`}
+                  {/* Same row-position count as the table above had: on a
+                      phone every order past the third read "Overdue". */}
+                  <div style={{ fontSize: 11, fontWeight: 600, color: daysUntilDue(delivery) !== null && daysUntilDue(delivery) < 0 ? '#8a3520' : '#2a7d4f', marginTop: 1 }}>
+                    {dueDateLabel(delivery)}
                   </div>
                 </div>
                 <div>

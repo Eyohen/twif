@@ -185,3 +185,56 @@ Then('the timeline should record who approved it and when', async function () {
   expect(invoice?.accountApprovedBy, 'nobody was recorded as approving it').toBeTruthy();
   expect(invoice?.accountApprovedAt, 'no approval time was recorded').toBeTruthy();
 });
+
+// The document itself, rendered by the same template the email carries.
+const invoiceDocument = async (world, { total, paid }) => {
+  const client = await world.api('Store Manager');
+  const response = await client.post(`${API_URL}/oms/invoices/html-preview`, {
+    data: {
+      invoiceNumber: `INVDOC${Date.now().toString().slice(-6)}`,
+      customer: { name: 'Document Check', phone: '08110000000' },
+      items: [{ description: 'Document check suit', rate: total, quantity: 1, amount: total }],
+      subtotal: total,
+      balanceDue: total,
+      amountReceived: paid,
+      paymentStatus: paid >= total ? 'fully_paid' : 'partial_paid',
+      paymentMethod: 'transfer',
+    },
+  });
+  const html = await response.text();
+  await client.dispose();
+  return html;
+};
+
+const naira = (amount) => `₦${Number(amount).toLocaleString('en-NG')}`;
+
+When('an invoice for {int} is raised as fully paid', async function (total) {
+  this.invoiceTotal = total;
+  this.invoiceHtml = await invoiceDocument(this, { total, paid: total });
+});
+
+When('an invoice for {int} is raised with {int} paid', async function (total, paid) {
+  this.invoiceTotal = total;
+  this.invoiceHtml = await invoiceDocument(this, { total, paid });
+});
+
+// Nothing on a settled invoice — the document, the totals box or the line the
+// inbox shows before it is opened — may still ask for the money.
+Then('the invoice document should not say {int} is due', function (amount) {
+  const dueBlocks = this.invoiceHtml.match(/Balance due[\s\S]{0,240}?<\/(strong|div|p)>/gi) || [];
+  dueBlocks.forEach((block) => {
+    expect(block, `the document still asks for ${naira(amount)} on an invoice paid in full`)
+      .not.toContain(naira(amount));
+  });
+  expect(this.invoiceHtml, 'a settled invoice should say so').toContain('Paid In Full');
+});
+
+Then('the invoice document should show {int} as paid', function (amount) {
+  expect(this.invoiceHtml).toContain('Amount paid');
+  expect(this.invoiceHtml).toContain(naira(amount));
+});
+
+Then('the invoice document should say {int} is due', function (amount) {
+  const dueBlocks = this.invoiceHtml.match(/Balance Due[\s\S]{0,240}?<\/(strong|div)>/gi) || [];
+  expect(dueBlocks.some((block) => block.includes(naira(amount))), `no balance of ${naira(amount)} on the document`).toBe(true);
+});

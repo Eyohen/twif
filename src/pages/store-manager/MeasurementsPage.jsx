@@ -227,14 +227,18 @@ export default function MeasurementsPage({ customer, onBack, onSaved }) {
             </div>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#b0a090', marginTop: 4 }}>
               <Clock size={10} />
-              Last updated: {customer.updatedAt ? new Date(customer.updatedAt).toLocaleDateString('en-GB') : 'Recently'} by Bola
+              {/* This read "by Bola" for every customer whoever saved them —
+                  and who took a measurement is not recorded anywhere, so it
+                  cannot be shown honestly. */}
+              Last updated: {customer.updatedAt ? new Date(customer.updatedAt).toLocaleDateString('en-GB') : 'not recorded'}
             </span>
           </div>
 
           {/* Meta Chips */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {[
-              ['Measurement Set', '#3'],
+              // "Measurement Set #3" stood here against every customer alike.
+              // One set is kept per customer, so there is no set number.
               ['Created On', customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB') : '—'],
               ['Last Updated', customer.updatedAt ? new Date(customer.updatedAt).toLocaleDateString('en-GB') : '—'],
               ['Total Orders Using', `${customer.totalOrders || 0} orders`],

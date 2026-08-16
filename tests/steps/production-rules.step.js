@@ -183,7 +183,9 @@ async function makeOrder(world, { paymentStatus, measurements, percentPaid }) {
   const list = await client.get(`${API_URL}/oms/invoices/sent`);
   const invoice = ((await list.json())?.data?.invoices || []).find((item) => item.invoiceNumber === invoiceNumber);
   await client.dispose();
-  return invoice;
+  // The list is deliberately lean and drops the contact details, so they are
+  // carried alongside for scenarios that need to reach the customer record.
+  return { ...invoice, contact: { name: customer, email: `rule.${stamp}@twif.test`, phone: `0819${stamp}0` } };
 }
 
 Given('an approved order whose invoice is unpaid', async function () {
@@ -196,6 +198,29 @@ Given('an approved and paid order with no measurements', async function () {
   this.order = await makeOrder(this, { paymentStatus: 'partial_paid', measurements: '', percentPaid: 70 });
   expect(this.order.paymentStatus).toBe('Partial Paid');
   expect(this.order.orderSheet?.measurements ?? '').toBe('');
+});
+
+// Measured on the customer's record rather than on the order sheet — the way
+// it happens when the invoice is raised first and the tape comes out after.
+When('the customer is measured on their own profile', async function () {
+  const client = await this.api();
+  const { name, email, phone } = this.order.contact;
+
+  const list = await client.get(`${API_URL}/oms/customers`);
+  const existing = ((await list.json())?.data?.customers || [])
+    .find((entry) => entry.fullName === name && !String(entry.id).startsWith('sent-'));
+
+  const measurements = { top_chest: '42', top_shoulder: '18', bottom_waist: '36' };
+  const response = existing
+    ? await client.patch(`${API_URL}/oms/customers/${existing.id}`, {
+      data: { fullName: name, phone, email, measurements },
+    })
+    : await client.post(`${API_URL}/oms/customers`, {
+      data: { fullName: name, phone, email, measurements },
+    });
+  const detail = await response.text();
+  await client.dispose();
+  expect(response.ok(), `the measurements could not be saved against the customer: ${detail}`).toBe(true);
 });
 
 When('the measurements are added', async function () {

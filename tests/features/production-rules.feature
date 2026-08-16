@@ -66,6 +66,15 @@ Feature: The rules production runs on
       When the measurements are added
       Then assigning a tailor to it should be allowed
 
+    # A shop raises the invoice at the counter and measures the customer after.
+    # The order sheet takes its copy of the measurements when it is raised, so
+    # measuring later left the job held for good with nothing to undo it.
+    Scenario: Measuring the customer after the order sheet was raised releases the job
+      Given an approved and paid order with no measurements
+      When the customer is measured on their own profile
+      And the Production Manager opens Production
+      Then that order should be listed as a production job
+
   # The tailor's controls follow the job's state, so a garment cannot be
   # reported finished before anyone has touched it.
   Rule: A job moves Ready to Assign, then In Progress, then Ready

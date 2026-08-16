@@ -58,3 +58,17 @@ Feature: Recording what a customer actually paid
       And the Accountant approves it
       Then deleting it should be refused
       And the timeline should record who approved it and when
+
+  # The invoice the customer receives is the shop's word on what they owe. It
+  # was printing the whole sum as the balance due whatever had been paid,
+  # under a "Fully Paid" badge, because nothing subtracted the payment.
+  Rule: The invoice the customer receives shows what is still owed
+
+    Scenario: An invoice paid in full does not ask for the money again
+      When an invoice for 50000 is raised as fully paid
+      Then the invoice document should not say 50000 is due
+      And the invoice document should show 50000 as paid
+
+    Scenario: A part-paid invoice asks for the remainder only
+      When an invoice for 50000 is raised with 20000 paid
+      Then the invoice document should say 30000 is due

@@ -2474,6 +2474,14 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   // typed in — see the tier the customer is on, resolved below.
   const eliteDiscountAmount = Math.round(((subtotal - itemDiscountTotal) * elitePercent) / 100);
   const balanceDue = Math.max(subtotal - itemDiscountTotal - eliteDiscountAmount - toNumber(form.storeCreditApplied), 0);
+  // `balanceDue` is what the invoice comes to — the server stores it as the
+  // invoice total. What is still owed is that less whatever the customer has
+  // just handed over, and nothing used to subtract it: a fully paid invoice
+  // showed, and emailed, the whole sum as outstanding.
+  const amountPaidNow = form.paymentStatus === 'fully_paid' && !toNumber(form.amountReceived)
+    ? balanceDue
+    : Math.min(toNumber(form.amountReceived), balanceDue);
+  const outstanding = Math.max(balanceDue - amountPaidNow, 0);
 
   const updateForm = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -2531,9 +2539,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     eliteDiscountAmount,
     storeCreditApplied: toNumber(form.storeCreditApplied),
     // Fully paid means the whole balance unless a smaller figure was typed.
-    amountReceived: form.paymentStatus === 'fully_paid' && !toNumber(form.amountReceived)
-      ? balanceDue
-      : toNumber(form.amountReceived),
+    amountReceived: amountPaidNow,
     balanceDue,
     trackingUrl: form.trackingUrl || trackingUrlForToken(form.trackingToken),
     notes: form.notes.split('\n').map((note) => note.trim()).filter(Boolean),
@@ -2633,7 +2639,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     return <div className="invoice-preview-page-v2">
       <header><button type="button" onClick={() => setPreviewMode(false)}>← &nbsp; Back to Invoice</button><div><small>INVOICE</small><strong>{form.invoiceNumber}</strong><Status>Not Sent Yet</Status></div></header>
       <section className="invoice-preview-title"><div><h2>{previewTab === 'invoice' ? 'Invoice Preview' : 'Email Preview'}</h2><p>This is how your {previewTab === 'invoice' ? 'invoice' : 'email'} will appear to the customer.</p></div><nav><button className={previewTab === 'invoice' ? 'active' : ''} onClick={() => setPreviewTab('invoice')}>Invoice Preview</button><button className={previewTab === 'email' ? 'active' : ''} onClick={() => setPreviewTab('email')}>Email Preview</button></nav></section>
-      {previewTab === 'invoice' ? <InvoiceDocumentPreview html={previewHtml} invoiceNumber={form.invoiceNumber} /> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your twif Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], ['Amount Due', money.format(balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div>{/* These two are part of the picture of the email, not controls on this screen — clicking them here did nothing. */}<span>Download Invoice PDF</span><span>Track Your Order</span></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>Balance Due</span><strong>{money.format(balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your twif Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
+      {previewTab === 'invoice' ? <InvoiceDocumentPreview html={previewHtml} invoiceNumber={form.invoiceNumber} /> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your twif Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], [outstanding > 0 ? 'Amount Due' : 'Paid In Full', money.format(outstanding > 0 ? outstanding : balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div>{/* These two are part of the picture of the email, not controls on this screen — clicking them here did nothing. */}<span>Download Invoice PDF</span><span>Track Your Order</span></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>{outstanding > 0 ? 'Balance Due' : 'Paid In Full'}</span><strong>{money.format(outstanding > 0 ? outstanding : balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your twif Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
       {message ? <div className="invoice-message">{message}</div> : null}
       <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => saveInvoicePdf(previewHtml, form.invoiceNumber)}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
     </div>;
@@ -2914,10 +2920,12 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
               {itemDiscountTotal > 0 && <><dt>Item discounts</dt><dd style={{ color: '#2a7d4f' }}>-{money.format(itemDiscountTotal)}</dd></>}
               {eliteDiscountAmount > 0 && <><dt>Elite discount</dt><dd style={{ color: '#2a7d4f' }}>-{money.format(eliteDiscountAmount)}</dd></>}
               {toNumber(form.storeCreditApplied) > 0 && <><dt>Store credit</dt><dd style={{ color: '#2a7d4f' }}>-{money.format(toNumber(form.storeCreditApplied))}</dd></>}
+              {amountPaidNow > 0 && <><dt>Invoice total</dt><dd>{money.format(balanceDue)}</dd></>}
+              {amountPaidNow > 0 && <><dt>Amount paid</dt><dd style={{ color: '#2a7d4f' }}>-{money.format(amountPaidNow)}</dd></>}
             </dl>
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee5da', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 11, textTransform: 'uppercase', color: '#8a7a6a', letterSpacing: '0.06em', fontWeight: 700 }}>Balance Due</span>
-              <strong style={{ fontSize: 18, color: '#1a1611' }}>{money.format(balanceDue)}</strong>
+              <span style={{ fontSize: 11, textTransform: 'uppercase', color: '#8a7a6a', letterSpacing: '0.06em', fontWeight: 700 }}>{outstanding > 0 ? 'Balance Due' : 'Paid In Full'}</span>
+              <strong style={{ fontSize: 18, color: '#1a1611' }}>{money.format(outstanding > 0 ? outstanding : balanceDue)}</strong>
             </div>
           </div>
           <button type="button" onClick={previewInvoice}
@@ -3419,6 +3427,10 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       trackingToken: sheetForm.trackingToken,
       trackingUrl: sheetForm.trackingUrl,
       customer: sheetForm.customer.trim(),
+      // Kept so the order can find its customer again later — two customers can
+      // share a name, and measurements taken after the sheet was raised are
+      // looked up against this.
+      customerId: sheetForm.customerId || '',
       phone: '',
       store: sheetForm.store,
       amount: 0,
@@ -6856,12 +6868,15 @@ function App() {
 
     let cancelled = false;
 
-    api.get('/oms/invoices/sent')
-      .then((response) => {
+    // The customer list comes along so a job whose order sheet was raised
+    // before the customer was measured can still find their figures.
+    Promise.all([api.get('/oms/invoices/sent'), api.get('/oms/customers').catch(() => null)])
+      .then(([invoiceResponse, customerResponse]) => {
         if (cancelled) return;
-        const invoices = response.data?.data?.invoices || [];
+        const invoices = invoiceResponse.data?.data?.invoices || [];
+        const profiles = customerResponse?.data?.data?.customers || [];
         setSentInvoices(invoices);
-        setProductionJobs(invoices.map(productionJobFromInvoice).filter(Boolean));
+        setProductionJobs(invoices.map((invoice) => productionJobFromInvoice(invoice, profiles)).filter(Boolean));
       })
       .catch(() => {
         // Keep the local cache visible if the API is unavailable.
