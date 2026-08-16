@@ -206,3 +206,42 @@ Then('the refusal should name the places staff can be assigned', function () {
   expect(message, `the message was: ${message}`).not.toMatch(/enum|invalid input value/i);
   STORES.forEach((store) => expect(message).toContain(store));
 });
+
+When('the Owner fills in the Add Staff form', async function () {
+  const page = this.page;
+  await page.getByRole('button', { name: /add staff/i }).first().click();
+
+  const tag = String(Date.now()).slice(-6);
+  this.newStaffName = `Form Check ${tag}`;
+  this.newStaffPhone = `0816${tag}`;
+
+  const fill = async (label, value) => {
+    const field = page.locator('label').filter({ hasText: new RegExp(label, 'i') }).first();
+    await field.locator('input').first().fill(value);
+  };
+  await fill('Full Name', this.newStaffName);
+  await fill('Display Name', this.newStaffName);
+  await fill('Phone', this.newStaffPhone);
+  await fill('Initial PIN', 'check26');
+  await fill('Confirm PIN', 'check26');
+
+  await page.locator('label').filter({ hasText: /Role/i }).first().locator('select').selectOption('accounts');
+  await page.locator('label').filter({ hasText: /Assigned Store/i }).first().locator('select').selectOption('lekki');
+
+  await page.getByRole('button', { name: /^(create|save|add) /i }).last().click();
+  await page.waitForTimeout(2500);
+});
+
+// Checked against the shop's records, not against what the screen says.
+Then('the new member of staff should appear on the staff list', async function () {
+  const client = await this.api('Owner');
+  const response = await client.get(`${API_URL}/oms/staff`);
+  const staff = ((await response.json())?.data?.staffUsers || []);
+  const made = staff.find((person) => person.displayName === this.newStaffName);
+
+  expect(made, `no staff member called ${this.newStaffName} reached the records`).toBeTruthy();
+  expect(made.store).toBe('lekki');
+
+  await client.delete(`${API_URL}/oms/staff/${made.id}`);
+  await client.dispose();
+});

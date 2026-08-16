@@ -44,7 +44,7 @@ const roleStyle = {
 const blankForm = {
   displayName: '', fullName: '', phone: '', dateOfBirth: '',
   role: 'tailor', store: 'all', tailorDepartment: 'native',
-  tailorGrade: '1', pin: '', confirmPin: '', authCode: '',
+  tailorGrade: '1', pin: '', confirmPin: '',
 };
 
 function Avatar({ name, size = 'md' }) {
@@ -128,6 +128,14 @@ export default function UserManagementPage() {
   const save = async (event) => {
     event.preventDefault();
     setMessage('');
+
+    // Confirm PIN was asked for and never compared, so a typo in either box
+    // became the PIN the new member of staff could not sign in with.
+    if (screen === 'add') {
+      if (form.pin.trim().length < 4) { setMessage('A PIN must be at least 4 characters.'); return; }
+      if (form.pin !== form.confirmPin) { setMessage('The two PINs do not match.'); return; }
+    }
+
     const payload = { ...form, displayName: form.displayName || form.fullName };
     try {
       if (screen === 'edit') {
@@ -295,7 +303,7 @@ export default function UserManagementPage() {
             <Filter size={13} style={{ color: '#8a7a6a' }} />
             {[
               { value: roleFilter, onChange: setRoleFilter, options: [['all', 'All Roles'], ['admin', 'Admin'], ['accounts', 'Accountant'], ['tailor', 'Tailor'], ['store_manager', 'Store Manager'], ['production_manager', 'Production']] },
-              { value: storeFilter, onChange: setStoreFilter, options: [['all', 'All Stores'], ...stores.map(s => [s, s])] },
+              { value: storeFilter, onChange: setStoreFilter, options: [['all', 'All Stores'], ...stores.filter((s) => s !== 'all').map((s) => [s, storeLabel(s)])] },
               { value: statusFilter, onChange: setStatusFilter, options: [['all', 'All Statuses'], ['active', 'Active'], ['inactive', 'Inactive']] },
             ].map((sel, i) => (
               <select
@@ -488,7 +496,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
           <UserCog size={22} strokeWidth={1.5} style={{ color: '#c97b08' }} />
           <div>
             <h2>{mode === 'edit' ? 'Edit Staff Member' : 'Add New Staff'}</h2>
-            <p>{mode === 'edit' ? 'Update staff information. Google Auth code required to save.' : 'Create a new staff account. Google Auth code required to save.'}</p>
+            <p>{mode === 'edit' ? 'Update this staff member and their access.' : 'Create a staff account and the access that goes with it.'}</p>
           </div>
         </div>
       </div>
@@ -598,19 +606,11 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
               </div>
             )}
 
-            {/* Security */}
-            <div className="os-card">
-              <div className="os-card-head">
-                <span className="os-step-num">{mode === 'add' ? 4 : 3}</span>
-                <div><strong>Security Verification</strong><p>Your Google Authenticator code is required</p></div>
-              </div>
-              <div className="os-card-body">
-                <label className="os-field os-field-full">
-                  <span>Google Auth Code <span style={{ color: '#e05252' }}>*</span></span>
-                  <input value={form.authCode} onChange={(e) => update('authCode', e.target.value)} placeholder="123 456" required />
-                </label>
-              </div>
-            </div>
+            {/* A "Google Auth Code" box stood here, marked required and checked
+                by nothing — it was sent nowhere and verified nowhere. Because
+                the browser enforces `required`, it stopped the form submitting
+                at all, so no staff account could be created. Two-factor is real
+                and belongs to the Admin's own sign-in, not to this form. */}
 
             {/* Footer actions */}
             <div style={{ display: 'flex', gap: 10 }}>

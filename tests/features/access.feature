@@ -57,3 +57,13 @@ Feature: Who may reach the shop's records
     Scenario: An unknown store is refused in words a person can act on
       When the Owner adds a member of staff to "Head Office"
       Then the refusal should name the places staff can be assigned
+
+    # The API accepted a new staff member all along. The form did not send one:
+    # it carried a "Google Auth Code" box, marked required and checked by
+    # nothing, so the browser refused to submit. Testing the endpoint said this
+    # worked; the screen was the thing that did not.
+    Scenario: The Owner adds a member of staff from the screen
+      Given I am signed in as the Owner
+      And I open the User Management page
+      When the Owner fills in the Add Staff form
+      Then the new member of staff should appear on the staff list
