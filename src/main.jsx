@@ -4,52 +4,16 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import './index.css'
 
-// Temporary suspension switch — flip to false to restore the site.
-const SUSPENDED = true
-
-function SuspendedNotice() {
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        textAlign: 'center',
-        padding: '2rem',
-        background: '#111827',
-        color: '#f9fafb',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        zIndex: 999999,
-      }}
-    >
-      <div>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.75rem' }}>
-          This site is temporarily unavailable
-        </h1>
-        <p style={{ fontSize: '1rem', color: '#9ca3af' }}>
-          Please check back soon.
-        </p>
-      </div>
-    </div>
-  )
-}
-
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {SUSPENDED ? (
-      <SuspendedNotice />
-    ) : (
-      // The template's AuthProvider used to wrap this. It fetched /auth/me on
-      // every load — the customer-account endpoint from the product this
-      // codebase started as — and on the 401 it cleared the stored token, which
-      // is now the staff token the OMS signs in with. Nothing in the OMS ever
-      // used it: its three consumers are unreachable from here.
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    )}
+    {/* The template's AuthProvider used to wrap this. It fetched /auth/me on
+        every load — the customer-account endpoint from the product this
+        codebase started as — and on the 401 it cleared the stored token, which
+        is now the staff token the OMS signs in with. Nothing in the OMS ever
+        used it: its three consumers are unreachable from here. */}
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </StrictMode>,
 )
 
