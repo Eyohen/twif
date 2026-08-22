@@ -24,8 +24,8 @@ export const navByRole = {
   // /owner/notifications and was redirected straight back to the overview.
   // The Owner and Admin could see everything except the two screens where work
   // actually starts, so neither could raise an invoice or an order sheet.
-  owner: ['Overview', 'Orders', 'Customers', 'Invoices', 'Order Sheet', 'Payments', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'User Management', 'Stores', 'Memberships', 'Reports', 'Settings', 'Notifications'],
-  admin: ['Overview', 'Orders', 'Customers', 'Invoices', 'Order Sheet', 'Payments', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'Staff', 'Memberships', 'Reports', 'Settings', 'Notifications'],
+  owner: ['Overview', 'Orders', 'Customers', 'Invoices', 'Order Sheet', 'Payments', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'User Management', 'Stores', 'Memberships', 'Reports', 'Shopify Sync', 'Settings', 'Notifications'],
+  admin: ['Overview', 'Orders', 'Customers', 'Invoices', 'Order Sheet', 'Payments', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'Staff', 'Memberships', 'Reports', 'Shopify Sync', 'Settings', 'Notifications'],
   store_manager: ['Overview', 'Customers', 'Orders', 'Invoices', 'Order Sheet', 'Notifications'],
   accounts: ['Overview', 'Invoices', 'Payments', 'Reports', 'Inventory', 'Notifications'],
   production_manager: ['Overview', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'Notifications'],
@@ -66,4 +66,5 @@ export const navIcons = {
   'User Management': 'UserCog',
   Stores: 'Building2',
   Memberships: 'Star',
+  'Shopify Sync': 'RefreshCw',
 };

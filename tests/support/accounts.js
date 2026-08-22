@@ -38,4 +38,5 @@ export const VIEW_PATHS = {
   Stores: 'stores',
   Memberships: 'memberships',
   Staff: 'staff',
+  'Shopify Sync': 'shopify-sync',
 };

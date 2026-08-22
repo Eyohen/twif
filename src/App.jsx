@@ -15,6 +15,7 @@ import AccountsInventoryReconciliationPage from './pages/accounts/InventoryRecon
 import UserManagementPage from './pages/owner/UserManagementPage';
 import MembershipsPage from './pages/owner/MembershipsPage';
 import SettingsPage from './pages/owner/SettingsPage';
+import ShopifySyncPage from './pages/owner/ShopifySyncPage';
 import InventoryManagerOverviewPage from './pages/inventory/OverviewPage';
 import InventoryListPage from './pages/inventory/InventoryListPage';
 import { roles, inventoryCategories, navByRole, accountTypeByRole } from './config/oms';
@@ -122,6 +123,7 @@ const NAV_ICONS = {
   'User Management': UserCog,
   Stores: Building2,
   Memberships: Star,
+  'Shopify Sync': RefreshCw,
 };
 
 function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], onUpdateJob, onApproveInvoice, onNavigate }) {
@@ -6809,6 +6811,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'User Management') return <UserManagementPage currentRole={viewProps.currentRole} />;
   if (activeView === 'Stores') return <OwnerStoresPage sentInvoices={viewProps.sentInvoices} />;
   if (activeView === 'Memberships') return <MembershipsPage />;
+  if (activeView === 'Shopify Sync') return <ShopifySyncPage />;
   if (activeView === 'Settings') return <SettingsPage />;
   if (activeView === 'Reports') return <ReportsView role={role} />;
   if (activeView === 'My Tasks') return <MyTasksPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
