@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ArrowLeft, Edit2, Plus, User, Ruler, ShoppingBag, FileText, Clock, StickyNote, Save, X, MapPin, Phone, Star, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Edit2, Plus, User, Ruler, ShoppingBag, FileText, Clock, StickyNote, Save, X, MapPin, Phone, Star, ChevronRight, Tag } from 'lucide-react';
 import { money, invoiceApprovalStatus, isEliteCustomer, customerTierLabel } from '../../utils/oms';
 import { MEASUREMENT_FIELDS } from './MeasurementsPage';
 import { Status } from '../../components/oms/Common';
@@ -302,6 +302,41 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
               ) : null}
             </div>
           </div>
+
+          {/* Ready-to-Wear (Shopify) */}
+          {(customer.shopifyOrders || []).length ? (
+            <div className="os-card">
+              <div className="os-card-head">
+                <Tag size={16} strokeWidth={1.8} style={{ color: '#c97b08' }} />
+                <div>
+                  <strong>Ready-to-Wear (Shopify)</strong>
+                  <p>{customer.shopifyOrders.length} order{customer.shopifyOrders.length !== 1 ? 's' : ''} from the online store</p>
+                </div>
+              </div>
+              <div className="os-card-body" style={{ gap: 10 }}>
+                {customer.shopifyOrders.slice(0, 4).map((order, index) => (
+                  <div
+                    key={`${order.orderNumber || 'order'}-${index}`}
+                    style={{
+                      border: '1px solid #f3ede5', borderRadius: 10, padding: '12px 14px',
+                      background: '#faf7f3',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#0f0b06' }}>{order.orderNumber || 'Shopify order'}</span>
+                      <Status>{order.financialStatus || 'unknown'}</Status>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#8a7a6a', marginTop: 2 }}>
+                      {order.placedAt ? new Date(order.placedAt).toLocaleDateString('en-GB') : 'Date unknown'} &middot; {order.fulfillmentStatus || 'not fulfilled'}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1a1611' }}>{money.format(order.total)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {/* Invoices */}
           <div ref={invoicesRef} className="os-card">
