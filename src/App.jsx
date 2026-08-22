@@ -33,6 +33,7 @@ import {
   periodWindow, previousWindow, withinWindow, changeAgainst, changeLabel, LOG_PERIODS,
   amountReceived, invoicePayable, formatMoment, CUSTOMER_TRACKING_STEPS,
   openDocumentTab, presentInvoiceDocument, downloadInvoicePdf as saveInvoicePdf,
+  useStores,
 } from './utils/oms';
 
 const trackingBaseUrl = (
@@ -609,48 +610,77 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
 }
 
 function OwnerStoresPage({ sentInvoices = [] }) {
-  const [stores, setStores] = useState([
-    { id: 1, name: 'Lekki Store', location: 'Lekki Phase 1, Lagos', manager: 'Bola', phone: '08012345678', status: 'Active' },
-    { id: 2, name: 'Ikeja Store', location: 'Allen Avenue, Ikeja, Lagos', manager: 'Grace', phone: '08023456789', status: 'Active' },
-    { id: 3, name: 'VI Store', location: 'Victoria Island, Lagos', manager: '—', phone: '—', status: 'Coming Soon' },
-  ]);
+  const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [viewMode, setViewMode] = useState('cards');
-  const emptyForm = { name: '', location: '', manager: '', phone: '', status: 'Active' };
+  const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const emptyForm = { name: '', location: '', manager: '', phone: '', email: '', status: 'active' };
   const [form, setForm] = useState(emptyForm);
 
+  const reload = () => {
+    setLoading(true);
+    api.get('/oms/stores')
+      .then((response) => setStores(response.data?.data?.stores || []))
+      .catch((error) => setMessage(error.response?.data?.message || 'The store list could not be loaded.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(reload, []);
+
   const storeRevenue = (storeName) => {
-    const matches = sentInvoices.filter(inv => String(inv.store || '').toLowerCase().includes(storeName.toLowerCase().split(' ')[0]));
+    const matches = sentInvoices.filter(inv => String(inv.store || '').toLowerCase().includes(String(storeName || '').toLowerCase().split(' ')[0]));
     return { revenue: matches.reduce((s, inv) => s + toNumber(inv.total), 0), orders: matches.length };
   };
 
-  const openCreate = () => { setForm(emptyForm); setEditing(null); setShowForm(true); };
-  const openEdit = (store) => { setForm({ name: store.name, location: store.location, manager: store.manager, phone: store.phone, status: store.status }); setEditing(store.id); setShowForm(true); };
-  const saveStore = (e) => {
-    e.preventDefault();
-    if (editing) {
-      setStores(current => current.map(s => s.id === editing ? { ...s, ...form } : s));
-    } else {
-      setStores(current => [...current, { id: Date.now(), ...form }]);
-    }
-    setShowForm(false);
+  const openCreate = () => { setForm(emptyForm); setEditing(null); setMessage(''); setShowForm(true); };
+  const openEdit = (store) => {
+    setForm({ name: store.name, location: store.location || '', manager: store.manager || '', phone: store.phone || '', email: store.email || '', status: store.status });
+    setEditing(store.id);
+    setMessage('');
+    setShowForm(true);
   };
-  const deleteStore = () => {
-    setStores(current => current.filter(s => s.id !== deletingId));
-    setDeletingId(null);
+  const saveStore = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage('');
+    try {
+      if (editing) {
+        await api.patch(`/oms/stores/${editing}`, form);
+      } else {
+        await api.post('/oms/stores', form);
+      }
+      setShowForm(false);
+      reload();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'That store could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const deleteStore = async () => {
+    try {
+      await api.delete(`/oms/stores/${deletingId}`);
+      setDeletingId(null);
+      reload();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'That store could not be deleted.');
+      setDeletingId(null);
+    }
   };
 
+  const statusLabel = (status) => (status === 'active' ? 'Active' : 'Inactive');
   const totalRevenue = stores.reduce((s, store) => s + storeRevenue(store.name).revenue, 0);
-  const activeStores = stores.filter(s => s.status === 'Active');
+  const activeStores = stores.filter(s => s.status === 'active');
   const topStore = activeStores.reduce((best, store) => {
     const { revenue } = storeRevenue(store.name);
     return !best || revenue > storeRevenue(best.name).revenue ? store : best;
   }, null);
 
-  const storeInitials = (name) => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-  const storeTones = ['blue', 'green', 'purple', 'gold'];
+  const storeInitials = (name) => (name || '').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   const storeAccentColors = ['#4a7bb5', '#2a7d4f', '#7b5ea7', '#c97b08'];
 
@@ -669,6 +699,13 @@ function OwnerStoresPage({ sentInvoices = [] }) {
           <Plus size={14} /> Add Store
         </button>
       </div>
+
+      {message && !showForm && !deletingId ? (
+        <div className="os-row-notice is-error" role="status">
+          <span>{message}</span>
+          <button type="button" onClick={() => setMessage('')} aria-label="Dismiss">×</button>
+        </div>
+      ) : null}
 
       {/* KPI row */}
       <div className="os-kpi-row" style={{ gap: 14 }}>
@@ -707,19 +744,21 @@ function OwnerStoresPage({ sentInvoices = [] }) {
         </div>
 
         {/* Card Grid View */}
-        {viewMode === 'cards' && (
+        {loading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#8a7a6a' }}>Loading stores…</div>
+        ) : viewMode === 'cards' && (
           <div style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
             {stores.map((store, idx) => {
               const { revenue, orders } = storeRevenue(store.name);
               const share = totalRevenue > 0 ? Math.round((revenue / totalRevenue) * 100) : 0;
               const accent = storeAccentColors[idx % storeAccentColors.length];
               const isTop = topStore?.id === store.id;
-              const inactive = store.status !== 'Active';
+              const inactive = store.status !== 'active';
               return (
                 <div key={store.id} style={{ background: '#fff', border: '1px solid #eee5da', borderRadius: 12, overflow: 'hidden', opacity: inactive ? 0.75 : 1, position: 'relative' }}>
                   {/* Accent bar */}
                   <div style={{ height: 4, background: inactive ? '#eee5da' : accent }} />
-                  {isTop && store.status === 'Active' && (
+                  {isTop && store.status === 'active' && (
                     <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', alignItems: 'center', gap: 3, background: '#fffbf0', border: '1px solid #e8d5a0', borderRadius: 20, padding: '3px 8px', fontSize: 10, fontWeight: 700, color: '#7a6030' }}>
                       <Star size={9} /> Top Store
                     </div>
@@ -731,17 +770,17 @@ function OwnerStoresPage({ sentInvoices = [] }) {
                       </div>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 15, color: '#1a1611', marginBottom: 4 }}>{store.name}</div>
-                        <Status>{store.status}</Status>
+                        <Status>{statusLabel(store.status)}</Status>
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#5a4e42' }}>
-                        <MapPin size={11} style={{ color: '#b0a090', flexShrink: 0 }} />{store.location}
+                        <MapPin size={11} style={{ color: '#b0a090', flexShrink: 0 }} />{store.location || 'No address on file'}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#5a4e42' }}>
-                        <Users size={11} style={{ color: '#b0a090', flexShrink: 0 }} />{store.manager !== '—' ? store.manager : 'No manager assigned'}
+                        <Users size={11} style={{ color: '#b0a090', flexShrink: 0 }} />{store.manager || 'No manager assigned'}
                       </div>
-                      {store.phone !== '—' && (
+                      {store.phone && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#5a4e42' }}>
                           <Phone size={11} style={{ color: '#b0a090', flexShrink: 0 }} />{store.phone}
                         </div>
@@ -755,7 +794,7 @@ function OwnerStoresPage({ sentInvoices = [] }) {
                         </div>
                       ))}
                     </div>
-                    {store.status === 'Active' && totalRevenue > 0 && (
+                    {store.status === 'active' && totalRevenue > 0 && (
                       <div style={{ height: 4, background: '#f3ede5', borderRadius: 2, marginBottom: 14, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${share}%`, background: accent, borderRadius: 2, transition: 'width 0.5s ease' }} />
                       </div>
@@ -787,7 +826,7 @@ function OwnerStoresPage({ sentInvoices = [] }) {
         )}
 
         {/* Table View */}
-        {viewMode === 'table' && (
+        {!loading && viewMode === 'table' && (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -815,9 +854,9 @@ function OwnerStoresPage({ sentInvoices = [] }) {
                         </div>
                       </td>
                       <td style={{ padding: '12px 14px', fontSize: 12, color: '#5a4e42' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={11} style={{ color: '#b0a090' }} />{store.location}</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={11} style={{ color: '#b0a090' }} />{store.location || '—'}</span>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{store.manager !== '—' ? store.manager : <span style={{ color: '#b0a090' }}>—</span>}</td>
+                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>{store.manager || <span style={{ color: '#b0a090' }}>—</span>}</td>
                       <td style={{ padding: '12px 14px', fontSize: 13 }}><strong style={{ color: '#1a1611' }}>{money.format(revenue)}</strong></td>
                       <td style={{ padding: '12px 14px', fontSize: 13, color: '#1a1611', fontWeight: 600, textAlign: 'center' }}>{orders}</td>
                       <td style={{ padding: '12px 14px', fontSize: 13 }}>
@@ -828,7 +867,7 @@ function OwnerStoresPage({ sentInvoices = [] }) {
                           <span style={{ fontSize: 11, fontWeight: 600, color: '#5a4e42', minWidth: 28 }}>{share}%</span>
                         </div>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: 13 }}><Status>{store.status}</Status></td>
+                      <td style={{ padding: '12px 14px', fontSize: 13 }}><Status>{statusLabel(store.status)}</Status></td>
                       <td style={{ padding: '12px 14px', fontSize: 13 }}>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button type="button" onClick={() => openEdit(store)}
@@ -867,11 +906,18 @@ function OwnerStoresPage({ sentInvoices = [] }) {
                 <p style={{ margin: 0, fontSize: 12, color: '#8a7a6a' }}>{editing ? 'Update store details below.' : 'Add a new store location.'}</p>
               </div>
             </div>
+            {message ? (
+              <div className="os-row-notice is-error" role="status">
+                <span>{message}</span>
+                <button type="button" onClick={() => setMessage('')} aria-label="Dismiss">×</button>
+              </div>
+            ) : null}
             {[
-              { label: 'Store Name', key: 'name', required: true, placeholder: 'e.g. Lekki Store' },
-              { label: 'Location / Address', key: 'location', required: true, placeholder: 'e.g. Lekki Phase 1, Lagos' },
+              { label: 'Store Name', key: 'name', required: true, placeholder: 'e.g. Surulere Store' },
+              { label: 'Location / Address', key: 'location', required: false, placeholder: 'e.g. Adeniran Ogunsanya St, Surulere, Lagos' },
               { label: 'Manager Name', key: 'manager', required: false, placeholder: 'Assigned store manager' },
               { label: 'Phone Number', key: 'phone', required: false, placeholder: 'Store contact number' },
+              { label: 'Email Address', key: 'email', required: false, placeholder: 'Store contact email' },
             ].map(({ label, key, required, placeholder }) => (
               <label key={key} className="os-field">
                 <span>{label}{required && <span style={{ color: '#d62828', marginLeft: 2 }}>*</span>}</span>
@@ -881,9 +927,8 @@ function OwnerStoresPage({ sentInvoices = [] }) {
             <label className="os-field">
               <span>Status</span>
               <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                <option>Active</option>
-                <option>Coming Soon</option>
-                <option>Inactive</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
               </select>
             </label>
             <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
@@ -891,9 +936,9 @@ function OwnerStoresPage({ sentInvoices = [] }) {
                 style={{ flex: 1, padding: '10px', border: '1px solid #ddd5c8', borderRadius: 10, background: '#fff', color: '#5a4e42', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button type="submit"
-                style={{ flex: 2, padding: '10px', border: 'none', borderRadius: 10, background: '#1a1611', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <CheckCircle size={15} /> {editing ? 'Save Changes' : 'Create Store'}
+              <button type="submit" disabled={saving}
+                style={{ flex: 2, padding: '10px', border: 'none', borderRadius: 10, background: '#1a1611', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <CheckCircle size={15} /> {saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Store'}
               </button>
             </div>
           </form>
@@ -2384,6 +2429,8 @@ function InvoiceDocumentPreview({ html, invoiceNumber }) {
 }
 
 function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
+  const stores = useStores();
+  const storeLabel = (key) => stores.find((store) => store.key === key)?.name || key;
   const [form, setForm] = useState({
     store: 'lekki',
     invoiceNumber: invoiceSeed(),
@@ -2608,7 +2655,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
       onInvoiceSent(serverInvoice || {
         invoiceNumber: payload.invoiceNumber,
         customer: payload.customer.name,
-        store: payload.store === 'lekki' ? 'Lekki' : 'Ikeja',
+        store: storeLabel(payload.store).replace(/\s+Store$/i, ''),
         createdBy: currentRole?.name || 'Store Manager',
         createdAt: new Intl.DateTimeFormat('en-GB', {
           day: '2-digit',
@@ -2708,8 +2755,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
               <label className="os-field">
                 <span>Sending Store</span>
                 <select value={form.store} onChange={(event) => updateForm('store', event.target.value)}>
-                  <option value="lekki">Lekki Store</option>
-                  <option value="ikeja">Ikeja Store</option>
+                  {stores.map((store) => <option key={store.key} value={store.key}>{store.name}</option>)}
                 </select>
               </label>
               <label className="os-field">
@@ -2906,7 +2952,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
               <dt>Invoice #</dt>
               <dd style={{ fontFamily: 'monospace', fontSize: 11 }}>{form.invoiceNumber}</dd>
               <dt>Store</dt>
-              <dd>{form.store === 'lekki' ? 'Lekki Store' : 'Ikeja Store'}</dd>
+              <dd>{storeLabel(form.store)}</dd>
               <dt>Bill To</dt>
               <dd>{form.customerName || <span className="os-empty">—</span>}</dd>
               <dt>Email</dt>
@@ -5007,6 +5053,7 @@ function InventoryView() {
 }
 
 function StaffView({ role, currentRole }) {
+  const stores = useStores();
   const emptyForm = { displayName: '', phone: '', pin: '', role: 'store_manager', store: 'all', status: 'active', dateOfBirth: '', tailorDepartment: '', tailorGrade: '' };
   const [staffUsers, setStaffUsers] = useState([]);
   const [message, setMessage] = useState('');
@@ -5200,8 +5247,7 @@ function StaffView({ role, currentRole }) {
               <span>Store</span>
               <select value={form.store} onChange={(event) => updateForm('store', event.target.value)}>
                 <option value="all">All Stores</option>
-                <option value="ikeja">Ikeja</option>
-                <option value="lekki">Lekki</option>
+                {stores.map((store) => <option key={store.key} value={store.key}>{store.name.replace(/\s+Store$/i, '')}</option>)}
                 <option value="production">Production</option>
               </select>
             </label>

@@ -1,8 +1,35 @@
+import { useEffect, useState } from 'react';
+import { api } from '../lib/api';
+
 export const money = new Intl.NumberFormat('en-NG', {
   style: 'currency',
   currency: 'NGN',
   maximumFractionDigits: 0,
 });
+
+// Seeded with the two stores the shop actually has, so a select using this
+// hook never renders empty for the instant before /oms/stores answers — it
+// just replaces this with the live list once the fetch lands.
+const DEFAULT_STORES = [
+  { id: 'lekki', key: 'lekki', name: 'Lekki Store', status: 'active' },
+  { id: 'ikeja', key: 'ikeja', name: 'Ikeja Store', status: 'active' },
+];
+
+// The single source of truth for what stores exist, used everywhere a store
+// needs to be picked or listed — so adding a store in one place makes it show
+// up everywhere else, rather than each screen keeping its own guess.
+export const useStores = () => {
+  const [stores, setStores] = useState(DEFAULT_STORES);
+  useEffect(() => {
+    api.get('/oms/stores')
+      .then((response) => {
+        const list = response.data?.data?.stores;
+        if (Array.isArray(list) && list.length) setStores(list);
+      })
+      .catch(() => {});
+  }, []);
+  return stores;
+};
 
 // The calendar date here, not in UTC. toISOString() reports the UTC day, so
 // between midnight and 01:00 in Lagos this returned yesterday — which set the

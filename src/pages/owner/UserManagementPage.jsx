@@ -7,21 +7,8 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { downloadCsv, csvStamp } from '../../utils/csv';
-import { formatMoment } from '../../utils/oms';
+import { formatMoment, useStores } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
-
-// The shop's two stores, plus production and everywhere. These are the values
-// the staff record actually holds — the select used to show names like
-// "Victoria Island" and "Yaba Store", which are neither places the shop has nor
-// values the column accepts, so every save was refused.
-const STAFF_STORES = [
-  ['all', 'All stores'],
-  ['lekki', 'Lekki'],
-  ['ikeja', 'Ikeja'],
-  ['production', 'Production'],
-];
-
-const storeLabel = (store) => STAFF_STORES.find(([value]) => value === store)?.[1] || store || '—';
 
 const roleLabel = (role) => ({
   admin: 'Admin',
@@ -78,7 +65,22 @@ function RoleBadge({ role }) {
   );
 }
 
+// The shop's stores, plus 'all' (every store) and 'production' (not attached
+// to one) — the two non-store values the field also accepts. A select that
+// showed a name the store column didn't have on file used to get every save
+// refused.
+const useStoreLabel = () => {
+  const assignableStores = useStores();
+  return (store) => {
+    if (store === 'all') return 'All stores';
+    if (store === 'production') return 'Production';
+    const name = assignableStores.find((candidate) => candidate.key === store)?.name;
+    return (name ? name.replace(/\s+Store$/i, '') : store) || '—';
+  };
+};
+
 export default function UserManagementPage() {
+  const storeLabel = useStoreLabel();
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -473,6 +475,7 @@ export default function UserManagementPage() {
 }
 
 function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
+  const assignableStores = useStores();
   return (
     <div className="os-page">
       {/* Breadcrumb */}
@@ -561,7 +564,9 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
                 <label className="os-field">
                   <span>Assigned Store <span style={{ color: '#e05252' }}>*</span></span>
                   <select value={form.store} onChange={(e) => update('store', e.target.value)}>
-                    {STAFF_STORES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    <option value="all">All stores</option>
+                    {assignableStores.map((store) => <option key={store.key} value={store.key}>{store.name.replace(/\s+Store$/i, '')}</option>)}
+                    <option value="production">Production</option>
                   </select>
                 </label>
                 {form.role === 'tailor' && (
@@ -660,6 +665,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
 }
 
 function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setStatus }) {
+  const storeLabel = useStoreLabel();
   const roleS = roleStyle[person.role] || { bg: '#f5f0e8', color: '#5a4e42' };
   return (
     <div className="os-page">

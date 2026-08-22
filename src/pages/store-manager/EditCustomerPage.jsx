@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react';
 import { ArrowLeft, Save, X, User, Settings, Star, Ruler, StickyNote, Edit2, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react';
-import { money, CUSTOMER_STATUSES } from '../../utils/oms';
+import { money, CUSTOMER_STATUSES, useStores } from '../../utils/oms';
 import { api } from '../../lib/api';
 
 export default function EditCustomerPage({ customer, onCancel, onSave, onViewMeasurements, currentRole }) {
   const notesFieldRef = useRef(null);
+  const stores = useStores();
+  const storeNames = stores.map((store) => store.name.replace(/\s+Store$/i, ''));
   const [form, setForm] = useState({
     fullName: customer.fullName || '',
     phone: customer.phone || '',
@@ -71,7 +73,7 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
     ['Full Name *', 'fullName', 'input'], ['Customer Type', 'customerType', 'select', customerTypes],
     ['Phone Number *', 'phone', 'input'], ['Registration Date', 'registrationDate', 'date'],
     ['Email Address', 'email', 'email'], ['Referred By', 'referredBy', 'select', ['Walk-in', 'Referral', 'Social Media']],
-    ['Date of Birth', 'dateOfBirth', 'date'], ['Preferred Store', 'preferredStore', 'select', ['Lekki', 'Ikeja', 'Surulere']],
+    ['Date of Birth', 'dateOfBirth', 'date'], ['Preferred Store', 'preferredStore', 'select', storeNames],
     ['Gender', 'gender', 'select', ['Male', 'Female', 'Other']], ['Communication Preference', 'communicationPreference', 'select', ['WhatsApp', 'Phone', 'Email']],
     ['Occupation', 'occupation', 'input'], ['Preferred Contact Time', 'preferredContactTime', 'select', ['Anytime', 'Morning', 'Afternoon', 'Evening']],
     ['Website', 'website', 'input'],
