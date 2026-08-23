@@ -206,7 +206,6 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
                       <button onClick={() => setReviewInvoice(invoice)}>
                         {status === 'Awaiting Review' ? 'Review' : status === 'Flagged' ? 'Resolve' : 'View'}
                       </button>
-                      <button className="dots" title="Open full invoice" onClick={() => setReviewInvoice(invoice)}>⋮</button>
                     </td>
                   </tr>
                 );
