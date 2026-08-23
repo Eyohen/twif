@@ -1615,8 +1615,9 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
       <div className="os-confirm edit-invoice" onClick={(event) => event.stopPropagation()}>
         <h3>Edit {invoice.invoiceNumber}</h3>
         <p className="edit-invoice-note">
-          What this invoice is for can be corrected. What it comes to cannot — the
-          rates, quantities and discounts stay as they were sent to the customer.
+          You can correct the customer's details and what each item is called.
+          The price, quantity and discounts stay as they were sent to the
+          customer — they can't be changed here.
         </p>
 
         <div className="edit-invoice-grid">
