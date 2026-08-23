@@ -348,7 +348,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
   const [inventory, setInventory] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [staff, setStaff] = useState([]);
-  const [period, setPeriod] = useState('month');
+  const [period, setPeriod] = useState('today');
   const [salesPeriod, setSalesPeriod] = useState('month');
   const [productionPeriod, setProductionPeriod] = useState('week');
   const [storePeriod, setStorePeriod] = useState('month');
@@ -2434,7 +2434,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   const stores = useStores();
   const storeLabel = (key) => stores.find((store) => store.key === key)?.name || key;
   const [form, setForm] = useState({
-    store: 'lekki',
+    store: 'ikeja',
     invoiceNumber: invoiceSeed(),
     trackingToken: trackingTokenSeed(),
     invoiceDate: todayIso(),
@@ -2613,7 +2613,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   };
 
   const validateInvoice = () => {
-    if (!form.customerName.trim() || !form.customerEmail.trim()) return 'Select a customer and provide their email address.';
+    if (!form.customerName.trim()) return 'Select a customer.';
     if (!items.some((item) => item.description.trim())) return 'Add at least one invoice item.';
     if (evidenceRequired && !paymentEvidence) return 'Upload payment evidence for a partially or fully paid invoice.';
     // A part paid invoice with no figure is what left Accounts unable to
@@ -2751,7 +2751,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
                 <input value={form.customerPhone} onChange={(event) => updateForm('customerPhone', event.target.value)} placeholder="e.g. 08012345678" />
               </label>
               <label className="os-field os-field-full">
-                <span>Customer Email <span style={{ color: '#d62828' }}>*</span></span>
+                <span>Customer Email</span>
                 <input type="email" value={form.customerEmail} onChange={(event) => updateForm('customerEmail', event.target.value)} placeholder="customer@email.com" />
               </label>
               <label className="os-field">
@@ -2849,18 +2849,22 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
                 </select>
               </label>
               {/* There was nowhere to write down what the customer paid, so an
-                  invoice could say "part paid" with no figure behind it. */}
-              <label className="os-field">
-                <span>Amount Received (₦){form.paymentStatus === 'partial_paid' ? <span style={{ color: '#d62828' }}> *</span> : null}</span>
-                <input
-                  type="number"
-                  min="0"
-                  max={balanceDue}
-                  value={form.amountReceived}
-                  onChange={(event) => updateForm('amountReceived', event.target.value)}
-                  placeholder={form.paymentStatus === 'fully_paid' ? String(balanceDue) : '0'}
-                />
-              </label>
+                  invoice could say "part paid" with no figure behind it. An
+                  unpaid invoice has no amount to record, so the field only
+                  makes sense once some payment status is selected. */}
+              {form.paymentStatus && form.paymentStatus !== 'unpaid' ? (
+                <label className="os-field">
+                  <span>Amount Received (₦){form.paymentStatus === 'partial_paid' ? <span style={{ color: '#d62828' }}> *</span> : null}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max={balanceDue}
+                    value={form.amountReceived}
+                    onChange={(event) => updateForm('amountReceived', event.target.value)}
+                    placeholder={form.paymentStatus === 'fully_paid' ? String(balanceDue) : '0'}
+                  />
+                </label>
+              ) : null}
               <label className="os-field">
                 <span>Store Credit Applied (₦)</span>
                 <input type="number" min="0" value={form.storeCreditApplied} onChange={(event) => updateForm('storeCreditApplied', event.target.value)} />
@@ -3227,7 +3231,7 @@ const emptySheetForm = () => ({
   trackingUrl: '',
   customer: '',
   customerId: '',
-  store: 'Lekki',
+  store: 'Ikeja',
   itemNote: '',
   // One set of measurements for the whole order rather than one per garment.
   // It is taken from the customer's profile and may be adjusted here for this
@@ -6644,9 +6648,20 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
 
         <div className="tracking-hero">
           <span>{tracking.invoiceNumber}</span>
-          <h1>{tracking.item || 'Your order'}</h1>
+          <h1>{(tracking.items?.length ? tracking.items.map((item) => item.description).join(', ') : tracking.item) || 'Your order'}</h1>
           <p>{tracking.customer} · {tracking.store} Store</p>
         </div>
+
+        {tracking.items?.length > 1 ? (
+          <ul className="tracking-item-list">
+            {tracking.items.map((item, index) => (
+              <li key={`${item.description}-${index}`}>
+                <span>{item.description}</span>
+                <span>{item.quantity} {item.quantity === 1 ? 'piece' : 'pieces'}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         <div className="tracking-steps">
           {steps.map((step, index) => (

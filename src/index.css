@@ -2852,6 +2852,28 @@ dd {
   color: var(--muted);
 }
 
+.tracking-item-list {
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid #eee7dd;
+}
+
+.tracking-item-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee7dd;
+  font-size: 13px;
+}
+
+.tracking-item-list li span:last-child {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .tracking-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
