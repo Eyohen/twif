@@ -31,6 +31,30 @@ export const useStores = () => {
   return stores;
 };
 
+const DEFAULT_DEPARTMENTS = [
+  { id: 'suit', key: 'suit', name: 'Suit', status: 'active' },
+  { id: 'native', key: 'native', name: 'Native', status: 'active' },
+  { id: 'shirts', key: 'shirts', name: 'Shirts', status: 'active' },
+  { id: 'agbada', key: 'agbada', name: 'Agbada', status: 'active' },
+  { id: 'design', key: 'design', name: 'Design', status: 'active' },
+  { id: 'pants', key: 'pants', name: 'Pants', status: 'active' },
+];
+
+// Mirrors useStores exactly — seeded so a select never renders empty before
+// /oms/departments answers.
+export const useDepartments = () => {
+  const [departments, setDepartments] = useState(DEFAULT_DEPARTMENTS);
+  useEffect(() => {
+    api.get('/oms/departments')
+      .then((response) => {
+        const list = response.data?.data?.departments;
+        if (Array.isArray(list) && list.length) setDepartments(list);
+      })
+      .catch(() => {});
+  }, []);
+  return departments;
+};
+
 // The calendar date here, not in UTC. toISOString() reports the UTC day, so
 // between midnight and 01:00 in Lagos this returned yesterday — which set the
 // invoice date a day back and capped every date picker a day short.
