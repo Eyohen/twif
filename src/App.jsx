@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors, Ruler, Award, Camera, Image } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors, Ruler, Award, Camera, Image, Layers } from 'lucide-react';
 import { api, getStoredAccessToken, setStoredAccessToken } from './lib/api';
 import LoginPage from './pages/auth/LoginPage';
 import MyTasksPage from './pages/tailor/MyTasksPage';
@@ -16,6 +16,7 @@ import UserManagementPage from './pages/owner/UserManagementPage';
 import MembershipsPage from './pages/owner/MembershipsPage';
 import SettingsPage from './pages/owner/SettingsPage';
 import ShopifySyncPage from './pages/owner/ShopifySyncPage';
+import DepartmentsPage from './pages/owner/DepartmentsPage';
 import InventoryManagerOverviewPage from './pages/inventory/OverviewPage';
 import InventoryListPage from './pages/inventory/InventoryListPage';
 import { roles, inventoryCategories, navByRole, accountTypeByRole } from './config/oms';
@@ -124,6 +125,7 @@ const NAV_ICONS = {
   'Tailors & Staff': Users2,
   'User Management': UserCog,
   Stores: Building2,
+  Departments: Layers,
   Memberships: Star,
   'Shopify Sync': RefreshCw,
 };
@@ -6874,6 +6876,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Tailors & Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
   if (activeView === 'User Management') return <UserManagementPage currentRole={viewProps.currentRole} />;
   if (activeView === 'Stores') return <OwnerStoresPage sentInvoices={viewProps.sentInvoices} />;
+  if (activeView === 'Departments') return <DepartmentsPage />;
   if (activeView === 'Memberships') return <MembershipsPage />;
   if (activeView === 'Shopify Sync') return <ShopifySyncPage />;
   if (activeView === 'Settings') return <SettingsPage />;

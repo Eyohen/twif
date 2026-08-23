@@ -36,6 +36,7 @@ export const VIEW_PATHS = {
   'Order Sheet': 'order-sheet',
   'User Management': 'user-management',
   Stores: 'stores',
+  Departments: 'departments',
   Memberships: 'memberships',
   Staff: 'staff',
   'Shopify Sync': 'shopify-sync',
