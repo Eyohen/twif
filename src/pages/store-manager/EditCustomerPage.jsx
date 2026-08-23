@@ -62,6 +62,12 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
     } finally { setSaving(false); }
   };
 
+  const REFERRAL_OPTIONS = ['Walk-in', 'Referral', 'Social Media'];
+  // A customer referred by, say, a specific tailor or event has nowhere to
+  // record that beyond the three fixed options, so "Other" reveals a free-text
+  // field instead of forcing the closest-but-wrong pick.
+  const [referralIsOther, setReferralIsOther] = useState(!REFERRAL_OPTIONS.includes(form.referredBy));
+
   // Tagging someone an elite member turns on an automatic discount on every
   // invoice they are sent, so it is the Owner's and Admin's to give.
   const mayTagElite = ['owner', 'admin'].includes(currentRole?.id);
@@ -72,7 +78,7 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
   const infoFields = [
     ['Full Name *', 'fullName', 'input'], ['Customer Type', 'customerType', 'select', customerTypes],
     ['Phone Number *', 'phone', 'input'], ['Registration Date', 'registrationDate', 'date'],
-    ['Email Address', 'email', 'email'], ['Referred By', 'referredBy', 'select', ['Walk-in', 'Referral', 'Social Media']],
+    ['Email Address', 'email', 'email'],
     ['Date of Birth', 'dateOfBirth', 'date'], ['Preferred Store', 'preferredStore', 'select', storeNames],
     ['Gender', 'gender', 'select', ['Male', 'Female', 'Other']], ['Communication Preference', 'communicationPreference', 'select', ['WhatsApp', 'Phone', 'Email']],
     ['Occupation', 'occupation', 'input'], ['Preferred Contact Time', 'preferredContactTime', 'select', ['Anytime', 'Morning', 'Afternoon', 'Evening']],
@@ -182,6 +188,31 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
                   )}
                 </label>
               ))}
+              <label className="os-field">
+                <span>Referred By</span>
+                <select
+                  value={referralIsOther ? 'Other' : form.referredBy}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value === 'Other') { setReferralIsOther(true); update('referredBy', ''); }
+                    else { setReferralIsOther(false); update('referredBy', value); }
+                  }}
+                >
+                  {REFERRAL_OPTIONS.map((option) => <option key={option}>{option}</option>)}
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              {referralIsOther ? (
+                <label className="os-field">
+                  <span>Referral Details</span>
+                  <input
+                    type="text"
+                    value={form.referredBy}
+                    onChange={(event) => update('referredBy', event.target.value)}
+                    placeholder="e.g. Referred by Aunty Bisi"
+                  />
+                </label>
+              ) : null}
             </div>
           </div>
 
@@ -274,11 +305,14 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
               <div><strong>Elite Membership</strong></div>
               <button
                 type="button"
-                onClick={() => update('elite', !form.elite)}
+                disabled={!mayTagElite}
+                onClick={() => mayTagElite && update('elite', !form.elite)}
+                title={mayTagElite ? undefined : 'Only Owner/Admin can tag a client Elite Member'}
                 style={{
                   marginLeft: 'auto', width: 40, height: 22, borderRadius: 11,
                   background: form.elite ? '#c97b08' : '#ddd5c8',
-                  border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0,
+                  border: 'none', cursor: mayTagElite ? 'pointer' : 'not-allowed',
+                  opacity: mayTagElite ? 1 : 0.6, position: 'relative', flexShrink: 0,
                   transition: 'background 0.2s',
                 }}
               >
