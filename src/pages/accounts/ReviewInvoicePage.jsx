@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Flag, XCircle, HelpCircle, Download, Maximize2, User, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
-import { money, invoiceApprovalStatus, amountReceived, invoicePayable, formatMoment } from '../../utils/oms';
+import { money, invoiceApprovalStatus, amountReceived, invoicePayable, isFullyPaid, formatMoment } from '../../utils/oms';
 import { usePaymentEvidence } from '../../hooks/usePaymentEvidence';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
@@ -27,6 +27,10 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
     ? Math.max(0, Math.floor((Date.now() - new Date(invoice.createdAt).getTime()) / 86400000))
     : null;
   const status = invoiceApprovalStatus(invoice) === 'Pending Accounts' ? 'Awaiting Review' : invoiceApprovalStatus(invoice);
+  // Once an invoice is both Approved and fully paid, the decision is final —
+  // re-flagging or rejecting a settled invoice after the fact isn't a real
+  // workflow, it was just an oversight that every action button stayed live.
+  const locked = status === 'Approved' && isFullyPaid(invoice);
   const evidence = invoice.paymentEvidence || null;
   // The image is fetched on opening rather than travelling with every invoice
   // in the list — see usePaymentEvidence.
@@ -69,6 +73,11 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
       </div>
 
       {/* Action Bar */}
+      {locked ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#f0faf4', border: '1px solid #b8e4cb', borderRadius: 8, color: '#2a7d4f', fontSize: 13, fontWeight: 700 }}>
+          <CheckCircle size={15} /> Approved &amp; fully paid — this decision is final
+        </div>
+      ) : (
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button
           type="button"
@@ -99,6 +108,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
           <HelpCircle size={15} /> Request Clarification
         </button>
       </div>
+      )}
 
       {/* A `1fr` column will not shrink below its own content, so the order
           summary table pushed the first column to 818px, squeezed the evidence
@@ -331,9 +341,16 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
             <div className="os-card-head">
               <div>
                 <strong>Review Actions</strong>
-                <p>Choose a decision below</p>
+                <p>{locked ? 'This decision is final' : 'Choose a decision below'}</p>
               </div>
             </div>
+            {locked ? (
+              <div className="os-card-body" style={{ padding: '12px' }}>
+                <p style={{ margin: 0, fontSize: 12, color: '#8a7a6a', lineHeight: 1.5 }}>
+                  Approved and fully paid invoices can no longer be flagged, rejected, or re-approved from here.
+                </p>
+              </div>
+            ) : (
             <div className="os-card-body" style={{ gap: 8, padding: '12px' }}>
               {[
                 [<CheckCircle size={15} />, 'Approve Invoice', 'Mark as paid and release to production', 'Approved', '#2a7d4f', '#f0faf4', '#b8e4cb'],
@@ -355,6 +372,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
                 </button>
               ))}
             </div>
+            )}
           </div>
 
           {/* Review Information */}
@@ -416,7 +434,9 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 14px', background: '#fffbf0', border: '1px solid #f0ddb0', borderRadius: 10, color: '#7a6030' }}>
         <AlertCircle size={14} style={{ color: '#c97b08', flexShrink: 0, marginTop: 1 }} />
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>
-          {status === 'Awaiting Review'
+          {locked
+            ? 'This invoice is Approved and fully paid. That decision is final and can no longer be changed from here.'
+            : status === 'Awaiting Review'
             ? 'This invoice is currently awaiting your review. Once approved, it will be automatically sent to Production.'
             : `This invoice has been marked ${status}. Choosing another action below will replace that decision.`}
         </p>
