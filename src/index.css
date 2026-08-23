@@ -1524,6 +1524,7 @@ dd {
 .os-field input:focus, .os-field select:focus, .os-field textarea:focus { outline: none; border-color: #c97b08; box-shadow: 0 0 0 3px rgba(201,123,8,0.08); }
 .os-field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
 .os-field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23998877' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; cursor: pointer; }
+.os-department-note { margin: 10px 0 0; padding: 8px 10px; background: #fffbf0; border: 1px solid #f0ddb0; border-radius: 6px; color: #7a6030; font-size: 12px; line-height: 1.5; }
 .os-fabric-hint { display: flex; align-items: center; gap: 5px; margin-top: 2px; font-size: 11px; color: #7a6a5a; }
 
 .os-invoice-chip { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #f8f5f0; border: 1px solid #e8ddd0; border-radius: 10px; }

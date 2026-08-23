@@ -35,7 +35,9 @@ import {
   amountReceived, invoicePayable, formatMoment, CUSTOMER_TRACKING_STEPS,
   openDocumentTab, presentInvoiceDocument, downloadInvoicePdf as saveInvoicePdf,
   useStores,
+  useDepartments,
 } from './utils/oms';
+import { DEPARTMENT_FIELDS } from './config/departmentFields';
 
 const trackingBaseUrl = (
   import.meta.env.VITE_TRACKING_BASE_URL ||
@@ -3224,6 +3226,8 @@ const emptyOrderItem = () => ({
   fabricUnit: '',
   designNotes: '',
   styleImages: [null, null, null, null, null],
+  department: '',
+  departmentFields: {},
 });
 
 const emptySheetForm = () => ({
@@ -3247,6 +3251,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
   // than from the menu, so the picker does not have to be searched again.
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedInvoice = searchParams.get('invoice');
+  const departments = useDepartments();
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
   const [sheetForm, setSheetForm] = useState(emptySheetForm);
@@ -3295,6 +3300,15 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     setSheetForm((current) => ({
       ...current,
       items: current.items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...changes } : item)),
+    }));
+  };
+
+  const updateDepartmentField = (index, fieldKey, value) => {
+    setSheetForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) => (itemIndex === index
+        ? { ...item, departmentFields: { ...item.departmentFields, [fieldKey]: value } }
+        : item)),
     }));
   };
 
@@ -3716,6 +3730,40 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
                   <span>Delivery Date</span>
                   <input type="date" value={orderItem.delivery} onChange={(event) => updateItem(index, { delivery: event.target.value })} />
                 </label>
+              </div>
+
+              <div className="os-card-body" style={{ paddingTop: 0 }}>
+                <label className="os-field os-field-full">
+                  <span>Department</span>
+                  <select
+                    value={orderItem.department}
+                    onChange={(event) => updateItem(index, { department: event.target.value, departmentFields: {} })}
+                  >
+                    <option value="">Select a department to enter its details…</option>
+                    {departments.filter((department) => department.status === 'active').map((department) => (
+                      <option key={department.key} value={department.key}>{department.name}</option>
+                    ))}
+                  </select>
+                </label>
+
+                {orderItem.department && DEPARTMENT_FIELDS[orderItem.department] ? (
+                  <div className="os-department-fields">
+                    <div className="os-grid-3">
+                      {DEPARTMENT_FIELDS[orderItem.department].fields.map((field) => (
+                        <label className="os-field" key={field.key}>
+                          <span>{field.label}{field.required ? <span style={{ color: '#d62828' }}> *</span> : null}</span>
+                          <input
+                            value={orderItem.departmentFields?.[field.key] || ''}
+                            onChange={(event) => updateDepartmentField(index, field.key, event.target.value)}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    {DEPARTMENT_FIELDS[orderItem.department].note ? (
+                      <p className="os-department-note">{DEPARTMENT_FIELDS[orderItem.department].note}</p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               <div className="os-card-body os-grid-2" style={{ paddingTop: 0 }}>
