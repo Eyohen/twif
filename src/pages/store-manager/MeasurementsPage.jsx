@@ -66,9 +66,10 @@ function BodyFigure({ back = false }) {
 export default function MeasurementsPage({ customer, onBack, onSaved }) {
   const stored = customer.measurements || {};
   const [editing, setEditing] = useState(false);
-  const [values, setValues] = useState(() => Object.fromEntries(
-    MEASUREMENT_FIELDS.map((field) => [field.key, readValue(stored, field.key)])
-  ));
+  const [values, setValues] = useState(() => ({
+    ...Object.fromEntries(MEASUREMENT_FIELDS.map((field) => [field.key, readValue(stored, field.key)])),
+    additionalInformation: stored.additionalInformation || '',
+  }));
   const [draft, setDraft] = useState(values);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -380,11 +381,23 @@ export default function MeasurementsPage({ customer, onBack, onSaved }) {
               <h3>Additional Information</h3>
             </header>
             <dl>
-              <dt>Posture</dt><dd>Normal</dd>
-              <dt>Body Build</dt><dd>Average</dd>
               <dt>Preferred Fit</dt><dd>{customer.preferredFit || 'Regular Fit'}</dd>
               <dt>Remarks</dt><dd style={{ fontSize: 12, lineHeight: 1.5 }}>{customer.notes || 'No remarks recorded.'}</dd>
             </dl>
+            {editing ? (
+              <textarea
+                className="measurement-input"
+                rows={4}
+                style={{ width: '100%', marginTop: 10, resize: 'vertical' }}
+                value={draft.additionalInformation ?? ''}
+                onChange={(event) => setDraft((current) => ({ ...current, additionalInformation: event.target.value }))}
+                placeholder="Posture, build, or any other note worth recording alongside these measurements…"
+              />
+            ) : (
+              <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.5, color: values.additionalInformation ? '#1a1611' : '#a0917f' }}>
+                {values.additionalInformation || 'No additional information recorded.'}
+              </p>
+            )}
           </div>
 
         </aside>
