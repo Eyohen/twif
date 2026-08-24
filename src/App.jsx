@@ -4048,6 +4048,9 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   const [tailors, setTailors] = useState([]);
   const [allocatingJobId, setAllocatingJobId] = useState(null);
   const [confirmReady, setConfirmReady] = useState(null);
+  // Chrome refuses to open a data: URL in a new tab (blank page, no error),
+  // so a reference image is shown full-size in place instead.
+  const [viewingImage, setViewingImage] = useState(null);
   const toastTimerRef = useRef(null);
   const filteredJobs = productionJobs.filter((job) => (
     (statusFilter === 'All' ? true : job.status === statusFilter)
@@ -4678,7 +4681,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                                 key={`${image.label}-${imageIndex}`}
                                 type="button"
                                 className="tailor-style-image"
-                                onClick={() => window.open(image.dataUrl, '_blank')}
+                                onClick={() => setViewingImage(image)}
                                 title={image.label}
                               >
                                 <img src={image.dataUrl} alt={image.label || `Reference ${imageIndex + 1}`} />
@@ -4872,6 +4875,25 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
           </div>
         </div>
       )}
+
+      {/* Chrome refuses to navigate a new tab to a data: URL — it just opens
+          blank with no error — so the reference image is shown full-size
+          here instead. */}
+      {viewingImage ? (
+        <div
+          className="receive-stock-backdrop"
+          onClick={() => setViewingImage(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(26,22,17,0.75)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <div style={{ maxWidth: '90vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }} onClick={(event) => event.stopPropagation()}>
+            <img src={viewingImage.dataUrl} alt={viewingImage.label || 'Reference image'} style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8, boxShadow: '0 24px 60px rgba(0,0,0,0.4)' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#fff' }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{viewingImage.label || 'Reference image'}</span>
+              <button type="button" onClick={() => setViewingImage(null)} style={{ padding: '6px 14px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6, background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {confirmReady ? (
         <div className="confirm-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-ready-title">
