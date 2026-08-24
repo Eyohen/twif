@@ -491,6 +491,13 @@ export const productionJobFromInvoice = (invoice, customers = []) => {
     images: toNumber(sheet.images) || styleImages.length,
     styleImages,
     measurements,
+    // The structured, field-by-field figures taken on the order sheet — this
+    // was never carried across from the order sheet to the job, so Production
+    // and Tailor screens fell back to the free-text summary above even when
+    // real per-field measurements existed.
+    measurementDetails: sheet.measurementDetails && typeof sheet.measurementDetails === 'object'
+      ? sheet.measurementDetails
+      : null,
     designNotes: sheet.designNotes || '',
     note: sheet.note || sheet.designNotes || invoice.itemNote || '',
     productionNote: sheet.productionNote || '',
