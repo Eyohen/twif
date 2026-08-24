@@ -175,7 +175,17 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
               </div>
 
               {/* Expanded Details */}
-              {isExpanded && (
+              {isExpanded && (() => {
+                // Fabric, design notes and reference images are per garment —
+                // a jacket and its trousers rarely match. Measurements,
+                // production notes and the customer note are the same for
+                // every item on the order, so those stay shown once. Older
+                // orders raised before items carried their own fabric/images
+                // have nothing in `order.items`; falling back to the order
+                // itself here means this still renders exactly as before
+                // for those, with no regression.
+                const detailItems = order.items?.length ? order.items : [order];
+                return (
                 <div style={{ padding: '16px 18px' }}>
                   {/* Orders that cover several garments list each one, so the
                       tailor sees the whole job rather than only the first item. */}
@@ -198,75 +208,99 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                       ))}
                     </div>
                   ) : null}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
-                    <section>
-                      <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Product Details</h4>
+
+                  {(order.productionNote || order.note) ? (
+                    <div style={{ marginBottom: 16 }}>
+                      <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Order Notes</h4>
                       <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
-                        {order.item && <li style={{ marginBottom: 4 }}>Style: {order.item}</li>}
-                        {order.designNotes && <li style={{ marginBottom: 4 }}>{order.designNotes}</li>}
                         {order.productionNote && <li style={{ marginBottom: 4 }}>{order.productionNote}</li>}
                         {order.note && <li style={{ marginBottom: 4 }}>Customer Note: {order.note}</li>}
-                        {!order.item && !order.designNotes && !order.productionNote && <li style={{ color: '#b0a090' }}>No additional details</li>}
                       </ul>
-                    </section>
-                    <section>
-                      <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fabric</h4>
-                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
-                        <li style={{ marginBottom: 4 }}>Fabric: {order.fabric || 'Not specified'}</li>
-                        {order.fabricQuality && <li style={{ marginBottom: 4 }}>Quality: {order.fabricQuality}</li>}
-                        {order.fabricColour && <li style={{ marginBottom: 4 }}>Colour: {order.fabricColour}</li>}
-                        {order.fabricNote && <li style={{ marginBottom: 4 }}>{order.fabricNote}</li>}
-                      </ul>
-                    </section>
-                    <section>
-                      <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Measurements</h4>
-                      {/* The figures themselves, not a note saying they exist.
-                          A tailor cannot cut to "Measurements on file". */}
-                      {order.measurementDetails || order.measurements ? (
-                        <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
-                          {order.measurementDetails
-                            ? Object.entries(order.measurementDetails).map(([key, value]) => (
-                              <li key={key} style={{ marginBottom: 4 }}><strong style={{ fontWeight: 600 }}>{key}:</strong> {value}</li>
-                            ))
-                            : String(order.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line, index) => (
-                              <li key={`${line}-${index}`} style={{ marginBottom: 4 }}>{line}</li>
-                            ))}
-                        </ul>
-                      ) : (
-                        <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>
-                      )}
-                    </section>
-                    <section>
-                      <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Images ({order.images || 0})</h4>
-                      {styleImages.length ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                          {styleImages.map((image, index) => (
-                            image.dataUrl ? (
-                              <button
-                                key={`${image.label}-${index}`}
-                                type="button"
-                                className="tailor-style-image"
-                                onClick={() => setViewingImage(image)}
-                                title={image.label}
-                              >
-                                <img src={image.dataUrl} alt={image.label || `Reference ${index + 1}`} />
-                                <span>{image.label || `Image ${index + 1}`}</span>
-                              </button>
+                    </div>
+                  ) : null}
+
+                  {detailItems.map((item, itemIndex) => {
+                    const itemImages = Array.isArray(item.styleImages) ? item.styleImages : [];
+                    return (
+                      <div key={`${item.item}-${itemIndex}`} style={{ marginBottom: 16 }}>
+                        {detailItems.length > 1 ? (
+                          <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Item {itemIndex + 1}: {item.item || 'Unnamed item'}
+                          </h4>
+                        ) : null}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                          <section>
+                            <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Product Details</h4>
+                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                              {item.item && <li style={{ marginBottom: 4 }}>Style: {item.item}</li>}
+                              {item.designNotes && <li style={{ marginBottom: 4 }}>{item.designNotes}</li>}
+                              {!item.item && !item.designNotes && <li style={{ color: '#b0a090' }}>No additional details</li>}
+                            </ul>
+                          </section>
+                          <section>
+                            <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fabric</h4>
+                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                              <li style={{ marginBottom: 4 }}>Fabric: {item.fabric || 'Not specified'}</li>
+                              {item.fabricQuality && <li style={{ marginBottom: 4 }}>Quality: {item.fabricQuality}</li>}
+                              {item.fabricColour && <li style={{ marginBottom: 4 }}>Colour: {item.fabricColour}</li>}
+                              {item.fabricNote && <li style={{ marginBottom: 4 }}>{item.fabricNote}</li>}
+                            </ul>
+                          </section>
+                          {itemIndex === 0 ? (
+                            <section>
+                              <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Measurements</h4>
+                              {/* The figures themselves, not a note saying they exist.
+                                  A tailor cannot cut to "Measurements on file". One set
+                                  for the whole order, not per item — shown once. */}
+                              {order.measurementDetails || order.measurements ? (
+                                <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                                  {order.measurementDetails
+                                    ? Object.entries(order.measurementDetails).map(([key, value]) => (
+                                      <li key={key} style={{ marginBottom: 4 }}><strong style={{ fontWeight: 600 }}>{key}:</strong> {value}</li>
+                                    ))
+                                    : String(order.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line, index) => (
+                                      <li key={`${line}-${index}`} style={{ marginBottom: 4 }}>{line}</li>
+                                    ))}
+                                </ul>
+                              ) : (
+                                <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>
+                              )}
+                            </section>
+                          ) : <section />}
+                          <section>
+                            <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Images ({itemImages.length})</h4>
+                            {itemImages.length ? (
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                {itemImages.map((image, index) => (
+                                  image.dataUrl ? (
+                                    <button
+                                      key={`${image.label}-${index}`}
+                                      type="button"
+                                      className="tailor-style-image"
+                                      onClick={() => setViewingImage(image)}
+                                      title={image.label}
+                                    >
+                                      <img src={image.dataUrl} alt={image.label || `Reference ${index + 1}`} />
+                                      <span>{image.label || `Image ${index + 1}`}</span>
+                                    </button>
+                                  ) : (
+                                    // Older order sheets recorded a filename rather
+                                    // than an upload; naming it still helps.
+                                    <span key={`${image.label}-${index}`} className="tailor-style-ref">
+                                      <strong>{image.label || `Image ${index + 1}`}</strong>
+                                      <small>{image.name}</small>
+                                    </span>
+                                  )
+                                ))}
+                              </div>
                             ) : (
-                              // Older order sheets recorded a filename rather
-                              // than an upload; naming it still helps.
-                              <span key={`${image.label}-${index}`} className="tailor-style-ref">
-                                <strong>{image.label || `Image ${index + 1}`}</strong>
-                                <small>{image.name}</small>
-                              </span>
-                            )
-                          ))}
+                              <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No reference images uploaded</p>
+                            )}
+                          </section>
                         </div>
-                      ) : (
-                        <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No reference images uploaded</p>
-                      )}
-                    </section>
-                  </div>
+                      </div>
+                    );
+                  })}
 
                   {/* The same thread the Production Manager reads, so a query
                       about a garment is answered against the job. */}
@@ -278,7 +312,8 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                   />
 
                 </div>
-              )}
+                );
+              })()}
 
               {/* Action Buttons */}
               <div style={{
