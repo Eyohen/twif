@@ -4615,27 +4615,109 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                 </div>
               ) : null}
 
-              {/* Order-level note — the same for every item, unlike design
-                  notes below which are specific to one garment. */}
-              {(jobModal.productionNote || jobModal.note) ? (
+              {/* `note` mirrors item 1's own design note from when the sheet
+                  was raised, so showing it here as well as in that item's own
+                  Design Notes box below just repeated the same text twice.
+                  productionNote is the one field genuinely written at the
+                  order level (Production's own textarea further down), so
+                  only that belongs in a box separate from any one item. */}
+              {jobModal.productionNote ? (
                 <div style={{ padding: '12px 14px', background: '#fffbf0', border: '1px solid #e8d9a0', borderRadius: 8, fontSize: 13, color: '#5a4e42' }}>
                   <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Production Note</div>
-                  {jobModal.productionNote || jobModal.note}
+                  {jobModal.productionNote}
                 </div>
               ) : null}
 
-              {/* Each garment's own design notes, shown prominently rather
-                  than only in the compact item list above — the same note
-                  a single-item order already got a highlighted box for. */}
-              {(jobModal.items?.length ? jobModal.items : [jobModal])
-                .map((item, index, list) => (item.designNotes ? (
-                  <div key={`${item.item}-${index}`} style={{ padding: '12px 14px', background: '#fffbf0', border: '1px solid #e8d9a0', borderRadius: 8, fontSize: 13, color: '#5a4e42' }}>
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>
-                      Design Notes{list.length > 1 ? ` — Item ${index + 1}: ${item.item || 'Unnamed item'}` : ''}
+              {/* Full production detail per garment — design notes, the
+                  fabric already chosen when the sheet was raised (including
+                  whether the customer is supplying it themselves), and
+                  reference images. Not the fabric-allocation picker further
+                  down, which is Production choosing stock to fulfil this —
+                  this is what was already decided before the job reached
+                  Production. Measurements are the same for every item, so
+                  they're shown once below rather than repeated per item. */}
+              {(jobModal.items?.length ? jobModal.items : [jobModal]).map((item, index, list) => {
+                const itemFabrics = Array.isArray(item.fabrics) && item.fabrics.length
+                  ? item.fabrics
+                  : (item.fabric ? [{ name: item.fabric, unit: item.fabricUnit, clientSupplied: false }] : []);
+                const itemImages = Array.isArray(item.styleImages) ? item.styleImages : [];
+                if (!item.designNotes && !itemFabrics.length && !itemImages.length) return null;
+                return (
+                  <div key={`${item.item}-${index}`} style={{ border: '1px solid #eee5da', borderRadius: 8, padding: '12px 14px', display: 'grid', gap: 10 }}>
+                    {list.length > 1 ? (
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1611' }}>Item {index + 1}: {item.item || 'Unnamed item'}</div>
+                    ) : null}
+                    {item.designNotes ? (
+                      <div>
+                        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Design Notes</div>
+                        <div style={{ fontSize: 13, color: '#5a4e42' }}>{item.designNotes}</div>
+                      </div>
+                    ) : null}
+                    <div>
+                      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Fabric</div>
+                      {itemFabrics.length ? (
+                        <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                          {itemFabrics.map((fabric, fabricIndex) => (
+                            <li key={`${fabric.name}-${fabricIndex}`} style={{ marginBottom: 2 }}>
+                              {fabric.name}{fabric.unit ? ` (${fabric.unit})` : ''}
+                              {fabric.clientSupplied ? <span style={{ marginLeft: 6, color: '#a76900', fontWeight: 700 }}>Customer&apos;s own</span> : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>Not specified — left to Production</p>
+                      )}
                     </div>
-                    {item.designNotes}
+                    <div>
+                      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Reference Images ({itemImages.length})</div>
+                      {itemImages.length ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                          {itemImages.map((image, imageIndex) => (
+                            image.dataUrl ? (
+                              <button
+                                key={`${image.label}-${imageIndex}`}
+                                type="button"
+                                className="tailor-style-image"
+                                onClick={() => window.open(image.dataUrl, '_blank')}
+                                title={image.label}
+                              >
+                                <img src={image.dataUrl} alt={image.label || `Reference ${imageIndex + 1}`} />
+                                <span>{image.label || `Image ${imageIndex + 1}`}</span>
+                              </button>
+                            ) : (
+                              <span key={`${image.label}-${imageIndex}`} className="tailor-style-ref">
+                                <strong>{image.label || `Image ${imageIndex + 1}`}</strong>
+                                <small>{image.name}</small>
+                              </span>
+                            )
+                          ))}
+                        </div>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No reference images uploaded</p>
+                      )}
+                    </div>
                   </div>
-                ) : null))}
+                );
+              })}
+
+              {/* One set of measurements for the whole order, not per item —
+                  the figures themselves, not just whether they exist. */}
+              <div style={{ border: '1px solid #eee5da', borderRadius: 8, padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 6 }}>Measurements</div>
+                {jobModal.measurementDetails || jobModal.measurements ? (
+                  <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                    {jobModal.measurementDetails
+                      ? Object.entries(jobModal.measurementDetails).map(([key, value]) => (
+                        <li key={key} style={{ marginBottom: 4 }}><strong style={{ fontWeight: 600 }}>{key}:</strong> {value}</li>
+                      ))
+                      : String(jobModal.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line, index) => (
+                        <li key={`${line}-${index}`} style={{ marginBottom: 4 }}>{line}</li>
+                      ))}
+                  </ul>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>
+                )}
+              </div>
 
               {/* Who is making what. A suit's jacket and trousers are rarely
                   the same pair of hands, so each item carries its own tailors —
