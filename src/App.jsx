@@ -4615,13 +4615,27 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                 </div>
               ) : null}
 
-              {/* Production note display */}
-              {(jobModal.designNotes || jobModal.productionNote || jobModal.note) ? (
+              {/* Order-level note — the same for every item, unlike design
+                  notes below which are specific to one garment. */}
+              {(jobModal.productionNote || jobModal.note) ? (
                 <div style={{ padding: '12px 14px', background: '#fffbf0', border: '1px solid #e8d9a0', borderRadius: 8, fontSize: 13, color: '#5a4e42' }}>
                   <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Production Note</div>
-                  {jobModal.productionNote || jobModal.designNotes || jobModal.note}
+                  {jobModal.productionNote || jobModal.note}
                 </div>
               ) : null}
+
+              {/* Each garment's own design notes, shown prominently rather
+                  than only in the compact item list above — the same note
+                  a single-item order already got a highlighted box for. */}
+              {(jobModal.items?.length ? jobModal.items : [jobModal])
+                .map((item, index, list) => (item.designNotes ? (
+                  <div key={`${item.item}-${index}`} style={{ padding: '12px 14px', background: '#fffbf0', border: '1px solid #e8d9a0', borderRadius: 8, fontSize: 13, color: '#5a4e42' }}>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>
+                      Design Notes{list.length > 1 ? ` — Item ${index + 1}: ${item.item || 'Unnamed item'}` : ''}
+                    </div>
+                    {item.designNotes}
+                  </div>
+                ) : null))}
 
               {/* Who is making what. A suit's jacket and trousers are rarely
                   the same pair of hands, so each item carries its own tailors —
