@@ -2836,23 +2836,38 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
             <div className="os-card-body os-grid-2">
               <label className="os-field">
                 <span>Payment Status <span style={{ color: '#d62828' }}>*</span></span>
-                <select value={form.paymentStatus} onChange={(event) => updateForm('paymentStatus', event.target.value)}>
+                <select
+                  value={form.paymentStatus}
+                  onChange={(event) => {
+                    const nextStatus = event.target.value;
+                    updateForm('paymentStatus', nextStatus);
+                    // An unpaid invoice has no settlement to speak of, so a method
+                    // chosen before switching back to Unpaid must not linger and
+                    // reach the server as if the invoice had been paid that way.
+                    if (nextStatus === 'unpaid') updateForm('paymentMethod', '');
+                  }}
+                >
                   <option value="" disabled>— Select status —</option>
                   <option value="unpaid">Unpaid</option>
                   <option value="partial_paid">Partial Paid</option>
                   <option value="fully_paid">Fully Paid</option>
                 </select>
               </label>
-              <label className="os-field">
-                <span>Payment Method</span>
-                <select value={form.paymentMethod} onChange={(event) => updateForm('paymentMethod', event.target.value)}>
-                  <option value="" disabled>— Select method —</option>
-                  <option value="transfer">Transfer</option>
-                  <option value="card">Card</option>
-                  <option value="check">Check</option>
-                  <option value="cash">Cash</option>
-                </select>
-              </label>
+              {/* Payment method describes how an invoice was settled, so it only
+                  makes sense once the invoice is being raised as already paid
+                  (in full or in part) — same rule as Amount Received below. */}
+              {form.paymentStatus && form.paymentStatus !== 'unpaid' ? (
+                <label className="os-field">
+                  <span>Payment Method</span>
+                  <select value={form.paymentMethod} onChange={(event) => updateForm('paymentMethod', event.target.value)}>
+                    <option value="" disabled>— Select method —</option>
+                    <option value="transfer">Transfer</option>
+                    <option value="card">Card</option>
+                    <option value="check">Check</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                </label>
+              ) : null}
               {/* There was nowhere to write down what the customer paid, so an
                   invoice could say "part paid" with no figure behind it. An
                   unpaid invoice has no amount to record, so the field only
