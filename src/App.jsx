@@ -301,7 +301,14 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate }) {
             <tbody>{queue.map((invoice) => <tr key={invoice.invoiceNumber}>
               <td><strong>{invoice.invoiceNumber}</strong></td><td>{invoice.customer}</td><td>{invoice.store}</td><td><strong>{money.format(invoice.total)}</strong></td>
               <td><Status>{invoice.orderStatus || 'Unpaid'}</Status></td><td><Status>{invoice.paymentStatus}</Status></td>
-              <td><div className="accounts-row-actions"><button title="Approve" onClick={() => setPendingInvoiceAction({ invoice, status: 'Approved' })}>✓</button><button title="Reject" onClick={() => setPendingInvoiceAction({ invoice, status: 'Rejected' })}>×</button><button title="Flag" onClick={() => setPendingInvoiceAction({ invoice, status: 'Flagged' })}>⚑</button><button title="Open full invoice" onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>•••</button></div></td>
+              <td><div className="accounts-row-actions">
+                {/* Unpaid invoices have nothing to approve, reject, or flag yet —
+                    they sit in the queue as a record until a payment comes in. */}
+                {!isAwaitingPayment(invoice) && <button title="Approve" onClick={() => setPendingInvoiceAction({ invoice, status: 'Approved' })}>✓</button>}
+                {!isAwaitingPayment(invoice) && <button title="Reject" onClick={() => setPendingInvoiceAction({ invoice, status: 'Rejected' })}>×</button>}
+                {!isAwaitingPayment(invoice) && <button title="Flag" onClick={() => setPendingInvoiceAction({ invoice, status: 'Flagged' })}>⚑</button>}
+                <button title="Open full invoice" onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>•••</button>
+              </div></td>
             </tr>)}</tbody></table>
             {!queue.length ? <div className="accounts-empty">No invoices are awaiting review.</div> : null}
           </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Flag, XCircle, HelpCircle, Download, Maximize2, User, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
-import { money, invoiceApprovalStatus, amountReceived, invoicePayable, isFullyPaid, formatMoment } from '../../utils/oms';
+import { money, invoiceApprovalStatus, amountReceived, invoicePayable, isFullyPaid, isAwaitingPayment, formatMoment } from '../../utils/oms';
 import { usePaymentEvidence } from '../../hooks/usePaymentEvidence';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
@@ -31,6 +31,10 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
   // re-flagging or rejecting a settled invoice after the fact isn't a real
   // workflow, it was just an oversight that every action button stayed live.
   const locked = status === 'Approved' && isFullyPaid(invoice);
+  // An unpaid invoice hasn't been settled, so there is nothing here for
+  // Accounts to approve, reject, or flag yet — it exists only as a record
+  // until a payment comes in.
+  const unpaidRecordOnly = !locked && isAwaitingPayment(invoice);
   const evidence = invoice.paymentEvidence || null;
   // The image is fetched on opening rather than travelling with every invoice
   // in the list — see usePaymentEvidence.
@@ -76,6 +80,10 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
       {locked ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#f0faf4', border: '1px solid #b8e4cb', borderRadius: 8, color: '#2a7d4f', fontSize: 13, fontWeight: 700 }}>
           <CheckCircle size={15} /> Approved &amp; fully paid — this decision is final
+        </div>
+      ) : unpaidRecordOnly ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#f5f0e8', border: '1px solid #ddd5c8', borderRadius: 8, color: '#5a4e42', fontSize: 13, fontWeight: 700 }}>
+          <AlertCircle size={15} /> Unpaid — this invoice is a record only, no action is available until payment is received
         </div>
       ) : (
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -341,13 +349,20 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
             <div className="os-card-head">
               <div>
                 <strong>Review Actions</strong>
-                <p>{locked ? 'This decision is final' : 'Choose a decision below'}</p>
+                <p>{locked ? 'This decision is final' : unpaidRecordOnly ? 'No action available' : 'Choose a decision below'}</p>
               </div>
             </div>
             {locked ? (
               <div className="os-card-body" style={{ padding: '12px' }}>
                 <p style={{ margin: 0, fontSize: 12, color: '#8a7a6a', lineHeight: 1.5 }}>
                   Approved and fully paid invoices can no longer be flagged, rejected, or re-approved from here.
+                </p>
+              </div>
+            ) : unpaidRecordOnly ? (
+              <div className="os-card-body" style={{ padding: '12px' }}>
+                <p style={{ margin: 0, fontSize: 12, color: '#8a7a6a', lineHeight: 1.5 }}>
+                  This invoice is Unpaid, so there is nothing to approve, reject, or flag yet. It sits here as a
+                  record until a payment is recorded against it.
                 </p>
               </div>
             ) : (
@@ -436,6 +451,8 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>
           {locked
             ? 'This invoice is Approved and fully paid. That decision is final and can no longer be changed from here.'
+            : unpaidRecordOnly
+            ? 'This invoice is Unpaid and kept here for records only. It has no review decision to make until a payment comes in.'
             : status === 'Awaiting Review'
             ? 'This invoice is currently awaiting your review. Once approved, it will be automatically sent to Production.'
             : `This invoice has been marked ${status}. Choosing another action below will replace that decision.`}
