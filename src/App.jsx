@@ -29,7 +29,7 @@ import {
   money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
   dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
   isInvoiceApproved, canShowJobInProduction, productionBlockReason, productionJobFromInvoice,
-  mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid, DEFAULT_RELEASE_PERCENT,
+  mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid, paidPercent, DEFAULT_RELEASE_PERCENT,
   worksOnJob, jobTailors, averageScore,
   invoiceDocumentPayload, PERIOD_OPTIONS, filterByPeriod, periodTrend, addDaysIso, isEliteCustomer,
   periodWindow, previousWindow, withinWindow, changeAgainst, changeLabel, LOG_PERIODS,
@@ -48,6 +48,14 @@ const trackingBaseUrl = (
 
 const trackingUrlForToken = (token) => `${trackingBaseUrl}/c/${token}`;
 const OMS_SESSION_KEY = 'twif_oms_session';
+// Approving an invoice releases it toward production, so enough of the money
+// has to be in first — the same rule Production itself checks, so the two
+// gates cannot fall out of sync (see the account-approval route on the
+// server, which enforces this too).
+const canApproveInvoice = (invoice, releasePercent = DEFAULT_RELEASE_PERCENT) => (
+  isFullyPaid(invoice) || paidPercent(invoice) >= releasePercent
+);
+
 const roleSlug = (value = '') => String(value || '').replaceAll('_', '-');
 const viewSlug = (value = '') => String(value || '').toLowerCase().replaceAll('&', 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 // Sessions are persistent by design, but the scope requires re-authentication
@@ -130,7 +138,7 @@ const NAV_ICONS = {
   'Shopify Sync': RefreshCw,
 };
 
-function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], onUpdateJob, onApproveInvoice, onNavigate }) {
+function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], onUpdateJob, onApproveInvoice, onNavigate, releasePercent }) {
   const isTailor = role === 'tailor';
 
   if (isTailor) {
@@ -140,7 +148,7 @@ function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], o
   if (role === 'inventory_manager') return <InventoryManagerOverviewPage onNavigate={onNavigate} />;
 
   if (role === 'production_manager') {
-    return <ProductionOverview productionJobs={productionJobs} />;
+    return <ProductionOverview productionJobs={productionJobs} onNavigate={onNavigate} />;
   }
 
   if (role === 'owner') {
@@ -148,17 +156,17 @@ function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], o
   }
 
   if (role === 'accounts') {
-    return <AccountsOverview sentInvoices={sentInvoices} onApproveInvoice={onApproveInvoice} onNavigate={onNavigate} />;
+    return <AccountsOverview sentInvoices={sentInvoices} onApproveInvoice={onApproveInvoice} onNavigate={onNavigate} releasePercent={releasePercent} />;
   }
 
   if (role === 'store_manager') {
     return <StoreManagerOverviewPage sentInvoices={sentInvoices} productionJobs={productionJobs} onNavigate={onNavigate} />;
   }
 
-  return <OperationsOverview role={role} sentInvoices={sentInvoices} productionJobs={productionJobs} />;
+  return <OperationsOverview role={role} sentInvoices={sentInvoices} productionJobs={productionJobs} onNavigate={onNavigate} />;
 }
 
-function OperationsOverview({ role, sentInvoices = [], productionJobs = [] }) {
+function OperationsOverview({ role, sentInvoices = [], productionJobs = [], onNavigate }) {
   const [inventory, setInventory] = useState([]);
 
   useEffect(() => {
@@ -215,7 +223,7 @@ function OperationsOverview({ role, sentInvoices = [], productionJobs = [] }) {
             <table className="operations-overview-table">
               <thead><tr><th>Invoice</th><th>Customer</th><th>Store</th><th>Total</th><th>Payment</th><th>Accounts</th><th>Order</th></tr></thead>
               <tbody>{sentInvoices.slice(0, 10).map((invoice) => (
-                <tr key={invoice.invoiceNumber}>
+                <tr key={invoice.invoiceNumber} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Invoices')}>
                   <td data-label="Invoice"><strong>{invoice.invoiceNumber}</strong></td>
                   <td data-label="Customer">{invoice.customer}</td>
                   <td data-label="Store">{invoice.store}</td>
@@ -240,9 +248,10 @@ function OperationsOverview({ role, sentInvoices = [], productionJobs = [] }) {
   );
 }
 
-function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate }) {
+function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate, releasePercent }) {
   const [inventory, setInventory] = useState([]);
   const [pendingInvoiceAction, setPendingInvoiceAction] = useState(null);
+  const [actionError, setActionError] = useState('');
   const [activeKpiDot, setActiveKpiDot] = useState(0);
   const kpiScrollRef = useRef(null);
   const KPI_COUNT = 6;
@@ -298,13 +307,16 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate }) {
           <header><div><h2>Invoice Review Queue</h2><p>Invoices awaiting your action.</p></div><button onClick={() => onNavigate?.('Invoices')}>View all invoices →</button></header>
           <div className="accounts-table-wrap">
             <table><thead><tr><th>Invoice</th><th>Customer</th><th>Store</th><th>Total</th><th>Status</th><th>Payment</th><th>Action</th></tr></thead>
-            <tbody>{queue.map((invoice) => <tr key={invoice.invoiceNumber}>
+            <tbody>{queue.map((invoice) => <tr key={invoice.invoiceNumber} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>
               <td><strong>{invoice.invoiceNumber}</strong></td><td>{invoice.customer}</td><td>{invoice.store}</td><td><strong>{money.format(invoice.total)}</strong></td>
               <td><Status>{invoice.orderStatus || 'Unpaid'}</Status></td><td><Status>{invoice.paymentStatus}</Status></td>
-              <td><div className="accounts-row-actions">
+              <td><div className="accounts-row-actions" onClick={(event) => event.stopPropagation()}>
                 {/* Unpaid invoices have nothing to approve, reject, or flag yet —
-                    they sit in the queue as a record until a payment comes in. */}
-                {!isAwaitingPayment(invoice) && <button title="Approve" onClick={() => setPendingInvoiceAction({ invoice, status: 'Approved' })}>✓</button>}
+                    they sit in the queue as a record until a payment comes in.
+                    A partially paid invoice can still be rejected or flagged,
+                    but Approve specifically needs to clear the same payment
+                    threshold Production checks. */}
+                {!isAwaitingPayment(invoice) && canApproveInvoice(invoice, releasePercent) && <button title="Approve" onClick={() => setPendingInvoiceAction({ invoice, status: 'Approved' })}>✓</button>}
                 {!isAwaitingPayment(invoice) && <button title="Reject" onClick={() => setPendingInvoiceAction({ invoice, status: 'Rejected' })}>×</button>}
                 {!isAwaitingPayment(invoice) && <button title="Flag" onClick={() => setPendingInvoiceAction({ invoice, status: 'Flagged' })}>⚑</button>}
                 <button title="Open full invoice" onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>•••</button>
@@ -342,12 +354,22 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate }) {
         {!sentInvoices.length ? <div className="accounts-empty">Account activity will appear here.</div> : null}
         <button onClick={() => onNavigate?.('Invoices')}>View full activity →</button>
       </div></section>
+      {actionError ? (
+        <p style={{ margin: 0, fontSize: 13, color: '#8a3520', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, padding: '10px 14px' }}>
+          {actionError}
+        </p>
+      ) : null}
       {pendingInvoiceAction && <InvoiceActionConfirmModal
         invoice={pendingInvoiceAction.invoice}
         status={pendingInvoiceAction.status}
         onCancel={() => setPendingInvoiceAction(null)}
-        onConfirm={() => {
-          onApproveInvoice?.(pendingInvoiceAction.invoice.invoiceNumber, pendingInvoiceAction.status);
+        onConfirm={async () => {
+          setActionError('');
+          try {
+            await onApproveInvoice?.(pendingInvoiceAction.invoice.invoiceNumber, pendingInvoiceAction.status);
+          } catch (error) {
+            setActionError(error.response?.data?.message || 'That decision could not be saved.');
+          }
           setPendingInvoiceAction(null);
         }}
       />}
@@ -570,7 +592,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
               const tone = share >= 40 ? 'green' : share >= 15 ? 'gold' : 'red';
               const label = share >= 40 ? 'Excellent' : share >= 15 ? 'Average' : 'Needs Attention';
               return (
-                <tr key={row.store}>
+                <tr key={row.store} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Stores')}>
                   <td>{row.store}</td>
                   <td>{money.format(row.revenue)}</td>
                   <td>{row.orders}</td>
@@ -603,7 +625,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
             <thead><tr><th>Customer</th><th>Spend</th><th>Orders</th><th>Last Order</th></tr></thead>
             <tbody>
               {topCustomers.length ? topCustomers.map((customer) => (
-                <tr key={customer.id}>
+                <tr key={customer.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Customers')}>
                   <td><i>{customer.fullName?.slice(0, 1)}</i>{customer.fullName}</td>
                   <td>{money.format(customer.spend)}</td>
                   <td>{customer.orders}</td>
@@ -615,8 +637,8 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
             </tbody>
           </table>
         </section>
-        <section className="owner-panel owner-table-panel"><header><span>Inventory Alerts</span><button onClick={() => onNavigate?.('Inventory')}>View full inventory →</button></header><table><thead><tr><th>Item</th><th>Category</th><th>Stock</th><th>Status</th><th>Location</th></tr></thead><tbody>{lowStock.slice(0, 5).map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.type}</td><td>{item.quantity} {item.unit}</td><td><Status>{toNumber(item.quantity) <= 0 ? 'Out of Stock' : 'Low Stock'}</Status></td><td>{item.store || 'Lekki'}</td></tr>)}</tbody></table></section>
-        <section className="owner-panel owner-table-panel"><header><span>Staff Performance (This Week)</span><button onClick={() => onNavigate?.('Staff')}>View all staff →</button></header><table><thead><tr><th>Staff Member</th><th>Role</th><th>Jobs Completed</th><th>Rating</th></tr></thead><tbody>{tailorRows.map((person, index) => <tr key={person.id}><td><i>{person.displayName?.slice(0, 1)}</i>{person.displayName}</td><td>Tailor</td><td>{productionJobs.filter((job) => worksOnJob(job, person.displayName) && job.status === 'Ready').length}</td><td>{(() => { const average = averageScore(productionJobs, person.displayName); return average === null ? <span style={{ color: '#8a7a6a' }}>Not scored</span> : `★ ${average.toFixed(1)} / 10`; })()}</td></tr>)}</tbody></table></section>
+        <section className="owner-panel owner-table-panel"><header><span>Inventory Alerts</span><button onClick={() => onNavigate?.('Inventory')}>View full inventory →</button></header><table><thead><tr><th>Item</th><th>Category</th><th>Stock</th><th>Status</th><th>Location</th></tr></thead><tbody>{lowStock.slice(0, 5).map((item) => <tr key={item.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Inventory')}><td>{item.name}</td><td>{item.type}</td><td>{item.quantity} {item.unit}</td><td><Status>{toNumber(item.quantity) <= 0 ? 'Out of Stock' : 'Low Stock'}</Status></td><td>{item.store || 'Lekki'}</td></tr>)}</tbody></table></section>
+        <section className="owner-panel owner-table-panel"><header><span>Staff Performance (This Week)</span><button onClick={() => onNavigate?.('Staff')}>View all staff →</button></header><table><thead><tr><th>Staff Member</th><th>Role</th><th>Jobs Completed</th><th>Rating</th></tr></thead><tbody>{tailorRows.map((person, index) => <tr key={person.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Staff')}><td><i>{person.displayName?.slice(0, 1)}</i>{person.displayName}</td><td>Tailor</td><td>{productionJobs.filter((job) => worksOnJob(job, person.displayName) && job.status === 'Ready').length}</td><td>{(() => { const average = averageScore(productionJobs, person.displayName); return average === null ? <span style={{ color: '#8a7a6a' }}>Not scored</span> : `★ ${average.toFixed(1)} / 10`; })()}</td></tr>)}</tbody></table></section>
       </section>
     </div>
   );
@@ -989,6 +1011,13 @@ function OwnerStoresPage({ sentInvoices = [] }) {
 }
 
 function TailorOverview({ currentRole, productionJobs = [], onUpdateJob }) {
+  const [jobError, setJobError] = useState('');
+  const applyJobUpdate = (jobId, changes) => {
+    setJobError('');
+    Promise.resolve(onUpdateJob?.(jobId, changes)).catch((error) => {
+      setJobError(error.response?.data?.message || 'That could not be saved. Please try again.');
+    });
+  };
   const tailorName = currentRole?.name?.split(' (')[0] || '';
   const myJobs = productionJobs.filter((job) => worksOnJob(job, tailorName));
   const readyJobs = myJobs.filter((job) => job.status === 'Ready');
@@ -1025,6 +1054,7 @@ function TailorOverview({ currentRole, productionJobs = [], onUpdateJob }) {
 
       <section className="panel">
         <SectionHeader eyebrow="My schedule" title="Priority Task Queue" />
+        {jobError ? <p style={{ margin: '0 0 12px', fontSize: 13, color: '#8a3520', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, padding: '8px 12px' }}>{jobError}</p> : null}
         {sortedActiveJobs.length ? (
           <div className="job-list production-job-list tailor-priority-list">
             {sortedActiveJobs.map((job) => (
@@ -1043,8 +1073,8 @@ function TailorOverview({ currentRole, productionJobs = [], onUpdateJob }) {
                   </dl>
                   {(job.productionNote || job.designNotes || job.note) ? <p className="production-note">{job.productionNote || job.designNotes || job.note}</p> : null}
                   <div className="row-actions">
-                    <button disabled={job.status === 'In Progress'} onClick={() => onUpdateJob?.(job.id, { status: 'In Progress' })}>Start Work</button>
-                    <button className="primary-action" onClick={() => onUpdateJob?.(job.id, { status: 'Ready' })}>Mark Ready</button>
+                    <button disabled={job.status === 'In Progress'} onClick={() => applyJobUpdate(job.id, { status: 'In Progress' })}>Start Work</button>
+                    <button className="primary-action" onClick={() => applyJobUpdate(job.id, { status: 'Ready' })}>Mark Ready</button>
                   </div>
                 </div>
               </article>
@@ -1079,7 +1109,7 @@ function TailorOverview({ currentRole, productionJobs = [], onUpdateJob }) {
   );
 }
 
-function ProductionOverview({ productionJobs = [] }) {
+function ProductionOverview({ productionJobs = [], onNavigate }) {
   const readyJobs = productionJobs.filter((job) => job.status === 'Ready');
   const unassignedJobs = productionJobs.filter((job) => !job.tailor || job.tailor === 'Unassigned');
   const fabricPending = productionJobs.filter((job) => !job.fabricConfirmed);
@@ -1121,6 +1151,12 @@ function ProductionOverview({ productionJobs = [] }) {
         <div className="panel">
           <SectionHeader eyebrow="Work schedule" title="Priority Production Queue" />
           {priorityJobs.length ? (
+            <>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+              <button type="button" onClick={() => onNavigate?.('Production')} style={{ background: 'none', border: 'none', color: '#c97b08', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                Open Production board →
+              </button>
+            </div>
             <div className="table-wrap">
               <table className="production-overview-table">
                 <thead>
@@ -1137,7 +1173,7 @@ function ProductionOverview({ productionJobs = [] }) {
                   {priorityJobs.slice(0, 10).map((job) => {
                     const isOverdue = job.delivery && new Date(job.delivery) < new Date();
                     return (
-                      <tr key={job.id} className={isOverdue ? 'row-overdue' : ''}>
+                      <tr key={job.id} className={isOverdue ? 'row-overdue' : ''} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Production')}>
                         <td data-label="Delivery">
                           <span className={classNames('delivery-date-cell', isOverdue && 'delivery-overdue')}>
                             {isOverdue && <AlertTriangle size={11} />}
@@ -1164,6 +1200,7 @@ function ProductionOverview({ productionJobs = [] }) {
                 </tbody>
               </table>
             </div>
+            </>
           ) : <div className="invoice-preview-empty">No active production jobs.</div>}
         </div>
 
@@ -1577,20 +1614,23 @@ function OrdersView({ sentInvoices }) {
   );
 }
 
-// Correcting an invoice after it has gone out: the lines, who it is for, when
-// it is due. Totals are recomputed by the server from the lines, so an edited
-// invoice cannot disagree with the sum of its own items, and it refuses to be
-// cut below what has already been paid against it.
+// Correcting an invoice after it has gone out: who it is for, when it is due,
+// and the lines themselves — description, rate, quantity, discount, and the
+// lines a customer was billed at all. The server recomputes the total from
+// what is submitted here, so an edited invoice cannot disagree with the sum
+// of its own items, and refuses to be cut below what has already been paid.
 function EditInvoiceModal({ invoice, onClose, onSaved }) {
-  const [items, setItems] = useState(() => (invoice.items || []).map((item, index) => ({
+  const [items, setItems] = useState(() => (invoice.items?.length ? invoice.items : [{}]).map((item, index) => ({
     key: `line-${index}`,
     description: item.description || '',
     quantity: toNumber(item.quantity) || 1,
     rate: toNumber(item.rate),
     discountPercent: toNumber(item.discountPercent),
+    note: item.note || '',
   })));
   const [customerName, setCustomerName] = useState(invoice.customer || '');
   const [customerPhone, setCustomerPhone] = useState(invoice.customerPhone || '');
+  const [customerEmail, setCustomerEmail] = useState(invoice.email || '');
   const [dueDate, setDueDate] = useState(invoice.dueDate ? String(invoice.dueDate).slice(0, 10) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -1598,18 +1638,38 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
   const updateLine = (index, field, value) => setItems((current) => current.map((item, position) => (
     position === index ? { ...item, [field]: value } : item
   )));
+  const addLine = () => setItems((current) => [
+    ...current, { key: `line-${current.length}-${Date.now()}`, description: '', quantity: 1, rate: 0, discountPercent: 0, note: '' },
+  ]);
+  const removeLine = (index) => setItems((current) => current.filter((_, position) => position !== index));
+
+  // Mirrors the server's recompute exactly, so the total shown here is the
+  // total that will actually be saved rather than a promise about it.
+  const subtotal = items.reduce((sum, item) => sum + (toNumber(item.rate) * toNumber(item.quantity)), 0);
+  const itemDiscountTotal = items.reduce((sum, item) => sum + ((toNumber(item.rate) * toNumber(item.quantity) * toNumber(item.discountPercent)) / 100), 0);
+  const eliteDiscountAmount = toNumber(invoice.eliteDiscountAmount);
+  const storeCreditApplied = toNumber(invoice.storeCreditApplied);
+  const newTotal = Math.max(0, subtotal - itemDiscountTotal - eliteDiscountAmount - storeCreditApplied);
+  const alreadyPaid = toNumber(invoice.paid);
+  const belowPaid = newTotal < alreadyPaid;
 
   const save = async () => {
     setError('');
     if (items.some((item) => !item.description.trim())) { setError('Every line needs a description.'); return; }
+    if (belowPaid) { setError(`This invoice cannot be reduced below the ${money.format(alreadyPaid)} already recorded as paid against it.`); return; }
     setSaving(true);
     try {
       const response = await api.patch(`/oms/invoices/${invoice.invoiceNumber}`, {
-        // Only the wording travels. The figures are the invoice's own and are
-        // left exactly as they were.
-        items: items.map((item) => ({ description: item.description, note: item.note })),
+        items: items.map((item) => ({
+          description: item.description,
+          note: item.note,
+          quantity: toNumber(item.quantity),
+          rate: toNumber(item.rate),
+          discountPercent: toNumber(item.discountPercent),
+        })),
         customerName,
         customerPhone,
+        customerEmail,
         dueDate,
       });
       onSaved?.(response.data?.data?.invoice);
@@ -1626,9 +1686,7 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
       <div className="os-confirm edit-invoice" onClick={(event) => event.stopPropagation()}>
         <h3>Edit {invoice.invoiceNumber}</h3>
         <p className="edit-invoice-note">
-          You can correct the customer's details and what each item is called.
-          The price, quantity and discounts stay as they were sent to the
-          customer — they can't be changed here.
+          Correct the customer's details, due date, and the items on this invoice.
         </p>
 
         <div className="edit-invoice-grid">
@@ -1641,46 +1699,76 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
             <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} />
           </label>
           <label className="os-field">
+            <span>Email</span>
+            <input type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} />
+          </label>
+          <label className="os-field">
             <span>Due date</span>
             <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
           </label>
         </div>
 
-        <div className="edit-invoice-lines">
+        <div className="edit-invoice-lines" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {items.map((item, index) => (
-            <div key={item.key}>
-              <input
-                value={item.description}
-                onChange={(event) => updateLine(index, 'description', event.target.value)}
-                placeholder="Description"
-                aria-label={`Line ${index + 1} description`}
-              />
-              {/* Shown so the reader knows which line they are correcting, but
-                  not editable — changing any of these changes the money. */}
-              <span title="Quantity">{toNumber(item.quantity)}</span>
-              <span title="Rate">{money.format(toNumber(item.rate))}</span>
-              <span title="Discount">{toNumber(item.discountPercent) ? `${toNumber(item.discountPercent)}%` : '—'}</span>
+            <div key={item.key} className="invoice-item-row" style={{ border: '1px solid #eee5da', borderRadius: 10, padding: '14px 16px', background: '#faf7f3', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="invoice-item-fields">
+                <label className="os-field">
+                  <span>Description</span>
+                  <input
+                    value={item.description}
+                    onChange={(event) => updateLine(index, 'description', event.target.value)}
+                    placeholder="e.g. Three-piece suit"
+                    aria-label={`Line ${index + 1} description`}
+                  />
+                </label>
+                <label className="os-field">
+                  <span>Rate (₦)</span>
+                  <input type="number" min="0" value={item.rate} onChange={(event) => updateLine(index, 'rate', event.target.value)} />
+                </label>
+                <label className="os-field">
+                  <span>Qty</span>
+                  <input type="number" min="1" value={item.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} />
+                </label>
+                <label className="os-field">
+                  <span>Discount %</span>
+                  <input type="number" min="0" max="100" value={item.discountPercent} onChange={(event) => updateLine(index, 'discountPercent', event.target.value)} />
+                </label>
+              </div>
+              <div className="invoice-item-note-row">
+                <label className="os-field">
+                  <span>Item Note <em style={{ fontWeight: 400, fontSize: 10, textTransform: 'none' }}>(optional)</em></span>
+                  <input value={item.note} onChange={(event) => updateLine(index, 'note', event.target.value)} placeholder="Delivery date, style details…" />
+                </label>
+                <button type="button" onClick={() => removeLine(index)} disabled={items.length === 1}
+                  style={{ padding: '10px 14px', background: items.length === 1 ? '#faf7f3' : '#fff5f0', border: '1px solid', borderColor: items.length === 1 ? '#eee5da' : '#f3d5cc', borderRadius: 8, color: items.length === 1 ? '#b0a090' : '#8a3520', cursor: items.length === 1 ? 'default' : 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                  <Trash2 size={13} /> Remove
+                </button>
+              </div>
             </div>
           ))}
+          <button type="button" onClick={addLine}
+            style={{ padding: '10px 16px', border: '1px dashed #ddd5c8', borderRadius: 8, background: '#fff', color: '#c97b08', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center' }}>
+            <Plus size={14} /> Add Item
+          </button>
         </div>
 
         <dl className="edit-invoice-total">
-          <dt>Balance due</dt><dd><strong>{money.format(toNumber(invoice.total))}</strong></dd>
-          <dt>Recorded as paid</dt><dd>{money.format(toNumber(invoice.paid))}</dd>
+          <dt>New balance due</dt><dd><strong style={{ color: belowPaid ? '#8a3520' : undefined }}>{money.format(newTotal)}</strong></dd>
+          <dt>Recorded as paid</dt><dd>{money.format(alreadyPaid)}</dd>
         </dl>
 
         {error ? <p className="edit-invoice-error">{error}</p> : null}
 
         <div className="edit-invoice-actions">
           <button type="button" onClick={onClose}>Cancel</button>
-          <button type="button" className="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save invoice'}</button>
+          <button type="button" className="primary" onClick={save} disabled={saving || belowPaid}>{saving ? 'Saving…' : 'Save invoice'}</button>
         </div>
       </div>
     </div>
   );
 }
 
-function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onApproveInvoice, onInvoiceChanged, onInvoiceDeleted }) {
+function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onApproveInvoice, onInvoiceChanged, onInvoiceDeleted, releasePercent }) {
   const [editingInvoice, setEditingInvoice] = useState(null);
   // An invoice belongs to whoever raised it and to the people who run the shop.
   // Removing one is the Owner's and Admin's alone — a store manager cannot
@@ -1702,8 +1790,11 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
     ['Download PDF', <Download size={12} strokeWidth={2} />, () => downloadInvoicePdf(invoice)],
     ['Resend Email', <RefreshCw size={12} strokeWidth={2} />, () => resendInvoiceEmail(invoice)],
     ...(mayEdit(invoice) ? [['Edit Invoice', <Edit2 size={12} strokeWidth={2} />, () => setEditingInvoice(invoice)]] : []),
-    ...(onApproveInvoice && invoiceApprovalStatus(invoice) !== 'Approved'
-      ? [['Approve', <CheckCircle size={12} strokeWidth={2} />, () => onApproveInvoice(invoice.invoiceNumber, 'Approved')]]
+    // Approving needs the same payment threshold Production checks — an
+    // invoice that hasn't cleared it has no Approve action here at all,
+    // rather than one that fails after the fact.
+    ...(onApproveInvoice && invoiceApprovalStatus(invoice) !== 'Approved' && canApproveInvoice(invoice, releasePercent)
+      ? [['Approve', <CheckCircle size={12} strokeWidth={2} />, () => approveInvoice(invoice)]]
       : []),
     ...(mayDelete(invoice) ? [['Delete Invoice', <Trash2 size={12} strokeWidth={2} />, () => removeInvoice(invoice)]] : []),
   ];
@@ -1716,6 +1807,15 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
       setRowNotice(`${invoice.invoiceNumber} was deleted.`);
     } catch (error) {
       setRowNotice(error.response?.data?.message || 'That invoice could not be deleted.');
+    }
+  };
+
+  const approveInvoice = async (invoice) => {
+    try {
+      await onApproveInvoice(invoice.invoiceNumber, 'Approved');
+      setRowNotice(`${invoice.invoiceNumber} was approved.`);
+    } catch (error) {
+      setRowNotice(error.response?.data?.message || 'That invoice could not be approved.');
     }
   };
 
@@ -3024,10 +3124,19 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   );
 }
 
-function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
+function PaymentsView({ sentInvoices = [], onApproveInvoice, releasePercent }) {
   const invoiceQueue = sentInvoices;
   const [approvalFilter, setApprovalFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
+  const [actionNotice, setActionNotice] = useState('');
+  const approveWithFeedback = async (invoice) => {
+    setActionNotice('');
+    try {
+      await onApproveInvoice?.(invoice.invoiceNumber, 'Approved');
+    } catch (error) {
+      setActionNotice(error.response?.data?.message || 'That invoice could not be approved.');
+    }
+  };
   const pendingCount = invoiceQueue.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts').length;
   const approvedCount = invoiceQueue.filter(isInvoiceApproved).length;
   const partialCount = invoiceQueue.filter((invoice) => invoice.paymentStatus === 'Partial Paid').length;
@@ -3069,6 +3178,12 @@ function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
           </div>
         </div>
       </div>
+
+      {actionNotice ? (
+        <p style={{ margin: 0, fontSize: 13, color: '#8a3520', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, padding: '10px 14px' }}>
+          {actionNotice}
+        </p>
+      ) : null}
 
       {/* KPI row */}
       <div className="os-kpi-row" style={{ gap: 14 }}>
@@ -3168,7 +3283,8 @@ function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
                           style={{ padding: '5px 10px', border: '1px solid #ddd5c8', borderRadius: 6, background: '#fff', color: '#7a6030', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                           <AlertCircle size={11} /> Flag
                         </button>
-                        <button type="button" onClick={() => onApproveInvoice?.(invoice.invoiceNumber, 'Approved')} disabled={isInvoiceApproved(invoice)}
+                        <button type="button" onClick={() => approveWithFeedback(invoice)} disabled={isInvoiceApproved(invoice) || !canApproveInvoice(invoice, releasePercent)}
+                          title={!isInvoiceApproved(invoice) && !canApproveInvoice(invoice, releasePercent) ? `Needs ${releasePercent ?? DEFAULT_RELEASE_PERCENT}% paid before it can be approved` : undefined}
                           style={{ padding: '5px 10px', border: '1px solid', borderColor: isInvoiceApproved(invoice) ? '#c3e8d4' : '#1a1611', borderRadius: 6, background: isInvoiceApproved(invoice) ? '#f0faf4' : '#1a1611', color: isInvoiceApproved(invoice) ? '#2a7d4f' : '#fff', fontSize: 12, fontWeight: 600, cursor: isInvoiceApproved(invoice) ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                           <CheckCircle size={11} /> {isInvoiceApproved(invoice) ? 'Approved' : 'Approve'}
                         </button>
@@ -3212,7 +3328,7 @@ function PaymentsView({ sentInvoices = [], onApproveInvoice }) {
                     style={{ flex: 1, padding: '8px', border: '1px solid #ddd5c8', borderRadius: 6, background: '#fff', color: '#7a6030', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Flag
                   </button>
-                  <button type="button" onClick={() => onApproveInvoice?.(invoice.invoiceNumber, 'Approved')} disabled={isInvoiceApproved(invoice)}
+                  <button type="button" onClick={() => approveWithFeedback(invoice)} disabled={isInvoiceApproved(invoice) || !canApproveInvoice(invoice, releasePercent)}
                     style={{ flex: 2, padding: '8px', border: '1px solid', borderColor: isInvoiceApproved(invoice) ? '#c3e8d4' : '#1a1611', borderRadius: 6, background: isInvoiceApproved(invoice) ? '#f0faf4' : '#1a1611', color: isInvoiceApproved(invoice) ? '#2a7d4f' : '#fff', fontSize: 12, fontWeight: 600, cursor: isInvoiceApproved(invoice) ? 'default' : 'pointer' }}>
                     {isInvoiceApproved(invoice) ? 'Approved' : 'Approve Payment'}
                   </button>
@@ -4121,8 +4237,9 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   };
 
   const updateJobWithToast = (job, changes, message) => {
-    onUpdateJob(job.id, changes);
-    notify(message);
+    Promise.resolve(onUpdateJob(job.id, changes))
+      .then(() => notify(message))
+      .catch((error) => notify(error.response?.data?.message || 'Unable to update this job', 'error'));
   };
 
   // Everything this garment needs, from the list the order sheet carries. An
@@ -4404,7 +4521,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
             </div>
 
             {/* Job Table — Desktop */}
-            <div style={{ overflowX: 'auto' }}>
+            <div className="os-desktop-table" style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', display: 'table' }}>
                 <thead>
                   <tr>
@@ -4875,8 +4992,12 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                   onClick={() => {
                     const updatedJob = { ...jobModal, status: 'In Progress' };
                     setJobModal(updatedJob);
-                    onUpdateJob(jobModal.id, { status: 'In Progress' });
-                    notify('Job set to In Progress', 'success');
+                    Promise.resolve(onUpdateJob(jobModal.id, { status: 'In Progress' }))
+                      .then(() => notify('Job set to In Progress', 'success'))
+                      .catch((error) => {
+                        setJobModal(jobModal);
+                        notify(error.response?.data?.message || 'Unable to update this job', 'error');
+                      });
                   }}
                   style={{ flex: 1, padding: '10px 14px', border: '1px solid', borderColor: (jobModal.status === 'In Progress' || jobModal.status === 'Ready') ? '#c3e8d4' : '#ddd5c8', borderRadius: 8, background: (jobModal.status === 'In Progress' || jobModal.status === 'Ready') ? '#f0faf4' : '#fff', color: (jobModal.status === 'In Progress' || jobModal.status === 'Ready') ? '#2a7d4f' : '#5a4e42', fontSize: 13, fontWeight: 700, cursor: (jobModal.status === 'In Progress' || jobModal.status === 'Ready') ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 >
@@ -4934,8 +5055,12 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                 onClick={() => {
                   const job = confirmReady;
                   setJobModal((current) => (current && current.id === job.id ? { ...current, status: 'Ready' } : current));
-                  onUpdateJob(job.id, { status: 'Ready' });
-                  notify('Job marked Ready for Collection', 'success');
+                  Promise.resolve(onUpdateJob(job.id, { status: 'Ready' }))
+                    .then(() => notify('Job marked Ready for Collection', 'success'))
+                    .catch((error) => {
+                      setJobModal((current) => (current && current.id === job.id ? { ...current, status: job.status } : current));
+                      notify(error.response?.data?.message || 'Unable to mark this job ready', 'error');
+                    });
                   setConfirmReady(null);
                 }}
               >
@@ -6985,9 +7110,9 @@ function OrderTableLike({ columns, rows }) {
 }
 
 function renderView(activeView, role, viewProps = {}) {
-  if (activeView === 'Overview') return <Overview role={role} currentRole={viewProps.currentRole} sentInvoices={viewProps.sentInvoices} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} onApproveInvoice={viewProps.onApproveInvoice} onNavigate={viewProps.onNavigate} />;
+  if (activeView === 'Overview') return <Overview role={role} currentRole={viewProps.currentRole} sentInvoices={viewProps.sentInvoices} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} onApproveInvoice={viewProps.onApproveInvoice} onNavigate={viewProps.onNavigate} releasePercent={viewProps.releasePercent} />;
   if (activeView === 'Invoices') {
-    if (role === 'accounts') return <AccountsInvoicesPage sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
+    if (role === 'accounts') return <AccountsInvoicesPage sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} onInvoiceUpdated={viewProps.onInvoiceUpdated} releasePercent={viewProps.releasePercent} />;
     if (['store_manager', 'owner', 'admin'].includes(role)) {
       return (
         <StoreInvoicesView
@@ -6997,6 +7122,7 @@ function renderView(activeView, role, viewProps = {}) {
           onApproveInvoice={viewProps.onApproveInvoice}
           onInvoiceChanged={viewProps.onInvoiceUpdated}
           onInvoiceDeleted={viewProps.onInvoiceDeleted}
+          releasePercent={viewProps.releasePercent}
         />
       );
     }
@@ -7008,7 +7134,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Order Sheet') return <OrderSheetView sentInvoices={viewProps.sentInvoices} onCreateJob={viewProps.onCreateJob} />;
   if (activeView === 'Payments') return role === 'accounts' || role === 'owner'
     ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} onInvoiceUpdated={viewProps.onInvoiceUpdated} />
-    : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} />;
+    : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} releasePercent={viewProps.releasePercent} />;
   if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} blockedJobs={viewProps.blockedProductionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} onOverrideHold={viewProps.onOverrideHold} />;
   if (activeView === 'Inventory') return role === 'accounts' ? <AccountsInventoryReconciliationPage /> : role === 'inventory_manager' ? <InventoryListPage currentRole={viewProps.currentRole} /> : role === 'owner' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode /> : <InventoryView />;
   if (activeView === 'Reconciliations') return <InventoryView />;
@@ -7229,25 +7355,44 @@ function App() {
     )));
   };
 
+  // Returns the request's promise so a caller that cares (an approve button
+  // that needs to show "only 40% paid, 70% needed") can catch a rejection.
+  // A server that refuses the change — an under-threshold approval, most
+  // often — used to be indistinguishable from one that accepted it, because
+  // the optimistic update stood and the failure was swallowed silently.
   const updateInvoiceApproval = (invoiceNumber, status) => {
     setSentInvoices((current) => current.map((invoice) => (
       invoice.invoiceNumber === invoiceNumber ? { ...invoice, accountApprovalStatus: status } : invoice
     )));
 
-    api.patch(`/oms/invoices/${invoiceNumber}/account-approval`, { status }).then((response) => {
+    return api.patch(`/oms/invoices/${invoiceNumber}/account-approval`, { status }).then((response) => {
       const invoice = response.data?.data?.invoice;
       if (!invoice) return;
       setSentInvoices((current) => current.map((item) => (
         item.invoiceNumber === invoice.invoiceNumber ? invoice : item
       )));
       setProductionJobs((current) => mergeJobsByInvoice(current, [productionJobFromInvoice(invoice)]));
-    }).catch(() => {});
+    }).catch((error) => {
+      // The change never landed, so the optimistic status shown above has to
+      // come back off — otherwise Accounts sees "Approved" on an invoice the
+      // server refused to approve.
+      setSentInvoices((current) => current.map((invoice) => (
+        invoice.invoiceNumber === invoiceNumber ? { ...invoice, accountApprovalStatus: invoiceApprovalStatus(invoice) } : invoice
+      )));
+      throw error;
+    });
   };
 
   const createProductionJob = (job) => {
     setProductionJobs((current) => [job, ...current]);
   };
 
+  // Same shape as updateInvoiceApproval: returns the request's promise, and
+  // reverts the optimistic board state on failure rather than leaving a job
+  // reading "In Progress"/"Ready" locally when the server actually rejected
+  // it (e.g. missing department, invoice under the payment threshold) — the
+  // silent version of this let a tailor believe a job was done when nothing
+  // had actually saved.
   const updateProductionJob = (jobId, changes) => {
     const existingJob = productionJobs.find((job) => job.id === jobId);
     const updatedJob = existingJob ? {
@@ -7260,14 +7405,21 @@ function App() {
       job.id === jobId ? updatedJob : job
     )));
 
-    if (updatedJob?.trackingToken) {
-      // The job's own status is saved, not the customer-facing label. Sending
-      // customerStatus() here overwrote 'Assigned' with 'Order Received' and
-      // 'Ready' with 'Ready for Collection', so after a reload the job matched
-      // none of the production board's states and dropped out of every count.
-      // The server derives what the customer is shown from this value.
-      api.patch(`/oms/tracking/order-sheet/${updatedJob.trackingToken}`, updatedJob).catch(() => {});
-    }
+    if (!updatedJob?.trackingToken) return Promise.resolve(updatedJob);
+
+    // The job's own status is saved, not the customer-facing label. Sending
+    // customerStatus() here overwrote 'Assigned' with 'Order Received' and
+    // 'Ready' with 'Ready for Collection', so after a reload the job matched
+    // none of the production board's states and dropped out of every count.
+    // The server derives what the customer is shown from this value.
+    return api.patch(`/oms/tracking/order-sheet/${updatedJob.trackingToken}`, updatedJob)
+      .then(() => updatedJob)
+      .catch((error) => {
+        setProductionJobs((current) => current.map((job) => (
+          job.id === jobId ? existingJob : job
+        )));
+        throw error;
+      });
   };
 
   // An Owner or Admin releasing an order the payment gate is holding. The
@@ -7504,6 +7656,7 @@ function App() {
                 onCreateJob: createProductionJob,
                 onUpdateJob: updateProductionJob,
                 onOverrideHold: overrideProductionHold,
+                releasePercent,
               })}
             />
           ))}

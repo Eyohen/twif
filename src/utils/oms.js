@@ -192,11 +192,10 @@ export const paidPercent = (invoice) => {
   return (toNumber(invoice?.paid) / payable) * 100;
 };
 
-// What the invoice is actually payable at, once its discounts are applied.
-export const invoicePayable = (invoice) => Math.max(
-  0,
-  toNumber(invoice?.total) - toNumber(invoice?.eliteDiscountAmount) - toNumber(invoice?.storeCreditApplied),
-);
+// invoice.total is already net of the elite discount and store credit — both
+// are applied once, when the invoice is raised — so this used to subtract
+// them a second time and undercount what was actually payable.
+export const invoicePayable = (invoice) => Math.max(0, toNumber(invoice?.total));
 
 // An invoice carries a payment status but no figure for what was handed over,
 // so a part payment's amount is genuinely unknown — null says so rather than

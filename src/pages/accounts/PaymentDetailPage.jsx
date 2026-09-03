@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { ArrowLeft, Banknote, Building2, CreditCard, Download, FileText, Maximize2, User, Check } from 'lucide-react';
-import { api } from '../../lib/api';
+import { ArrowLeft, Banknote, Building2, CreditCard, Download, FileText, Maximize2, User } from 'lucide-react';
 import { usePaymentEvidence } from '../../hooks/usePaymentEvidence';
 import { money, amountReceived, invoicePayable, invoiceApprovalStatus, formatMoment } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
+import RecordPaymentForm from '../../components/oms/RecordPaymentForm';
 
 const label = { fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 };
 const value = { fontSize: 13, fontWeight: 600, color: '#1a1611' };
@@ -14,38 +14,18 @@ const value = { fontSize: 13, fontWeight: 600, color: '#1a1611' };
 export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onRecorded }) {
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [invoice, setInvoice] = useState(initialInvoice);
-  const [draft, setDraft] = useState('');
-  const [payMethod, setPayMethod] = useState(initialInvoice.paymentMethod || 'Transfer');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
 
   const payable = invoicePayable(invoice);
   const received = amountReceived(invoice);
-
-  // Until this existed an invoice carried a status but no figure, so Accounts
-  // had nothing to reconcile against and the screens invented one.
-  const recordPayment = async (event) => {
-    event.preventDefault();
-    setError('');
-    setSaving(true);
-    try {
-      const response = await api.patch(`/oms/invoices/${invoice.invoiceNumber}/payment`, {
-        amountReceived: Number(draft),
-        method: payMethod,
-      });
-      const updated = response.data?.data?.invoice;
-      if (updated) {
-        setInvoice(updated);
-        onRecorded?.(updated);
-      }
-      setDraft('');
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'That payment could not be recorded.');
-    } finally {
-      setSaving(false);
-    }
-  };
   const balance = received === null ? null : Math.max(0, payable - received);
+
+  // Recording a payment recomputes the status from the cumulative amount, so
+  // an invoice cannot say part paid while showing nothing received — and the
+  // page reflects it immediately rather than waiting on a reload.
+  const handleRecorded = (updated) => {
+    setInvoice(updated);
+    onRecorded?.(updated);
+  };
   const asMoney = (amount) => (amount === null ? 'Not recorded' : money.format(amount));
   const evidence = invoice.paymentEvidence || null;
   // The image is fetched on opening rather than travelling with every invoice
@@ -100,9 +80,9 @@ export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onR
             <div className="os-card-body">
               <div className="os-grid-2" style={{ gap: 12 }}>
                 {[
-                  ['Invoice Amount', money.format(payable)],
-                  ['Amount Received', asMoney(received)],
-                  ['Balance Outstanding', asMoney(balance)],
+                  ['Invoice Total', money.format(payable)],
+                  ['Amount Paid', asMoney(received)],
+                  ['Balance Due', asMoney(balance)],
                   ['Payment Method', <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><MethodIcon size={13} />{method}</span>],
                   ['Payment Status', <Status>{invoice.paymentStatus}</Status>],
                   ['Accounts Decision', <Status>{invoiceApprovalStatus(invoice)}</Status>],
@@ -120,35 +100,12 @@ export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onR
                 </p>
               ) : null}
 
-              {/* Recording a payment sets the status from the amount, so an
-                  invoice cannot say part paid while showing nothing received. */}
-              <form onSubmit={recordPayment} className="record-payment">
-                <div>
-                  <label className="os-field">
-                    <span>Amount received</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max={payable}
-                      step="1"
-                      value={draft}
-                      onChange={(event) => setDraft(event.target.value)}
-                      placeholder={String(payable)}
-                      required
-                    />
-                  </label>
-                  <label className="os-field">
-                    <span>Method</span>
-                    <select value={payMethod} onChange={(event) => setPayMethod(event.target.value)}>
-                      {['Transfer', 'Cash', 'Card', 'Check'].map((option) => <option key={option}>{option}</option>)}
-                    </select>
-                  </label>
-                </div>
-                <button type="submit" disabled={saving || draft === ''}>
-                  <Check size={14} /> {saving ? 'Recording…' : 'Record payment'}
-                </button>
-                {error ? <p className="record-payment-error">{error}</p> : null}
-              </form>
+              <RecordPaymentForm
+                invoiceNumber={invoice.invoiceNumber}
+                balance={balance === null ? payable : balance}
+                defaultMethod={invoice.paymentMethodKey || 'transfer'}
+                onRecorded={handleRecorded}
+              />
 
               {invoice.paymentHistory?.length ? (
                 <div className="payment-history">

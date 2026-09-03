@@ -10,6 +10,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
   const [filter, setFilter] = useState('All tasks');
   const [viewingImage, setViewingImage] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [error, setError] = useState('');
 
   const getStatus = (order) => {
     if (order.status === 'Ready') return 'ready';
@@ -17,10 +18,22 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
     return 'in_queue';
   };
 
-  const confirmAction = () => {
+  const openConfirm = (next) => {
+    setError('');
+    setConfirm(next);
+  };
+
+  const confirmAction = async () => {
     if (!confirm) return;
-    onUpdateJob?.(confirm.jobId, { status: confirm.action === 'start' ? 'In Progress' : 'Ready' });
-    setConfirm(null);
+    setError('');
+    try {
+      await onUpdateJob?.(confirm.jobId, { status: confirm.action === 'start' ? 'In Progress' : 'Ready' });
+      setConfirm(null);
+    } catch (requestError) {
+      // The board reverts itself on a rejected change — this just tells the
+      // tailor why nothing moved, instead of the button quietly resetting.
+      setError(requestError.response?.data?.message || 'That could not be saved. Please try again.');
+    }
   };
 
   const statusConfig = {
@@ -325,7 +338,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                 <button
                   type="button"
                   disabled={!canStart}
-                  onClick={() => canStart && setConfirm({ jobId: order.id, action: 'start', order })}
+                  onClick={() => canStart && openConfirm({ jobId: order.id, action: 'start', order })}
                   style={{
                     flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: canStart ? 'pointer' : 'default',
@@ -342,7 +355,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                 <button
                   type="button"
                   disabled={!canReady}
-                  onClick={() => canReady && setConfirm({ jobId: order.id, action: 'ready', order })}
+                  onClick={() => canReady && openConfirm({ jobId: order.id, action: 'ready', order })}
                   style={{
                     flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: canReady ? 'pointer' : 'not-allowed',
@@ -410,6 +423,11 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                 ? `Are you ready to start working on ${confirm.order.customer}'s ${confirm.order.item || 'order'}?`
                 : `Confirm that ${confirm.order.customer}'s ${confirm.order.item || 'order'} is completed and ready for collection?`}
             </p>
+            {error ? (
+              <p style={{ margin: '-12px 0 20px', fontSize: 13, color: '#8a3520', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, padding: '8px 12px', textAlign: 'left' }}>
+                {error}
+              </p>
+            ) : null}
             <div style={{ display: 'flex', gap: 10 }}>
               <button
                 type="button"

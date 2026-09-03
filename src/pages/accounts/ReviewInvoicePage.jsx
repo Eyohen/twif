@@ -4,10 +4,17 @@ import { money, invoiceApprovalStatus, amountReceived, invoicePayable, isFullyPa
 import { usePaymentEvidence } from '../../hooks/usePaymentEvidence';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
+import RecordPaymentForm from '../../components/oms/RecordPaymentForm';
 
-export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
+export default function ReviewInvoicePage({ invoice, onBack, onReview, onPaymentRecorded }) {
   const [pendingAction, setPendingAction] = useState(null);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [actionError, setActionError] = useState('');
+
+  const requestAction = (action) => {
+    setActionError('');
+    setPendingAction(action);
+  };
 
   // Everything below reads from the invoice. It previously applied a flat 5%
   // discount to every invoice, invented a ₦25,000 part-payment, and listed
@@ -35,6 +42,10 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
   // Accounts to approve, reject, or flag yet — it exists only as a record
   // until a payment comes in.
   const unpaidRecordOnly = !locked && isAwaitingPayment(invoice);
+  // Invoices approved before the payment gate existed can be both Approved
+  // and Unpaid at once — a real, inconsistent state, not a rendering bug —
+  // so it gets its own message rather than the plain "not yet reviewed" one.
+  const approvedButUnpaid = unpaidRecordOnly && status === 'Approved';
   const evidence = invoice.paymentEvidence || null;
   // The image is fetched on opening rather than travelling with every invoice
   // in the list — see usePaymentEvidence.
@@ -82,41 +93,50 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
           <CheckCircle size={15} /> Approved &amp; fully paid — this decision is final
         </div>
       ) : unpaidRecordOnly ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#f5f0e8', border: '1px solid #ddd5c8', borderRadius: 8, color: '#5a4e42', fontSize: 13, fontWeight: 700 }}>
-          <AlertCircle size={15} /> Unpaid — this invoice is a record only, no action is available until payment is received
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: approvedButUnpaid ? '#fff5f0' : '#f5f0e8', border: `1px solid ${approvedButUnpaid ? '#f0c8b8' : '#ddd5c8'}`, borderRadius: 8, color: approvedButUnpaid ? '#8a3520' : '#5a4e42', fontSize: 13, fontWeight: 700 }}>
+          <AlertCircle size={15} />
+          {approvedButUnpaid
+            ? 'This invoice shows Approved but is still Unpaid — record the payment received below to correct it.'
+            : 'Unpaid — record the payment received in the sidebar before this can be reviewed.'}
         </div>
       ) : (
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button
           type="button"
-          onClick={() => setPendingAction('Approved')}
+          onClick={() => requestAction('Approved')}
           style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#f0faf4', border: '1px solid #b8e4cb', borderRadius: 8, color: '#2a7d4f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
         >
           <CheckCircle size={15} /> Approve
         </button>
         <button
           type="button"
-          onClick={() => setPendingAction('Flagged')}
+          onClick={() => requestAction('Flagged')}
           style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#fffbf0', border: '1px solid #f0ddb0', borderRadius: 8, color: '#7a6030', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
         >
           <Flag size={15} /> Flag
         </button>
         <button
           type="button"
-          onClick={() => setPendingAction('Rejected')}
+          onClick={() => requestAction('Rejected')}
           style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, color: '#8a3520', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
         >
           <XCircle size={15} /> Reject
         </button>
         <button
           type="button"
-          onClick={() => setPendingAction('Partial')}
+          onClick={() => requestAction('Partial')}
           style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#f5f0e8', border: '1px solid #ddd5c8', borderRadius: 8, color: '#5a4e42', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
         >
           <HelpCircle size={15} /> Request Clarification
         </button>
       </div>
       )}
+
+      {actionError ? (
+        <p style={{ margin: 0, fontSize: 13, color: '#8a3520', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, padding: '10px 14px' }}>
+          {actionError}
+        </p>
+      ) : null}
 
       {/* A `1fr` column will not shrink below its own content, so the order
           summary table pushed the first column to 818px, squeezed the evidence
@@ -234,7 +254,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
                 {[
                   ['Payment Status', <Status>{invoice.paymentStatus}</Status>],
                   ['Amount Received', <span style={{ fontWeight: 700, color: paid === null ? '#8a7a6a' : '#2a7d4f' }}>{asMoney(paid)}</span>],
-                  ['Balance Outstanding', <span style={{ fontWeight: 700, color: balance === null ? '#8a7a6a' : '#8a3520' }}>{asMoney(balance)}</span>],
+                  ['Balance Due', <span style={{ fontWeight: 700, color: balance === null ? '#8a7a6a' : '#8a3520' }}>{asMoney(balance)}</span>],
                   ['Payment Method', invoice.paymentMethod || '—'],
                   ['Submitted By', invoice.createdBy ? `${invoice.createdBy} (Store Manager)` : '—'],
                 ].map(([label, val]) => (
@@ -246,20 +266,21 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               </div>
               <div style={{ borderTop: '1px solid #f3ede5' }} />
               <div style={{ fontSize: 12, fontWeight: 700, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Payment History</div>
-              {[
-                [submittedOn, evidence ? 'Payment evidence submitted' : 'Invoice submitted', invoice.createdBy ? `by ${invoice.createdBy} (Store Manager)` : 'Store', asMoney(paid), '#2a7d4f'],
-                ['—', 'Pending', 'Balance outstanding', asMoney(balance), '#8a3520'],
-              ].map(([date, title, note, amount, color]) => (
-                <div key={title} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid #f3ede5' }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, marginTop: 4, flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, color: '#8a7a6a' }}>{date}</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 2 }}>{title}</div>
-                    <div style={{ fontSize: 12, color: '#5a4e42' }}>{note}</div>
+              {invoice.paymentHistory?.length ? (
+                invoice.paymentHistory.map((entry, index) => (
+                  <div key={`${entry.recordedAt}-${index}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid #f3ede5' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#2a7d4f', marginTop: 4, flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11, color: '#8a7a6a' }}>{formatMoment(entry.recordedAt)}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 2 }}>{entry.method}{entry.note ? ` · ${entry.note}` : ''}</div>
+                      <div style={{ fontSize: 12, color: '#5a4e42' }}>{entry.recordedBy || 'Accounts'}</div>
+                    </div>
+                    <div style={{ fontWeight: 700, color: '#2a7d4f', fontSize: 13 }}>{money.format(Number(entry.amount || 0))}</div>
                   </div>
-                  <div style={{ fontWeight: 700, color, fontSize: 13 }}>{amount}</div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p style={{ margin: 0, fontSize: 12, color: '#8a7a6a' }}>No payments recorded yet.</p>
+              )}
             </div>
           </div>
         </div>
@@ -349,7 +370,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
             <div className="os-card-head">
               <div>
                 <strong>Review Actions</strong>
-                <p>{locked ? 'This decision is final' : unpaidRecordOnly ? 'No action available' : 'Choose a decision below'}</p>
+                <p>{locked ? 'This decision is final' : unpaidRecordOnly ? 'Record a payment to continue' : 'Choose a decision below'}</p>
               </div>
             </div>
             {locked ? (
@@ -360,10 +381,17 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
               </div>
             ) : unpaidRecordOnly ? (
               <div className="os-card-body" style={{ padding: '12px' }}>
-                <p style={{ margin: 0, fontSize: 12, color: '#8a7a6a', lineHeight: 1.5 }}>
-                  This invoice is Unpaid, so there is nothing to approve, reject, or flag yet. It sits here as a
-                  record until a payment is recorded against it.
+                <p style={{ margin: '0 0 10px', fontSize: 12, color: '#8a7a6a', lineHeight: 1.5 }}>
+                  {approvedButUnpaid
+                    ? 'This invoice was approved with nothing recorded against it. Record what was actually received to bring its payment status in line.'
+                    : 'There is nothing to approve, reject, or flag until a payment is recorded. Once enough has been paid, the usual decisions open up here.'}
                 </p>
+                <RecordPaymentForm
+                  invoiceNumber={invoice.invoiceNumber}
+                  balance={balance === null ? payable : balance}
+                  defaultMethod={invoice.paymentMethodKey || 'transfer'}
+                  onRecorded={(updated) => onPaymentRecorded?.(updated)}
+                />
               </div>
             ) : (
             <div className="os-card-body" style={{ gap: 8, padding: '12px' }}>
@@ -376,7 +404,7 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
                 <button
                   key={title}
                   type="button"
-                  onClick={() => setPendingAction(action)}
+                  onClick={() => requestAction(action)}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: bg, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', width: '100%', textAlign: 'left', fontFamily: 'inherit', transition: 'opacity 0.15s', color }}
                 >
                   <span style={{ flexShrink: 0 }}>{icon}</span>
@@ -452,7 +480,9 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
           {locked
             ? 'This invoice is Approved and fully paid. That decision is final and can no longer be changed from here.'
             : unpaidRecordOnly
-            ? 'This invoice is Unpaid and kept here for records only. It has no review decision to make until a payment comes in.'
+            ? (approvedButUnpaid
+              ? 'This invoice is marked Approved but no payment is on record — record it in the sidebar to correct the payment status.'
+              : 'This invoice is Unpaid. Record the payment received in the sidebar before it can be reviewed.')
             : status === 'Awaiting Review'
             ? 'This invoice is currently awaiting your review. Once approved, it will be automatically sent to Production.'
             : `This invoice has been marked ${status}. Choosing another action below will replace that decision.`}
@@ -464,9 +494,18 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview }) {
           invoice={invoice}
           status={pendingAction}
           onCancel={() => setPendingAction(null)}
-          onConfirm={() => {
-            if (pendingAction !== 'Partial') onReview(invoice, pendingAction);
-            setPendingAction(null);
+          onConfirm={async () => {
+            if (pendingAction === 'Partial') { setPendingAction(null); return; }
+            try {
+              await onReview(invoice, pendingAction);
+              setPendingAction(null);
+            } catch (requestError) {
+              // The decision never landed — most often an Approve rejected for
+              // being under the payment threshold — so it stays visible here
+              // rather than the modal just closing as if it had worked.
+              setActionError(requestError.response?.data?.message || 'That decision could not be saved.');
+              setPendingAction(null);
+            }
           }}
         />
       )}

@@ -9,7 +9,7 @@ import ReviewInvoicePage from './ReviewInvoicePage';
 const KPI_COUNT = 4;
 const PAGE_SIZE = 8;
 
-export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoice }) {
+export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoice, onInvoiceUpdated }) {
   const invoices = sentInvoices;
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
@@ -97,15 +97,24 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
     setSearchParams(next, { replace: true });
   };
 
-  const review = (invoice, status) => {
-    onApproveInvoice?.(invoice.invoiceNumber, status);
-  };
+  const review = (invoice, status) => onApproveInvoice?.(invoice.invoiceNumber, status);
 
   if (reviewInvoice) {
-    return <ReviewInvoicePage invoice={reviewInvoice} onBack={closeReview} onReview={(invoice, status) => {
-      review(invoice, status);
-      setReviewInvoice({ ...invoice, accountApprovalStatus: status });
-    }} />;
+    return <ReviewInvoicePage
+      invoice={reviewInvoice}
+      onBack={closeReview}
+      onReview={async (invoice, status) => {
+        // Only reflected locally once the server has actually accepted the
+        // decision — an Approve rejected for being under the payment
+        // threshold must not still read as Approved on this screen.
+        await review(invoice, status);
+        setReviewInvoice((current) => (current ? { ...current, accountApprovalStatus: status } : current));
+      }}
+      onPaymentRecorded={(updated) => {
+        setReviewInvoice(updated);
+        onInvoiceUpdated?.(updated);
+      }}
+    />;
   }
 
   return <div className="accounts-invoices-page">
