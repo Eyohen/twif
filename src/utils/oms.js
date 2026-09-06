@@ -494,7 +494,15 @@ export const productionJobFromInvoice = (invoice, customers = []) => {
     // was never carried across from the order sheet to the job, so Production
     // and Tailor screens fell back to the free-text summary above even when
     // real per-field measurements existed.
+    //
+    // An order sheet raised before the customer was measured saves this as
+    // `{}` — present, but empty. Left as `{}` here, it masked the free-text
+    // fallback above (an empty object is still truthy) and Production saw a
+    // blank measurements panel even once the shop measured the customer and
+    // `measurements` had real figures in it. Only keep it when it actually
+    // has something in it.
     measurementDetails: sheet.measurementDetails && typeof sheet.measurementDetails === 'object'
+      && Object.keys(sheet.measurementDetails).length
       ? sheet.measurementDetails
       : null,
     designNotes: sheet.designNotes || '',

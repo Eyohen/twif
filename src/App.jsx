@@ -1824,6 +1824,11 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   // no longer be deleted by anyone — the server refuses it either way.
   const mayDelete = (invoice) => ['owner', 'admin'].includes(currentRole?.id)
     && invoiceApprovalStatus(invoice) !== 'Approved';
+  // Approving is Accounts', Owner's and Admin's decision — a store manager can
+  // raise and edit their own invoices, but not sign off on their own payment.
+  // The server already refuses this for anyone else; the button shouldn't
+  // offer it in the first place.
+  const mayApprove = ['owner', 'admin'].includes(currentRole?.id);
 
   // Held in one place so the phone offers exactly what the desktop does. The
   // three-dot menu existed only in the table, so on a phone there was no way to
@@ -1836,7 +1841,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
     // Approving needs the same payment threshold Production checks — an
     // invoice that hasn't cleared it has no Approve action here at all,
     // rather than one that fails after the fact.
-    ...(onApproveInvoice && invoiceApprovalStatus(invoice) !== 'Approved' && canApproveInvoice(invoice, releasePercent)
+    ...(mayApprove && onApproveInvoice && invoiceApprovalStatus(invoice) !== 'Approved' && canApproveInvoice(invoice, releasePercent)
       ? [['Approve', <CheckCircle size={12} strokeWidth={2} />, () => approveInvoice(invoice)]]
       : []),
     ...(mayDelete(invoice) ? [['Delete Invoice', <Trash2 size={12} strokeWidth={2} />, () => removeInvoice(invoice)]] : []),
@@ -4889,19 +4894,33 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                   the figures themselves, not just whether they exist. */}
               <div style={{ border: '1px solid #eee5da', borderRadius: 8, padding: '12px 14px' }}>
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 6 }}>Measurements</div>
-                {jobModal.measurementDetails || jobModal.measurements ? (
-                  <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
-                    {jobModal.measurementDetails
-                      ? Object.entries(jobModal.measurementDetails).map(([key, value]) => (
-                        <li key={key} style={{ marginBottom: 4 }}><strong style={{ fontWeight: 600 }}>{key}:</strong> {value}</li>
-                      ))
-                      : String(jobModal.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line, index) => (
-                        <li key={`${line}-${index}`} style={{ marginBottom: 4 }}>{line}</li>
-                      ))}
-                  </ul>
-                ) : (
-                  <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>
-                )}
+                {/* An empty {} still counts as "present" to a plain truthy
+                    check, which hid the free-text figures below whenever the
+                    order sheet was raised before the customer was measured —
+                    same distinction hasMeasurements() already makes. */}
+                {(() => {
+                  const detailEntries = jobModal.measurementDetails ? Object.entries(jobModal.measurementDetails) : [];
+                  if (detailEntries.length) {
+                    return (
+                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                        {detailEntries.map(([key, value]) => (
+                          <li key={key} style={{ marginBottom: 4 }}><strong style={{ fontWeight: 600 }}>{key}:</strong> {value}</li>
+                        ))}
+                      </ul>
+                    );
+                  }
+                  const writtenLines = String(jobModal.measurements || '').split(/[\n,]/).map((line) => line.trim()).filter(Boolean);
+                  if (writtenLines.length) {
+                    return (
+                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                        {writtenLines.map((line, index) => (
+                          <li key={`${line}-${index}`} style={{ marginBottom: 4 }}>{line}</li>
+                        ))}
+                      </ul>
+                    );
+                  }
+                  return <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>;
+                })()}
               </div>
 
               {/* Who is making what. A suit's jacket and trousers are rarely
