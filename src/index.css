@@ -9818,6 +9818,13 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 .review-evidence-meta dt { font-size: 12px; color: #8a7a6a; }
 .review-evidence-meta dd { margin: 0; font-size: 13px; font-weight: 600; color: #1a1611; text-align: right; overflow-wrap: anywhere; }
 
+.review-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.review-evidence-grid .review-evidence-frame img { max-height: 96px; }
+
 .review-evidence-frame {
   position: relative;
   display: block;
@@ -9884,6 +9891,8 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   backdrop-filter: blur(4px);
 }
 .review-evidence-lightbox img { max-width: min(100%, 900px); max-height: 88vh; border-radius: 10px; background: #fff; }
+.review-evidence-lightbox-body { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 100%; }
+.review-evidence-lightbox-body .review-evidence-download { width: auto; padding: 8px 16px; }
 .review-evidence-close {
   position: absolute;
   top: calc(16px + env(safe-area-inset-top));

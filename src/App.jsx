@@ -25,6 +25,8 @@ import useLabelledTables from './hooks/useLabelledTables';
 import useCarouselIndicators from './hooks/useCarouselIndicators';
 import InvoiceActionConfirmModal from './components/oms/InvoiceActionConfirmModal';
 import JobCommentThread from './components/oms/JobCommentThread';
+import RecordPaymentForm from './components/oms/RecordPaymentForm';
+import PaymentEvidenceGallery from './components/oms/PaymentEvidenceGallery';
 import {
   money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
   dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
@@ -1634,6 +1636,10 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
   const [dueDate, setDueDate] = useState(invoice.dueDate ? String(invoice.dueDate).slice(0, 10) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Recording a payment here updates this invoice's paid amount and evidence
+  // immediately, without closing the modal — a store manager topping up a
+  // partial payment may want to keep going, e.g. correcting a line item next.
+  const [invoiceState, setInvoiceState] = useState(invoice);
 
   const updateLine = (index, field, value) => setItems((current) => current.map((item, position) => (
     position === index ? { ...item, [field]: value } : item
@@ -1647,11 +1653,19 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
   // total that will actually be saved rather than a promise about it.
   const subtotal = items.reduce((sum, item) => sum + (toNumber(item.rate) * toNumber(item.quantity)), 0);
   const itemDiscountTotal = items.reduce((sum, item) => sum + ((toNumber(item.rate) * toNumber(item.quantity) * toNumber(item.discountPercent)) / 100), 0);
-  const eliteDiscountAmount = toNumber(invoice.eliteDiscountAmount);
-  const storeCreditApplied = toNumber(invoice.storeCreditApplied);
+  const eliteDiscountAmount = toNumber(invoiceState.eliteDiscountAmount);
+  const storeCreditApplied = toNumber(invoiceState.storeCreditApplied);
   const newTotal = Math.max(0, subtotal - itemDiscountTotal - eliteDiscountAmount - storeCreditApplied);
-  const alreadyPaid = toNumber(invoice.paid);
+  const alreadyPaid = toNumber(invoiceState.paid);
+  const balanceDue = Math.max(0, newTotal - alreadyPaid);
   const belowPaid = newTotal < alreadyPaid;
+  const paymentEvidence = invoiceState.paymentEvidence || [];
+
+  const handlePaymentRecorded = (updated) => {
+    if (!updated) return;
+    setInvoiceState(updated);
+    onSaved?.(updated);
+  };
 
   const save = async () => {
     setError('');
@@ -1756,6 +1770,35 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
           <dt>New balance due</dt><dd><strong style={{ color: belowPaid ? '#8a3520' : undefined }}>{money.format(newTotal)}</strong></dd>
           <dt>Recorded as paid</dt><dd>{money.format(alreadyPaid)}</dd>
         </dl>
+
+        {/* Recording what's come in since this invoice was raised, instead of
+            raising a whole new invoice to reflect a top-up payment. Status
+            (unpaid / partial / fully paid) follows the amount automatically,
+            the same way it does everywhere else in the app. */}
+        <div className="os-card" style={{ marginTop: 4 }}>
+          <div className="os-card-head">
+            <CreditCard size={16} style={{ color: '#c0a87a' }} />
+            <div>
+              <strong>Record a payment</strong>
+              <p>Balance due {money.format(balanceDue)} · <Status>{invoiceState.paymentStatus}</Status></p>
+            </div>
+          </div>
+          <div className="os-card-body">
+            <RecordPaymentForm
+              invoiceNumber={invoice.invoiceNumber}
+              balance={balanceDue}
+              defaultMethod={invoiceState.paymentMethodKey || 'transfer'}
+              onRecorded={handlePaymentRecorded}
+            />
+            <div style={{ marginTop: 14 }}>
+              <PaymentEvidenceGallery
+                invoiceNumber={invoice.invoiceNumber}
+                evidence={paymentEvidence}
+                emptyMessage="No payment proof attached yet."
+              />
+            </div>
+          </div>
+        </div>
 
         {error ? <p className="edit-invoice-error">{error}</p> : null}
 

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { ArrowLeft, Banknote, Building2, CreditCard, Download, FileText, Maximize2, User } from 'lucide-react';
-import { usePaymentEvidence } from '../../hooks/usePaymentEvidence';
+import { ArrowLeft, Banknote, Building2, CreditCard, FileText, User } from 'lucide-react';
 import { money, amountReceived, invoicePayable, invoiceApprovalStatus, formatMoment } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import RecordPaymentForm from '../../components/oms/RecordPaymentForm';
+import PaymentEvidenceGallery from '../../components/oms/PaymentEvidenceGallery';
 
 const label = { fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 };
 const value = { fontSize: 13, fontWeight: 600, color: '#1a1611' };
@@ -12,7 +12,6 @@ const value = { fontSize: 13, fontWeight: 600, color: '#1a1611' };
 // much was billed. This page is where the rest of it lives: what the customer
 // ordered, which store took the money, and the evidence that it arrived.
 export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onRecorded }) {
-  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [invoice, setInvoice] = useState(initialInvoice);
 
   const payable = invoicePayable(invoice);
@@ -27,10 +26,7 @@ export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onR
     onRecorded?.(updated);
   };
   const asMoney = (amount) => (amount === null ? 'Not recorded' : money.format(amount));
-  const evidence = invoice.paymentEvidence || null;
-  // The image is fetched on opening rather than travelling with every invoice
-  // in the list — see usePaymentEvidence.
-  const { url: evidenceUrl } = usePaymentEvidence(invoice.invoiceNumber, Boolean(evidence));
+  const evidence = invoice.paymentEvidence || [];
   const method = invoice.paymentMethod || '—';
   const MethodIcon = method === 'Cash' ? Banknote : method === 'Card' ? CreditCard : Building2;
   const items = (invoice.items || []).map((line) => ({
@@ -183,41 +179,18 @@ export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onR
         <aside className="os-sidebar">
           <div className="os-card">
             <div className="os-card-head">
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: evidence ? '#2a7d4f' : '#c07a1e', flexShrink: 0 }} />
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: evidence.length ? '#2a7d4f' : '#c07a1e', flexShrink: 0 }} />
               <div>
                 <strong>Payment Evidence</strong>
-                <p style={{ color: evidence ? '#2a7d4f' : '#c07a1e' }}>{evidence ? 'Uploaded by the Store Manager' : 'Nothing uploaded'}</p>
+                <p style={{ color: evidence.length ? '#2a7d4f' : '#c07a1e' }}>{evidence.length ? 'Uploaded by the Store Manager' : 'Nothing uploaded'}</p>
               </div>
             </div>
             <div className="os-card-body">
-              {evidence ? (
-                <>
-                  <dl className="review-evidence-meta">
-                    <div><dt>File</dt><dd>{evidence.name || 'Attachment'}</dd></div>
-                    {evidence.uploadedAt ? <div><dt>Uploaded</dt><dd>{formatMoment(evidence.uploadedAt)}</dd></div> : null}
-                  </dl>
-                  {evidenceUrl ? (
-                    <>
-                      <button
-                        type="button"
-                        className="review-evidence-frame"
-                        onClick={() => setEvidenceOpen(true)}
-                        aria-label="Open payment evidence full size"
-                      >
-                        <img src={evidenceUrl} alt={`Payment evidence for ${invoice.invoiceNumber}`} />
-                        <span className="review-evidence-zoom"><Maximize2 size={13} /></span>
-                      </button>
-                      <a className="review-evidence-download" href={evidenceUrl} download={evidence.name || `${invoice.invoiceNumber}-payment-evidence`}>
-                        <Download size={14} /> Download evidence
-                      </a>
-                    </>
-                  ) : (
-                    <p className="review-evidence-empty">The attachment could not be previewed.</p>
-                  )}
-                </>
-              ) : (
-                <p className="review-evidence-empty">No proof of payment was attached to this invoice.</p>
-              )}
+              <PaymentEvidenceGallery
+                invoiceNumber={invoice.invoiceNumber}
+                evidence={evidence}
+                emptyMessage="No proof of payment was attached to this invoice."
+              />
             </div>
           </div>
 
@@ -239,19 +212,6 @@ export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onR
           </div>
         </aside>
       </div>
-
-      {evidenceOpen && evidenceUrl ? (
-        <div
-          className="review-evidence-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Payment evidence"
-          onClick={() => setEvidenceOpen(false)}
-        >
-          <button type="button" className="review-evidence-close" onClick={() => setEvidenceOpen(false)} aria-label="Close">×</button>
-          <img src={evidenceUrl} alt={`Payment evidence for ${invoice.invoiceNumber}`} onClick={(event) => event.stopPropagation()} />
-        </div>
-      ) : null}
 
       <style>{`
         @media (max-width: 860px) {
