@@ -3,6 +3,25 @@ import { CheckSquare, Clock, User, Package, ArrowRight, Play, CheckCircle, Chevr
 import { worksOnJob } from '../../utils/oms';
 import JobCommentThread from '../../components/oms/JobCommentThread';
 
+// Every garment on the order, not just the first — a card or a confirmation
+// that only ever named item 1 read like a one-item job even when there were
+// several.
+const itemsLabelFor = (order) => {
+  const names = (order.items?.length ? order.items.map((line) => line.item) : [order.item])
+    .map((name) => (name || '').trim()).filter(Boolean);
+  return names.length ? names.join(', ') : (order.item || 'Not specified');
+};
+
+// Fabric is chosen by Production for the order as a whole, not garment by
+// garment — allocating it writes only the order's own fabric fields, never
+// each item's, so an item with none of its own falls back to what was chosen
+// for the order, same as the Production board already does.
+const fabricNamesOf = (list) => (Array.isArray(list) ? list : [])
+  .map((entry) => (entry?.clientSupplied ? 'Client supplied' : entry?.name))
+  .filter(Boolean);
+const orderFabricLabelFor = (order) => fabricNamesOf(order.fabrics).join(', ') || order.fabric || '';
+const itemFabricLabelFor = (item, order) => fabricNamesOf(item?.fabrics).join(', ') || item?.fabric || orderFabricLabelFor(order);
+
 export default function MyTasksPage({ compact = false, currentRole, productionJobs = [], onUpdateJob }) {
   const tailorName = currentRole?.name?.split(' (')[0] || '';
   const allAssigned = productionJobs.filter((order) => worksOnJob(order, tailorName));
@@ -101,6 +120,9 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
           const { label, bg, color, border } = statusConfig[status];
           const initials = order.customer.split(' ').map(p => p[0]).join('').slice(0, 2);
           const styleImages = Array.isArray(order.styleImages) ? order.styleImages : [];
+          const itemsLabel = itemsLabelFor(order);
+          const orderFabricLabel = orderFabricLabelFor(order);
+          const fabricLabelFor = (item) => itemFabricLabelFor(item, order);
 
           return (
             <div
@@ -130,7 +152,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <strong style={{ fontSize: 14, color: '#1a1611' }}>{order.customer}</strong>
                     <span style={{ fontSize: 12, color: '#8a7a6a' }}>·</span>
-                    <span style={{ fontSize: 13, color: '#5a4e42' }}>{order.item}</span>
+                    <span style={{ fontSize: 13, color: '#5a4e42' }}>{itemsLabel}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                     <Calendar size={11} style={{ color: '#8a7a6a' }} />
@@ -166,8 +188,8 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
               {/* Info Grid */}
               <div className="os-info-grid" style={{ borderBottom: '1px solid #f3ede5', background: '#faf7f3' }}>
                 {[
-                  { icon: Package, label: 'Product', value: order.item || 'Not specified' },
-                  { icon: Scissors, label: 'Fabric', value: order.fabric || 'Not specified' },
+                  { icon: Package, label: 'Product', value: itemsLabel },
+                  { icon: Scissors, label: 'Fabric', value: orderFabricLabel || 'Not specified' },
                   { icon: Ruler, label: 'Measurements', value: order.measurements ? 'Included' : 'Not taken' },
                   { icon: Image, label: 'Ref Images', value: `${styleImages.length} ${styleImages.length === 1 ? 'Photo' : 'Photos'}` },
                   { icon: User, label: 'Pieces', value: order.pieces || 1 },
@@ -212,7 +234,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                             <strong>{line.item || 'Unnamed item'}</strong>
                             <small>
                               {Number(line.pieces) || 1} {(Number(line.pieces) || 1) === 1 ? 'piece' : 'pieces'}
-                              {line.fabric ? ` · ${line.fabric}` : ''}
+                              {fabricLabelFor(line) ? ` · ${fabricLabelFor(line)}` : ''}
                             </small>
                             {line.measurements ? <small className="job-item-note">Measurements: {line.measurements}</small> : null}
                             {line.designNotes ? <small className="job-item-note">{line.designNotes}</small> : null}
@@ -253,7 +275,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                           <section>
                             <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fabric</h4>
                             <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
-                              <li style={{ marginBottom: 4 }}>Fabric: {item.fabric || 'Not specified'}</li>
+                              <li style={{ marginBottom: 4 }}>Fabric: {fabricLabelFor(item) || 'Not specified'}</li>
                               {item.fabricQuality && <li style={{ marginBottom: 4 }}>Quality: {item.fabricQuality}</li>}
                               {item.fabricColour && <li style={{ marginBottom: 4 }}>Colour: {item.fabricColour}</li>}
                               {item.fabricNote && <li style={{ marginBottom: 4 }}>{item.fabricNote}</li>}
@@ -420,8 +442,8 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
             </h3>
             <p style={{ margin: '0 0 24px', fontSize: 14, color: '#5a4e42', lineHeight: 1.5 }}>
               {confirm.action === 'start'
-                ? `Are you ready to start working on ${confirm.order.customer}'s ${confirm.order.item || 'order'}?`
-                : `Confirm that ${confirm.order.customer}'s ${confirm.order.item || 'order'} is completed and ready for collection?`}
+                ? `Are you ready to start working on ${confirm.order.customer}'s ${itemsLabelFor(confirm.order)}?`
+                : `Confirm that ${confirm.order.customer}'s ${itemsLabelFor(confirm.order)} is completed and ready for collection?`}
             </p>
             {error ? (
               <p style={{ margin: '-12px 0 20px', fontSize: 13, color: '#8a3520', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, padding: '8px 12px', textAlign: 'left' }}>
