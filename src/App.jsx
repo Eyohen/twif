@@ -6986,6 +6986,12 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
   const normalizedStatus = customerStatus(tracking?.status);
   const steps = CUSTOMER_TRACKING_STEPS;
   const currentStep = Math.max(0, steps.indexOf(normalizedStatus));
+  // The last step has nothing after it to be "less than", so under a plain
+  // index < currentStep check it could only ever show as the highlighted
+  // current step — never the green tick every earlier step gets once passed.
+  // Reaching Ready for Collection at all means the order is actually done,
+  // so it earns the tick too, not just the highlight.
+  const isFinalStep = currentStep === steps.length - 1;
 
   if (loading) {
     return (
@@ -7042,15 +7048,18 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
         ) : null}
 
         <div className="tracking-steps">
-          {steps.map((step, index) => (
-            <div
-              className={classNames('tracking-step', index === currentStep && 'active', index < currentStep && 'done')}
-              key={step}
-            >
-              <span>{index < currentStep ? '✓' : index + 1}</span>
-              <strong>{step}</strong>
-            </div>
-          ))}
+          {steps.map((step, index) => {
+            const done = index < currentStep || (isFinalStep && index === currentStep);
+            return (
+              <div
+                className={classNames('tracking-step', index === currentStep && !done && 'active', done && 'done')}
+                key={step}
+              >
+                <span>{done ? '✓' : index + 1}</span>
+                <strong>{step}</strong>
+              </div>
+            );
+          })}
         </div>
 
         <dl className="tracking-details">
@@ -7141,7 +7150,7 @@ function CustomerPortalPage({ token, sentInvoices = [] }) {
       <section className="client-portal-workspace" id="portal-top"><header><div><span>Client Portal</span><strong>{profile.name}</strong></div><a className="client-portal-back" href={`/c/${encodeURIComponent(token)}`}>← &nbsp;Back to tracking</a></header><div className="client-portal-welcome"><p>Welcome back,</p><h1>{profile.name}</h1><span>⌕ &nbsp; {profile.phone || 'Phone not added'} &nbsp;&nbsp;·&nbsp;&nbsp; ✉ &nbsp; {profile.email}</span></div>
         <div className="client-portal-dashboard">
           <main>
-            <article className="client-current-order"><header><div><h2>Your Current Order</h2><strong>{currentOrder?.items?.map((item)=>item.description).join(', ') || 'No active order'}</strong><p>Order No. {currentOrder?.invoiceNumber || '—'} &nbsp; • &nbsp; {(() => { const qty = currentOrder?.items?.reduce((sum,item)=>sum+toNumber(item.quantity),0)||0; return <>{qty} {qty === 1 ? 'piece' : 'pieces'}</>; })()} &nbsp; • &nbsp; {currentOrder?.store || '—'} Store</p></div><Status>{currentOrder?.orderStatus || 'No order'}</Status></header><div className="client-portal-steps">{CUSTOMER_TRACKING_STEPS.map((step,index)=>{const current=Math.max(0,CUSTOMER_TRACKING_STEPS.indexOf(customerStatus(currentOrder?.orderStatus)));return <div className={classNames('tracking-step',index===current&&'active',index<current&&'done')} key={step}><span>{index<current?'✓':index+1}</span><strong>{step}</strong></div>;})}</div><dl><div><dt>Delivery Date</dt><dd>{currentOrder?.deliveryDate ? new Date(`${String(currentOrder.deliveryDate).slice(0,10)}T00:00:00`).toLocaleDateString('en-GB') : 'To be confirmed'}</dd></div><div><dt>Tailor</dt><dd>{currentOrder?.tailor || 'To be assigned'}</dd></div><div><dt>Fabric</dt><dd>{currentOrder?.fabric || 'To be confirmed'}</dd></div><div><dt>Style Images</dt><dd>{currentOrder?.styleImages?.length || 0} uploaded</dd></div></dl><a href="#order-history">View Order Details &nbsp;›</a></article>
+            <article className="client-current-order"><header><div><h2>Your Current Order</h2><strong>{currentOrder?.items?.map((item)=>item.description).join(', ') || 'No active order'}</strong><p>Order No. {currentOrder?.invoiceNumber || '—'} &nbsp; • &nbsp; {(() => { const qty = currentOrder?.items?.reduce((sum,item)=>sum+toNumber(item.quantity),0)||0; return <>{qty} {qty === 1 ? 'piece' : 'pieces'}</>; })()} &nbsp; • &nbsp; {currentOrder?.store || '—'} Store</p></div><Status>{currentOrder?.orderStatus || 'No order'}</Status></header><div className="client-portal-steps">{CUSTOMER_TRACKING_STEPS.map((step,index)=>{const current=Math.max(0,CUSTOMER_TRACKING_STEPS.indexOf(customerStatus(currentOrder?.orderStatus)));const isFinal=current===CUSTOMER_TRACKING_STEPS.length-1;const done=index<current||(isFinal&&index===current);return <div className={classNames('tracking-step',index===current&&!done&&'active',done&&'done')} key={step}><span>{done?'✓':index+1}</span><strong>{step}</strong></div>;})}</div><dl><div><dt>Delivery Date</dt><dd>{currentOrder?.deliveryDate ? new Date(`${String(currentOrder.deliveryDate).slice(0,10)}T00:00:00`).toLocaleDateString('en-GB') : 'To be confirmed'}</dd></div><div><dt>Tailor</dt><dd>{currentOrder?.tailor || 'To be assigned'}</dd></div><div><dt>Fabric</dt><dd>{currentOrder?.fabric || 'To be confirmed'}</dd></div><div><dt>Style Images</dt><dd>{currentOrder?.styleImages?.length || 0} uploaded</dd></div></dl><a href="#order-history">View Order Details &nbsp;›</a></article>
             <section className="client-portal-triple" id="order-history"><article><header><h2>Order History</h2></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{invoice.items.map((item)=>item.description).join(', ')}</strong><small>{(() => { const qty = invoice.items.reduce((sum,item)=>sum+toNumber(item.quantity),0); return <>{qty} {qty === 1 ? 'piece' : 'pieces'}</>; })()} &nbsp; • &nbsp; {invoice.store} Store</small></span><Status>{invoice.orderStatus}</Status></div>)}</article><article><header><h2>Invoices</h2></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{money.format(invoice.total)}</strong><small>{invoice.paymentStatus}</small></span><time>{new Date(invoice.invoiceDate).toLocaleDateString('en-GB')}</time></div>)}</article><article><header><h2>Measurements</h2></header><div className="client-measure-card"><i>⌁</i><strong>Your measurements</strong><p>{Object.keys(measurements).filter((key)=>key!=='profile').length ? 'We have your latest measurements saved.' : 'Measurements have not been saved yet.'}</p></div></article></section>
             <section className="client-portal-bottom"><article id="contact-details"><header><h2>Contact Details</h2></header><p>⌕ &nbsp; {profile.phone || 'Not provided'}</p><p>✉ &nbsp; {profile.email}</p><p>⌖ &nbsp; {details.address || 'Address not provided'}</p></article><article id="saved-styles"><header><h2>Saved Styles</h2></header><div className="client-saved-styles">{savedStyles.length ? savedStyles.map((image,index)=><img src={image.url || image.dataUrl || image} alt={`Saved style ${index+1}`} key={image.url || image.dataUrl || index}/>) : <p>Your saved style references will appear here.</p>}</div></article><article><header><h2>Address Book</h2></header><p><strong>⌖ &nbsp; Home</strong><br/>{details.address || 'No saved address'}</p><p><strong>⌖ &nbsp; Preferred Store</strong><br/>{details.preferredStore || currentOrder?.store || 'Lekki'} Store</p></article></section>
           </main>
