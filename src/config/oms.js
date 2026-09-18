@@ -26,7 +26,7 @@ export const navByRole = {
   // actually starts, so neither could raise an invoice or an order sheet.
   owner: ['Overview', 'Orders', 'Customers', 'Invoices', 'Order Sheet', 'Payments', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'User Management', 'Stores', 'Departments', 'Memberships', 'Reports', 'Shopify Sync', 'Settings', 'Notifications'],
   admin: ['Overview', 'Orders', 'Customers', 'Invoices', 'Order Sheet', 'Payments', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'Staff', 'Departments', 'Memberships', 'Reports', 'Shopify Sync', 'Settings', 'Notifications'],
-  store_manager: ['Overview', 'Customers', 'Orders', 'Invoices', 'Order Sheet', 'Notifications'],
+  store_manager: ['Overview', 'Customers', 'Orders', 'Invoices', 'Order Sheets', 'Order Sheet', 'Notifications'],
   accounts: ['Overview', 'Invoices', 'Payments', 'Reports', 'Inventory', 'Notifications'],
   production_manager: ['Overview', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'Notifications'],
   inventory_manager: ['Overview', 'Inventory', 'Notifications'],

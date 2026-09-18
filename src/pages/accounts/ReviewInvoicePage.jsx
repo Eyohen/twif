@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Flag, XCircle, HelpCircle, User, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
-import { money, invoiceApprovalStatus, amountReceived, invoicePayable, isFullyPaid, isAwaitingPayment, formatMoment } from '../../utils/oms';
+import { money, invoiceApprovalStatus, amountReceived, invoicePayable, isFullyPaid, isAwaitingPayment, formatMoment, paidPercent, DEFAULT_RELEASE_PERCENT } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 import RecordPaymentForm from '../../components/oms/RecordPaymentForm';
 import PaymentEvidenceGallery from '../../components/oms/PaymentEvidenceGallery';
 
-export default function ReviewInvoicePage({ invoice, onBack, onReview, onPaymentRecorded }) {
+export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DEFAULT_RELEASE_PERCENT, onBack, onReview, onPaymentRecorded }) {
   const [pendingAction, setPendingAction] = useState(null);
+  const [pendingTitle, setPendingTitle] = useState('');
   const [actionError, setActionError] = useState('');
 
-  const requestAction = (action) => {
+  const requestAction = (action, title) => {
     setActionError('');
     setPendingAction(action);
+    setPendingTitle(title || '');
   };
 
   // Everything below reads from the invoice. It previously applied a flat 5%
@@ -45,13 +47,31 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview, onPayment
   // and Unpaid at once — a real, inconsistent state, not a rendering bug —
   // so it gets its own message rather than the plain "not yet reviewed" one.
   const approvedButUnpaid = unpaidRecordOnly && status === 'Approved';
+  // "Approve" used to mean two different things depending on how much had been
+  // paid, so it is now two buttons, each only live for the case it names. A
+  // partial payment under the release threshold is a call only an Admin or
+  // Owner may make.
+  const percentPaid = paidPercent(invoice);
+  const settled = isFullyPaid(invoice) || percentPaid >= 100;
+  const mayApproveShortfall = ['owner', 'admin'].includes(roleId);
+  const belowThreshold = !settled && percentPaid < releasePercent;
+  const completeBlocked = settled ? null : 'Only available once the invoice is fully paid';
+  const partialBlocked = settled
+    ? 'This invoice is fully paid — use Approve Completed Payment'
+    : belowThreshold && !mayApproveShortfall
+      ? `Only ${Math.floor(percentPaid)}% paid — under ${releasePercent}%, so only an Admin or Owner can approve it`
+      : null;
   const evidence = invoice.paymentEvidence || [];
-  const storeNote = invoice.itemNote || (Array.isArray(invoice.notes) ? invoice.notes[0] : invoice.notes) || '';
-  const items = (invoice.items?.length ? invoice.items : []).map((line) => ([
-    line.description || line.name || 'Item',
-    Number(line.quantity || 1),
-    Number(line.amount ?? (Number(line.rate || 0) * Number(line.quantity || 1))),
-  ]));
+  // Kept apart rather than merged into one field — a note left on an item and
+  // the invoice's own notes answer different questions, and folding them
+  // together with `||` used to mean only one of them was ever shown.
+  const invoiceNotes = Array.isArray(invoice.notes) ? invoice.notes.filter(Boolean) : (invoice.notes ? [invoice.notes] : []);
+  const items = (invoice.items?.length ? invoice.items : []).map((line) => ({
+    name: line.description || line.name || 'Item',
+    quantity: Number(line.quantity || 1),
+    price: Number(line.amount ?? (Number(line.rate || 0) * Number(line.quantity || 1))),
+    note: line.note || '',
+  }));
 
   return (
     <div className="os-page" style={{ maxWidth: 1200 }}>
@@ -202,12 +222,15 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview, onPayment
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map(([name, quantity, price]) => (
-                      <tr key={name}>
-                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#1a1611' }}>{name}</td>
-                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#5a4e42' }}>{quantity}</td>
-                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#5a4e42' }}>{money.format(price)}</td>
-                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', fontWeight: 600, color: '#1a1611' }}>{money.format(price * quantity)}</td>
+                    {items.map((line, index) => (
+                      <tr key={`${line.name}-${index}`}>
+                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#1a1611' }}>
+                          {line.name}
+                          {line.note ? <div style={{ marginTop: 3, fontSize: 12, fontWeight: 400, color: '#8a7a6a' }}>{line.note}</div> : null}
+                        </td>
+                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#5a4e42' }}>{line.quantity}</td>
+                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#5a4e42' }}>{money.format(line.price)}</td>
+                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', fontWeight: 600, color: '#1a1611' }}>{money.format(line.price * line.quantity)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -312,19 +335,30 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview, onPayment
             </div>
           </div>
 
-          {/* Additional Notes */}
+          {/* Invoice Notes — separate from the notes left on individual items,
+              which show against their own line in the Order Summary above. */}
           <div className="os-card">
             <div className="os-card-head">
               <FileText size={15} style={{ color: '#c0a87a' }} />
               <div>
-                <strong>Additional Notes</strong>
+                <strong>Invoice Notes</strong>
                 <p>From Store Manager</p>
               </div>
             </div>
             <div className="os-card-body">
-              <p style={{ margin: 0, fontSize: 13, color: storeNote ? '#5a4e42' : '#8a7a6a', lineHeight: 1.6, background: '#faf7f3', padding: '10px 12px', borderRadius: 8, border: '1px solid #eee5da' }}>
-                {storeNote || 'No note was left with this invoice.'}
-              </p>
+              {invoiceNotes.length ? (
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
+                  {invoiceNotes.map((entry, index) => (
+                    <li key={index} style={{ fontSize: 13, color: '#5a4e42', lineHeight: 1.6, background: '#faf7f3', padding: '10px 12px', borderRadius: 8, border: '1px solid #eee5da' }}>
+                      {entry}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={{ margin: 0, fontSize: 13, color: '#8a7a6a', lineHeight: 1.6, background: '#faf7f3', padding: '10px 12px', borderRadius: 8, border: '1px solid #eee5da' }}>
+                  No note was left with this invoice.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -362,16 +396,18 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview, onPayment
             ) : (
             <div className="os-card-body" style={{ gap: 8, padding: '12px' }}>
               {[
-                [<CheckCircle size={15} />, 'Approve Invoice', 'Mark as paid and release to production', 'Approved', '#2a7d4f', '#f0faf4', '#b8e4cb'],
-                [<Flag size={15} />, 'Partial Payment', 'Record partial payment', 'Partial', '#7a6030', '#fffbf0', '#f0ddb0'],
+                [<CheckCircle size={15} />, 'Approve Completed Payment', 'Payment received in full — release to production', 'Approved', '#2a7d4f', '#f0faf4', '#b8e4cb', completeBlocked],
+                [<Flag size={15} />, 'Approve Partial Payment', belowThreshold ? `Under ${releasePercent}% — Admin or Owner only` : `At least ${releasePercent}% received — release to production`, 'Approved', '#7a6030', '#fffbf0', '#f0ddb0', partialBlocked],
                 [<XCircle size={15} />, 'Reject Invoice', 'Reject and send back to store', 'Rejected', '#8a3520', '#fff5f0', '#f0c8b8'],
                 [<HelpCircle size={15} />, 'Flag for Clarification', 'Request more info from store', 'Flagged', '#5a4e42', '#f5f0e8', '#ddd5c8'],
-              ].map(([icon, title, detail, action, color, bg, border]) => (
+              ].map(([icon, title, detail, action, color, bg, border, blocked]) => (
                 <button
                   key={title}
                   type="button"
-                  onClick={() => requestAction(action)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: bg, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', width: '100%', textAlign: 'left', fontFamily: 'inherit', transition: 'opacity 0.15s', color }}
+                  disabled={Boolean(blocked)}
+                  title={blocked || undefined}
+                  onClick={() => requestAction(action, title)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: bg, border: `1px solid ${border}`, borderRadius: 8, cursor: blocked ? 'not-allowed' : 'pointer', opacity: blocked ? 0.5 : 1, width: '100%', textAlign: 'left', fontFamily: 'inherit', transition: 'opacity 0.15s', color }}
                 >
                   <span style={{ flexShrink: 0 }}>{icon}</span>
                   <span>
@@ -458,11 +494,10 @@ export default function ReviewInvoicePage({ invoice, onBack, onReview, onPayment
       {pendingAction && (
         <InvoiceActionConfirmModal
           invoice={invoice}
-          status={pendingAction}
+          status={pendingAction === 'Approved' && pendingTitle === 'Approve Partial Payment' ? 'ApprovedPartial' : pendingAction === 'Approved' ? 'ApprovedComplete' : pendingAction}
           onCancel={() => setPendingAction(null)}
           onConfirm={async () => {
-            if (pendingAction === 'Partial') { setPendingAction(null); return; }
-            try {
+                        try {
               await onReview(invoice, pendingAction);
               setPendingAction(null);
             } catch (requestError) {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors, Ruler, Award, Camera, Image, Layers } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors, Ruler, Award, Camera, Image, Layers, ListChecks } from 'lucide-react';
 import { api, getStoredAccessToken, setStoredAccessToken } from './lib/api';
 import LoginPage from './pages/auth/LoginPage';
 import MyTasksPage from './pages/tailor/MyTasksPage';
@@ -9,6 +9,8 @@ import TailorReportsPage from './pages/production/TailorReportsPage';
 import StoreManagerOverviewPage from './pages/store-manager/OverviewPage';
 import StoreManagerCustomersPage from './pages/store-manager/CustomersPage';
 import StoreManagerOrdersPage from './pages/store-manager/OrdersPage';
+import StoreManagerOrderSheetsPage from './pages/store-manager/OrderSheetsPage';
+import OrderSheetDetailsPage from './pages/store-manager/OrderSheetDetailsPage';
 import AccountsInvoicesPage from './pages/accounts/InvoicesPage';
 import AccountsPaymentsPage from './pages/accounts/PaymentsPage';
 import AccountsInventoryReconciliationPage from './pages/accounts/InventoryReconciliationPage';
@@ -27,6 +29,7 @@ import InvoiceActionConfirmModal from './components/oms/InvoiceActionConfirmModa
 import JobCommentThread from './components/oms/JobCommentThread';
 import RecordPaymentForm from './components/oms/RecordPaymentForm';
 import PaymentEvidenceGallery from './components/oms/PaymentEvidenceGallery';
+import Pagination from './components/oms/Pagination';
 import {
   money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
   dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
@@ -127,6 +130,7 @@ const NAV_ICONS = {
   Reports: BarChart2,
   Settings: Settings2,
   'Order Sheet': ClipboardList,
+  'Order Sheets': ListChecks,
   'My Tasks': CheckSquare,
   'My Log': Calendar,
   'Tailor List': Users2,
@@ -1621,7 +1625,7 @@ function OrdersView({ sentInvoices }) {
 // lines a customer was billed at all. The server recomputes the total from
 // what is submitted here, so an edited invoice cannot disagree with the sum
 // of its own items, and refuses to be cut below what has already been paid.
-function EditInvoiceModal({ invoice, onClose, onSaved }) {
+function EditInvoicePage({ invoice, onClose, onSaved }) {
   const [items, setItems] = useState(() => (invoice.items?.length ? invoice.items : [{}]).map((item, index) => ({
     key: `line-${index}`,
     description: item.description || '',
@@ -1696,8 +1700,11 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
   };
 
   return (
-    <div className="os-confirm-backdrop" onClick={onClose}>
-      <div className="os-confirm edit-invoice" onClick={(event) => event.stopPropagation()}>
+    <div className="store-invoice-edit">
+      <div className="store-detail-toolbar">
+        <button type="button" onClick={onClose}>← &nbsp; Back to Invoices</button>
+      </div>
+      <div className="edit-invoice">
         <h3>Edit {invoice.invoiceNumber}</h3>
         <p className="edit-invoice-note">
           Correct the customer's details, due date, and the items on this invoice.
@@ -1811,7 +1818,7 @@ function EditInvoiceModal({ invoice, onClose, onSaved }) {
   );
 }
 
-function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onApproveInvoice, onInvoiceChanged, onInvoiceDeleted, releasePercent }) {
+function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onApproveInvoice, onInvoiceChanged, onInvoiceDeleted, releasePercent, onNavigate }) {
   const [editingInvoice, setEditingInvoice] = useState(null);
   // An invoice belongs to whoever raised it and to the people who run the shop.
   // Removing one is the Owner's and Admin's alone — a store manager cannot
@@ -1872,6 +1879,9 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'All');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  // Swaps the invoice detail page for the order sheet's own — see the
+  // "Order Sheet" document below — without losing which invoice was open.
+  const [showOrderSheet, setShowOrderSheet] = useState(false);
   const [openMenu, setOpenMenu] = useState(null);
   const [rowNotice, setRowNotice] = useState('');
   const invoiceKpiRef = useRef(null);
@@ -1944,6 +1954,19 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   const pending = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts');
   const partial = sentInvoices.filter((invoice) => invoice.paymentStatus === 'Partial Paid');
 
+  if (editingInvoice) {
+    return (
+      <EditInvoicePage
+        invoice={editingInvoice}
+        onClose={() => setEditingInvoice(null)}
+        onSaved={(updated) => {
+          if (updated) onInvoiceChanged?.(updated);
+          setRowNotice(`${editingInvoice.invoiceNumber} was updated.`);
+        }}
+      />
+    );
+  }
+
   if (creating) {
     return (
       <div className="store-invoice-create">
@@ -1956,6 +1979,17 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
           setPrefillCustomer(null);
         }} />
       </div>
+    );
+  }
+
+  if (selectedInvoice && showOrderSheet) {
+    return (
+      <OrderSheetDetailsPage
+        order={selectedInvoice}
+        backLabel="Back to Invoice"
+        onBack={() => setShowOrderSheet(false)}
+        onEdit={(invoiceNumber) => onNavigate?.('Order Sheet', { edit: invoiceNumber })}
+      />
     );
   }
 
@@ -2015,7 +2049,9 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                 once production has raised one. */}
             <section className="store-detail-panel detail-documents"><h3>Documents</h3>
               <article role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => downloadInvoicePdf(invoice)} onKeyDown={(event) => { if (event.key === 'Enter') downloadInvoicePdf(invoice); }}><i>▤</i><span><strong>Invoice PDF</strong><small>Open to print or save</small></span></article>
-              {invoice.orderSheet ? <article><i>▤</i><span><strong>Order Sheet</strong><small>Attached to this invoice</small></span></article> : <article><i>▤</i><span><strong>Order Sheet</strong><small>Not raised yet</small></span></article>}
+              {invoice.orderSheet
+                ? <article role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => setShowOrderSheet(true)} onKeyDown={(event) => { if (event.key === 'Enter') setShowOrderSheet(true); }}><i>▤</i><span><strong>Order Sheet</strong><small>View and download</small></span></article>
+                : <article><i>▤</i><span><strong>Order Sheet</strong><small>Not raised yet</small></span></article>}
             </section>
           </aside>
         </div>
@@ -2036,16 +2072,6 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
 
   return (
     <div className="os-page">
-      {editingInvoice ? (
-        <EditInvoiceModal
-          invoice={editingInvoice}
-          onClose={() => setEditingInvoice(null)}
-          onSaved={(updated) => {
-            if (updated) onInvoiceChanged?.(updated);
-            setRowNotice(`${editingInvoice.invoiceNumber} was updated.`);
-          }}
-        />
-      ) : null}
       <div className="os-page-header">
         <div className="os-page-title">
           <FileText size={22} strokeWidth={1.5} style={{ color: '#c97b08', flexShrink: 0 }} />
@@ -2687,7 +2713,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   // invoice total. What is still owed is that less whatever the customer has
   // just handed over, and nothing used to subtract it: a fully paid invoice
   // showed, and emailed, the whole sum as outstanding.
-  const amountPaidNow = form.paymentStatus === 'fully_paid' && !toNumber(form.amountReceived)
+  const amountPaidNow = form.paymentStatus === 'fully_paid'
     ? balanceDue
     : Math.min(toNumber(form.amountReceived), balanceDue);
   const outstanding = Math.max(balanceDue - amountPaidNow, 0);
@@ -3030,12 +3056,15 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
               {form.paymentStatus && form.paymentStatus !== 'unpaid' ? (
                 <label className="os-field">
                   <span>Amount Received (₦){form.paymentStatus === 'partial_paid' ? <span style={{ color: '#d62828' }}> *</span> : null}</span>
+                  {/* Fully paid means paid in full — the figure is the invoice
+                      total, not something typed in that could disagree with it. */}
                   <input
                     type="number"
                     min="0"
                     max={balanceDue}
-                    value={form.amountReceived}
+                    value={form.paymentStatus === 'fully_paid' ? balanceDue : form.amountReceived}
                     onChange={(event) => updateForm('amountReceived', event.target.value)}
+                    disabled={form.paymentStatus === 'fully_paid'}
                     placeholder={form.paymentStatus === 'fully_paid' ? String(balanceDue) : '0'}
                   />
                 </label>
@@ -3414,7 +3443,12 @@ const emptyOrderItem = () => ({
   fabricUnit: '',
   designNotes: '',
   styleImages: [null, null, null, null, null],
-  department: '',
+  // A garment can combine work from more than one department — a native
+  // outfit with embroidery, say — so this is a list, not a single choice.
+  // departmentFields is keyed by department, since field keys like
+  // "fabricColor" and "sleeveType" repeat across departments and would
+  // otherwise overwrite each other when more than one is selected.
+  departments: [],
   departmentFields: {},
 });
 
@@ -3426,25 +3460,31 @@ const emptySheetForm = () => ({
   customerId: '',
   store: 'Ikeja',
   itemNote: '',
-  // One set of measurements for the whole order rather than one per garment.
-  // It is taken from the customer's profile and may be adjusted here for this
-  // order; changing it does not touch the profile.
+  // Free-text fit notes for this order only — never pre-filled from the
+  // customer's profile, unlike measurementDetails below.
   measurements: '',
   measurementDetails: {},
   items: [emptyOrderItem()],
 });
 
-function OrderSheetView({ sentInvoices = [], onCreateJob }) {
+function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, onNavigate }) {
   // Arriving from an invoice — "raise an order sheet for this one" — rather
   // than from the menu, so the picker does not have to be searched again.
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedInvoice = searchParams.get('invoice');
+  // Arriving from the Order Sheets table to correct one that has not been
+  // picked up by Production yet — see the effect below.
+  const editingInvoiceNumber = searchParams.get('edit');
   const departments = useDepartments();
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
   const [sheetForm, setSheetForm] = useState(emptySheetForm);
   const [customers, setCustomers] = useState([]);
   const [message, setMessage] = useState('');
+  // Set once the order sheet named in `?edit=` has been loaded into the form.
+  // Distinct from `editingInvoiceNumber` (the URL param, cleared once used) so
+  // the rest of the form can keep asking "am I editing?" after that happens.
+  const [editingSheet, setEditingSheet] = useState(null);
 
   // Measurements come from the customer's own profile rather than being typed
   // in fresh for every order, so the figures a tailor works to are the figures
@@ -3480,6 +3520,62 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestedInvoice, sentInvoices, customers]);
 
+  // Loads an existing order sheet into the form for correcting, rather than
+  // raising a new one. Refused once a tailor is on it — from that point on,
+  // Production is working from what is there, and this form has no way to
+  // tell a tailor what changed underneath them.
+  useEffect(() => {
+    if (!editingInvoiceNumber || editingSheet) return;
+    if (!sentInvoices.length) return;
+    const invoice = sentInvoices.find((item) => item.invoiceNumber === editingInvoiceNumber);
+    if (!invoice?.orderSheet) {
+      setMessage('That order sheet could not be found.');
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    if (invoice.orderSheet.status !== 'Order Sheet Confirmed') {
+      setMessage('This order sheet already has a tailor assigned, so it can no longer be edited here.');
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    const sheet = invoice.orderSheet;
+    const sheetItems = Array.isArray(sheet.items) && sheet.items.length ? sheet.items : [{
+      item: sheet.item || '', pieces: sheet.pieces, delivery: sheet.delivery,
+      fabrics: sheet.fabrics, fabric: sheet.fabric, fabricId: sheet.fabricId, fabricUnit: sheet.fabricUnit,
+      designNotes: sheet.designNotes, styleImages: sheet.styleImages,
+    }];
+
+    setSheetForm({
+      invoiceNumber: invoice.invoiceNumber,
+      trackingToken: sheet.trackingToken || invoice.trackingToken,
+      trackingUrl: sheet.trackingUrl || invoice.trackingUrl,
+      customer: sheet.customer || invoice.customer || '',
+      customerId: sheet.customerId || '',
+      store: sheet.store || invoice.store || 'Lekki',
+      itemNote: '',
+      measurements: sheet.measurements || '',
+      measurementDetails: sheet.measurementDetails || {},
+      items: sheetItems.map((item, index) => ({
+        key: `edit-item-${index}`,
+        item: item.item || '',
+        pieces: toNumber(item.pieces) || 1,
+        delivery: item.delivery || todayIso(),
+        fabrics: item.fabrics || [],
+        fabric: item.fabric || '',
+        fabricId: item.fabricId || '',
+        fabricUnit: item.fabricUnit || '',
+        designNotes: item.designNotes || '',
+        styleImages: [0, 1, 2, 3, 4].map((slot) => (item.styleImages || [])[slot] || null),
+        departments: item.departments || [],
+        departmentFields: item.departmentFields || {},
+      })),
+    });
+    setEditingSheet({ invoiceNumber: invoice.invoiceNumber, trackingToken: sheet.trackingToken || invoice.trackingToken });
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingInvoiceNumber, sentInvoices, editingSheet]);
+
   const updateSheetForm = (field, value) => {
     setSheetForm((current) => ({ ...current, [field]: value }));
   };
@@ -3491,12 +3587,43 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     }));
   };
 
-  const updateDepartmentField = (index, fieldKey, value) => {
+  const updateDepartmentField = (index, departmentKey, fieldKey, value) => {
     setSheetForm((current) => ({
       ...current,
       items: current.items.map((item, itemIndex) => (itemIndex === index
-        ? { ...item, departmentFields: { ...item.departmentFields, [fieldKey]: value } }
+        ? {
+          ...item,
+          departmentFields: {
+            ...item.departmentFields,
+            [departmentKey]: { ...item.departmentFields?.[departmentKey], [fieldKey]: value },
+          },
+        }
         : item)),
+    }));
+  };
+
+  const addDepartment = (index, departmentKey) => {
+    if (!departmentKey) return;
+    setSheetForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) => (itemIndex === index && !(item.departments || []).includes(departmentKey)
+        ? { ...item, departments: [...(item.departments || []), departmentKey] }
+        : item)),
+    }));
+  };
+
+  const removeDepartment = (index, departmentKey) => {
+    setSheetForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        const { [departmentKey]: _removed, ...restFields } = item.departmentFields || {};
+        return {
+          ...item,
+          departments: (item.departments || []).filter((key) => key !== departmentKey),
+          departmentFields: restFields,
+        };
+      }),
     }));
   };
 
@@ -3606,9 +3733,6 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
     const measurementDetails = Object.fromEntries(
       Object.entries(stored).filter(([key, value]) => key !== 'profile' && String(value ?? '').trim())
     );
-    const written = Object.entries(measurementDetails)
-      .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
-      .join(', ');
 
     const resolvedToken = invoice.trackingToken || trackingTokenSeed();
 
@@ -3625,7 +3749,9 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       customerId: profile.id,
       store: invoice.store || current.store,
       itemNote: invoice.itemNote || current.itemNote,
-      measurements: written,
+      // Left as whatever the store manager has already typed — a note about
+      // fit is written fresh for each order, not carried over from the
+      // customer's stored measurement figures.
       measurementDetails,
       items: invoiceItems
         ? invoiceItems.map((line) => ({
@@ -3729,6 +3855,38 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
       }).format(new Date()),
     };
 
+    // Correcting an order sheet already on file, rather than raising a new
+    // one — only its content changes, so only that content is sent. The
+    // invoice-owned fields (customer, store, payment, tailor, status) are left
+    // alone: the server merges this into what is already saved.
+    if (editingSheet) {
+      try {
+        const response = await api.patch(`/oms/tracking/order-sheet/${editingSheet.trackingToken}`, {
+          items: orderSheet.items,
+          item: orderSheet.item,
+          pieces: orderSheet.pieces,
+          delivery: orderSheet.delivery,
+          fabric: orderSheet.fabric,
+          fabricId: orderSheet.fabricId,
+          fabricUnit: orderSheet.fabricUnit,
+          fabricUsage: orderSheet.fabricUsage,
+          fabrics: orderSheet.fabrics,
+          measurements: orderSheet.measurements,
+          measurementDetails: orderSheet.measurementDetails,
+          designNotes: orderSheet.designNotes,
+          images: orderSheet.images,
+          styleImages: orderSheet.styleImages,
+          note: orderSheet.note,
+        });
+        onOrderSheetUpdated?.(editingSheet.invoiceNumber, response.data?.data?.orderSheet || orderSheet);
+      } catch (error) {
+        setMessage(error.response?.data?.message || 'The order sheet could not be updated.');
+        return;
+      }
+      setMessage(`Order sheet saved with ${items.length} item${items.length === 1 ? '' : 's'}. The change is visible to Production immediately.`);
+      return;
+    }
+
     // The save used to be fired and forgotten: if the server refused it, the
     // failure was swallowed and the screen still said the sheet was saved, so
     // the Store Manager would leave believing production had it.
@@ -3752,12 +3910,17 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
 
   return (
     <div className="os-page">
+      {editingSheet ? (
+        <div className="store-detail-toolbar">
+          <button type="button" onClick={() => onNavigate?.('Order Sheets')}>← &nbsp; Back to Order Sheets</button>
+        </div>
+      ) : null}
       <div className="os-page-header">
         <div className="os-page-title">
           <ClipboardList size={22} strokeWidth={1.5} />
           <div>
-            <h2>Order Sheet</h2>
-            <p>Create the order sheets here.</p>
+            <h2>{editingSheet ? 'Edit Order Sheet' : 'Order Sheet'}</h2>
+            <p>{editingSheet ? 'Correct the items and department details before Production assigns a tailor.' : 'Create the order sheets here.'}</p>
           </div>
         </div>
         {sheetForm.invoiceNumber && (
@@ -3774,21 +3937,28 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
           <div className="os-card">
             <div className="os-card-head">
               <span className="os-step-num">1</span>
-              <div><strong>Invoice</strong><p>Link to an approved invoice to auto-fill details</p></div>
+              <div><strong>Invoice</strong><p>{editingSheet ? 'Linked when this order sheet was raised' : 'Link to an approved invoice to auto-fill details'}</p></div>
               <FileText size={16} strokeWidth={1.5} className="os-card-icon" />
             </div>
             <div className="os-card-body">
-              <label className="os-field os-field-full">
-                <span>Invoice Number</span>
-                <select value={sheetForm.invoiceNumber} onChange={(event) => selectInvoice(event.target.value)}>
-                  <option value="">Select invoice to auto-fill details...</option>
-                  {sentInvoices.map((invoice) => (
-                    <option key={invoice.invoiceNumber} value={invoice.invoiceNumber}>
-                      {invoice.invoiceNumber} · {invoice.customer} · {invoice.store}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {editingSheet ? (
+                <label className="os-field os-field-full">
+                  <span>Invoice Number</span>
+                  <input value={sheetForm.invoiceNumber} disabled />
+                </label>
+              ) : (
+                <label className="os-field os-field-full">
+                  <span>Invoice Number</span>
+                  <select value={sheetForm.invoiceNumber} onChange={(event) => selectInvoice(event.target.value)}>
+                    <option value="">Select invoice to auto-fill details...</option>
+                    {sentInvoices.map((invoice) => (
+                      <option key={invoice.invoiceNumber} value={invoice.invoiceNumber}>
+                        {invoice.invoiceNumber} · {invoice.customer} · {invoice.store}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {linkedInvoice && (
                 <div className="os-invoice-chip">
                   <span className="os-avatar">{linkedInvoice.customer?.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span>
@@ -3811,11 +3981,11 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
             <div className="os-card-body os-grid-2">
               <label className="os-field">
                 <span>Customer Name</span>
-                <input value={sheetForm.customer} onChange={(event) => updateSheetForm('customer', event.target.value)} placeholder="Full name" />
+                <input value={sheetForm.customer} onChange={(event) => updateSheetForm('customer', event.target.value)} placeholder="Full name" disabled={Boolean(editingSheet)} />
               </label>
               <label className="os-field">
                 <span>Store</span>
-                <select value={sheetForm.store} onChange={(event) => updateSheetForm('store', event.target.value)}>
+                <select value={sheetForm.store} onChange={(event) => updateSheetForm('store', event.target.value)} disabled={Boolean(editingSheet)}>
                   <option>Lekki</option>
                   <option>Ikeja</option>
                 </select>
@@ -3826,7 +3996,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
           {/* Arriving with nothing chosen, the useful thing is the list of
               invoices still waiting for a sheet — otherwise the page is a blank
               form and a dropdown to hunt through. */}
-          {!sheetForm.invoiceNumber && awaitingSheet.length ? (
+          {!editingSheet && !sheetForm.invoiceNumber && awaitingSheet.length ? (
             <div className="orders-awaiting">
               <div>
                 <strong>{awaitingSheet.length} invoice{awaitingSheet.length === 1 ? '' : 's'} waiting for an order sheet</strong>
@@ -3921,37 +4091,66 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
               </div>
 
               <div className="os-card-body" style={{ paddingTop: 0 }}>
-                <label className="os-field os-field-full">
-                  <span>Department</span>
-                  <select
-                    value={orderItem.department}
-                    onChange={(event) => updateItem(index, { department: event.target.value, departmentFields: {} })}
-                  >
-                    <option value="">Select a department to enter its details…</option>
-                    {departments.filter((department) => department.status === 'active').map((department) => (
-                      <option key={department.key} value={department.key}>{department.name}</option>
-                    ))}
-                  </select>
-                </label>
+                {/* A garment can need more than one department's work — a
+                    native outfit with embroidery, say — so departments are
+                    added one at a time, same as fabrics above, rather than
+                    picked from a single dropdown. */}
+                <div className="os-field os-field-full department-picker">
+                  <span>Department{(orderItem.departments || []).length > 1 ? 's' : ''}</span>
 
-                {orderItem.department && DEPARTMENT_FIELDS[orderItem.department] ? (
-                  <div className="os-department-fields">
-                    <div className="os-grid-3">
-                      {DEPARTMENT_FIELDS[orderItem.department].fields.map((field) => (
-                        <label className="os-field" key={field.key}>
-                          <span>{field.label}{field.required ? <span style={{ color: '#d62828' }}> *</span> : null}</span>
-                          <input
-                            value={orderItem.departmentFields?.[field.key] || ''}
-                            onChange={(event) => updateDepartmentField(index, field.key, event.target.value)}
-                          />
-                        </label>
+                  {(orderItem.departments || []).length ? (
+                    <ul className="department-chosen">
+                      {orderItem.departments.map((departmentKey) => (
+                        <li key={departmentKey}>
+                          <strong>{departments.find((department) => department.key === departmentKey)?.name || DEPARTMENT_FIELDS[departmentKey]?.label || departmentKey}</strong>
+                          <button
+                            type="button"
+                            onClick={() => removeDepartment(index, departmentKey)}
+                            aria-label={`Remove ${departmentKey}`}
+                          >×</button>
+                        </li>
                       ))}
+                    </ul>
+                  ) : null}
+
+                  <select
+                    value=""
+                    onChange={(event) => { addDepartment(index, event.target.value); event.target.value = ''; }}
+                  >
+                    <option value="">
+                      {(orderItem.departments || []).length ? 'Add another department…' : 'Select a department to enter its details…'}
+                    </option>
+                    {departments
+                      .filter((department) => department.status === 'active' && !(orderItem.departments || []).includes(department.key))
+                      .map((department) => (
+                        <option key={department.key} value={department.key}>{department.name}</option>
+                      ))}
+                  </select>
+                </div>
+
+                {(orderItem.departments || []).map((departmentKey) => (
+                  DEPARTMENT_FIELDS[departmentKey] ? (
+                    <div className="os-department-fields" key={departmentKey}>
+                      {(orderItem.departments || []).length > 1 ? (
+                        <h4 className="os-department-fields-title">{DEPARTMENT_FIELDS[departmentKey].label}</h4>
+                      ) : null}
+                      <div className="os-grid-3">
+                        {DEPARTMENT_FIELDS[departmentKey].fields.map((field) => (
+                          <label className="os-field" key={field.key}>
+                            <span>{field.label}{field.required ? <span style={{ color: '#d62828' }}> *</span> : null}</span>
+                            <input
+                              value={orderItem.departmentFields?.[departmentKey]?.[field.key] || ''}
+                              onChange={(event) => updateDepartmentField(index, departmentKey, field.key, event.target.value)}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      {DEPARTMENT_FIELDS[departmentKey].note ? (
+                        <p className="os-department-note">{DEPARTMENT_FIELDS[departmentKey].note}</p>
+                      ) : null}
                     </div>
-                    {DEPARTMENT_FIELDS[orderItem.department].note ? (
-                      <p className="os-department-note">{DEPARTMENT_FIELDS[orderItem.department].note}</p>
-                    ) : null}
-                  </div>
-                ) : null}
+                  ) : null
+                ))}
               </div>
 
               <div className="os-card-body os-grid-2" style={{ paddingTop: 0 }}>
@@ -4089,7 +4288,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob }) {
 
           <button className="os-release-btn" type="submit">
             <CheckCircle size={17} strokeWidth={2} />
-            Release Order Sheet to Production
+            {editingSheet ? 'Save Changes' : 'Release Order Sheet to Production'}
           </button>
         </form>
 
@@ -4164,6 +4363,11 @@ function TailorAssignmentPanel({ job, tailors, onSaved, onNotify }) {
       next.length ? `${items[index].item || 'Item'} assigned to ${next.join(', ')}` : 'Assignment removed');
   };
 
+  const setDueDate = (index, value) => {
+    write('assignments', { items: [{ index, tailors: items[index].tailors || [], tailorDueDate: value }] },
+      value ? `Due date for ${items[index].item || 'item'} saved` : 'Due date cleared');
+  };
+
   const score = (index, name, value) => {
     write('scores', { scores: [{ itemIndex: index, tailor: name, score: Number(value) }] },
       `${name} scored ${value} out of 10`);
@@ -4177,6 +4381,24 @@ function TailorAssignmentPanel({ job, tailors, onSaved, onNotify }) {
             <strong>{item.item || `Item ${index + 1}`}</strong>
             <span>{(item.tailors || []).length ? `${item.tailors.length} of 4 assigned` : 'Nobody assigned yet'}</span>
           </header>
+          {/* The customer's delivery date is the shop's business; the tailor
+              works to a date Production sets, normally earlier. Items on one
+              order can be promised on different days, so each has its own. */}
+          <label className="tailor-assign-due">
+            <span>Tailor&apos;s due date</span>
+            <input
+              type="date"
+              value={item.tailorDueDate || ''}
+              max={item.delivery || job.delivery || undefined}
+              disabled={saving}
+              onChange={(event) => setDueDate(index, event.target.value)}
+            />
+            <small>
+              {(item.delivery || job.delivery)
+                ? `Customer's delivery date for this item: ${new Date(`${item.delivery || job.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} — the tailor does not see it.`
+                : 'The tailor does not see the customer\'s delivery date.'}
+            </small>
+          </label>
           <div className="tailor-assign-picks">
             {tailors.map((person) => {
               const chosen = (item.tailors || []).includes(person.displayName);
@@ -4193,19 +4415,14 @@ function TailorAssignmentPanel({ job, tailors, onSaved, onNotify }) {
             {tailors.length ? null : <span className="tailor-assign-empty">No tailors on the staff list yet.</span>}
           </div>
 
-          {/* Scoring only makes sense once there is finished work to judge. It
-              said nothing about that, so a production manager looking for it on
-              a job still being worked found no explanation. */}
-          {!ready && (item.tailors || []).length ? (
-            <p className="tailor-assign-note">
-              Scoring opens when this is marked ready — it is {String(job.status || 'not started').toLowerCase()}.
-            </p>
-          ) : null}
-          {ready && (item.tailors || []).length ? (
+          {/* Scoring only makes sense once there is finished work to judge, so
+              until then the section says so rather than not being there. */}
+          {(item.tailors || []).length ? (
             <div className="tailor-assign-scores">
-              {(item.tailors || []).map((name) => (
+              <strong className="tailor-assign-scores-title">Score tailors</strong>
+              {ready ? (item.tailors || []).map((name) => (
                 <label key={name}>
-                  <span>{name}</span>
+                  <span>{name}{item.scores?.[name] ? '' : ' · not scored'}</span>
                   <select
                     value={item.scores?.[name]?.score ?? ''}
                     disabled={saving}
@@ -4215,7 +4432,11 @@ function TailorAssignmentPanel({ job, tailors, onSaved, onNotify }) {
                     {Array.from({ length: 11 }, (_, mark) => <option key={mark} value={mark}>{mark} / 10</option>)}
                   </select>
                 </label>
-              ))}
+              )) : (
+                <p className="tailor-assign-note">
+                  Opens once this job is marked ready — it is {String(job.status || 'not started').toLowerCase()}.
+                </p>
+              )}
             </div>
           ) : null}
         </div>
@@ -4223,6 +4444,11 @@ function TailorAssignmentPanel({ job, tailors, onSaved, onNotify }) {
     </div>
   );
 }
+
+// Ready work with a tailor on it that nobody has marked yet.
+const unscoredCount = (job) => (job.items || []).reduce((total, item) => (
+  total + (item.tailors || []).filter((name) => item.scores?.[name]?.score === undefined).length
+), 0);
 
 function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, currentRole, onOverrideHold }) {
   const canOverrideHold = ['owner', 'admin'].includes(currentRole?.id);
@@ -4233,15 +4459,25 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   const [inventory, setInventory] = useState([]);
   const [tailors, setTailors] = useState([]);
   const [allocatingJobId, setAllocatingJobId] = useState(null);
+  const [settingInProgress, setSettingInProgress] = useState(false);
   const [confirmReady, setConfirmReady] = useState(null);
   // Chrome refuses to open a data: URL in a new tab (blank page, no error),
   // so a reference image is shown full-size in place instead.
   const [viewingImage, setViewingImage] = useState(null);
+  const [page, setPage] = useState(1);
   const toastTimerRef = useRef(null);
   const filteredJobs = productionJobs.filter((job) => (
     (statusFilter === 'All' ? true : job.status === statusFilter)
     && `${job.customer} ${job.invoiceNumber} ${job.item}`.toLowerCase().includes(query.toLowerCase())
   ));
+  // Every job the company has ever raised, rendered in full — in both a
+  // desktop table and a duplicate mobile card list — with nothing to limit
+  // it, is what made this board slower to open the longer the business ran.
+  // The footer already claimed to show a page of it; now it actually is one.
+  const JOBS_PAGE_SIZE = 10;
+  const jobPageCount = Math.max(1, Math.ceil(filteredJobs.length / JOBS_PAGE_SIZE));
+  const currentJobPage = Math.min(page, jobPageCount);
+  const visibleJobs = filteredJobs.slice((currentJobPage - 1) * JOBS_PAGE_SIZE, currentJobPage * JOBS_PAGE_SIZE);
   const productionTabs = ['All', 'Order Sheet Confirmed', 'Assigned', 'In Progress', 'Ready'];
   const readyToAssign = productionJobs.filter((job) => job.status === 'Order Sheet Confirmed').length;
   const inProgress = productionJobs.filter((job) => ['Assigned', 'In Progress'].includes(job.status)).length;
@@ -4405,21 +4641,21 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   );
 
   const allocateFabricForModal = async () => {
-    if (!jobModal) return;
+    if (!jobModal) return false;
     if (jobModal.fabric === 'Client supplied') {
       const updatedJob = { ...jobModal, fabricConfirmed: true, fabricAllocated: true };
       setJobModal(updatedJob);
       onUpdateJob(jobModal.id, { fabricConfirmed: true, fabricAllocated: true });
       notify('Client-supplied fabric confirmed', 'success');
-      return;
+      return true;
     }
     // Every fabric on the job, not just the first.
     const lines = jobFabrics
       .filter((entry) => entry.fabricId && Number(entry.quantity) > 0)
       .map((entry) => ({ fabricId: entry.fabricId, quantity: Number(entry.quantity), name: entry.name, unit: entry.unit }));
-    if (!lines.length) { notify('Add a fabric and say how much of it this job needs', 'error'); return; }
-    if (!jobModal.tailor || jobModal.tailor === 'Unassigned') { notify('Assign a tailor before allocating fabric', 'error'); return; }
-    if (!jobModal.trackingToken) { notify('This job has no saved order sheet', 'error'); return; }
+    if (!lines.length) { notify('Add a fabric and say how much of it this job needs', 'error'); return false; }
+    if (!jobModal.tailor || jobModal.tailor === 'Unassigned') { notify('Assign a tailor before allocating fabric', 'error'); return false; }
+    if (!jobModal.trackingToken) { notify('This job has no saved order sheet', 'error'); return false; }
     setAllocatingJobId(jobModal.id);
     try {
       const response = await api.post('/oms/fabrics/allocate', {
@@ -4433,12 +4669,17 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
       setJobModal((current) => ({ ...current, ...changes }));
       onUpdateJob(jobModal.id, changes);
       notify(`${allocated.map((line) => `${line.quantity} ${line.unit} of ${line.name}`).join(', ')} allocated to ${jobModal.invoiceNumber}`, 'success');
+      return true;
     } catch (error) {
       notify(error.response?.data?.message || 'Unable to allocate fabric', 'error');
+      return false;
     } finally {
       setAllocatingJobId(null);
     }
   };
+
+  const hasTailor = Boolean(jobModal?.tailor) && jobModal.tailor !== 'Unassigned';
+  const startedJob = jobModal?.status === 'In Progress' || jobModal?.status === 'Ready';
 
   return (
     <div className="os-page">
@@ -4487,8 +4728,12 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Held jobs. The Exceptions figure used to be a count with nothing
               behind it — no list, nothing to click. These are the orders that
-              cannot be worked, each saying what is holding it. */}
-          {blockedJobs.length ? (
+              cannot be worked, each saying what is holding it.
+              Shown only to whoever can actually act on it — releasing a held
+              order is the Owner's and Admin's call, so a Production Manager
+              saw this card with a reason and no button, which is exactly what
+              made it read as clutter rather than useful information. */}
+          {canOverrideHold && blockedJobs.length ? (
             <div className="os-card" style={{ borderColor: '#f0c8b8' }}>
               <div className="os-card-head" style={{ background: '#fff7f3' }}>
                 <AlertCircle size={16} strokeWidth={1.5} style={{ color: '#8a3520' }} />
@@ -4579,8 +4824,8 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredJobs.length ? filteredJobs.map((order, idx) => (
-                    <tr key={order.id} style={{ borderBottom: idx < filteredJobs.length - 1 ? '1px solid #f3ede5' : 'none', background: 'white' }}
+                  {visibleJobs.length ? visibleJobs.map((order, idx) => (
+                    <tr key={order.id} style={{ borderBottom: idx < visibleJobs.length - 1 ? '1px solid #f3ede5' : 'none', background: 'white' }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = '#faf7f3'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}>
                       <td data-label="Customer" style={{ padding: '12px 14px' }}>
@@ -4615,6 +4860,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       </td>
                       <td data-label="Status" style={{ padding: '12px 14px' }}>
                         <Status>{order.status === 'Order Sheet Confirmed' ? 'Ready to Assign' : order.status === 'Ready' ? 'Ready for Collection' : order.status}</Status>
+                        {order.status === 'Ready' && unscoredCount(order) ? <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: '#a76900' }}>★ Needs scoring</div> : null}
                       </td>
                       <td data-label="Actions" style={{ padding: '12px 14px' }}>
                         <button
@@ -4622,7 +4868,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                           onClick={() => setJobModal(order)}
                           style={{ padding: '5px 12px', border: '1px solid #ddd5c8', borderRadius: 6, background: '#fff', color: '#5a4e42', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}
                         >
-                          <Eye size={12} /> View
+                          <Eye size={12} /> {order.status === 'Ready' && unscoredCount(order) ? 'View & score' : 'View'}
                         </button>
                       </td>
                     </tr>
@@ -4639,7 +4885,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
 
             {/* Mobile job cards */}
             <div style={{ display: 'none', flexDirection: 'column', gap: 10, padding: '14px 14px' }} className="prod-mobile-cards">
-              {filteredJobs.map((order) => (
+              {visibleJobs.map((order) => (
                 <div key={order.id} style={{ border: '1px solid #eee5da', borderRadius: 10, padding: '14px', background: '#fff', borderLeft: '3px solid #c97b08' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                     <div>
@@ -4660,8 +4906,8 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
             </div>
 
             {filteredJobs.length > 0 && (
-              <div style={{ padding: '12px 18px', borderTop: '1px solid #eee5da', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 12, color: '#8a7a6a' }}>Showing {filteredJobs.length} of {productionJobs.length} jobs</span>
+              <div style={{ padding: '4px 18px 12px' }}>
+                <Pagination page={currentJobPage} pageSize={JOBS_PAGE_SIZE} total={filteredJobs.length} onPage={setPage} noun="jobs" />
               </div>
             )}
           </div>
@@ -4899,27 +5145,28 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                     order sheet was raised before the customer was measured —
                     same distinction hasMeasurements() already makes. */}
                 {(() => {
+                  // Same label/value grid the Store Manager's customer profile
+                  // uses for measurements, rather than a bulleted list — one
+                  // figure per cell, in two columns, so a tailor can scan it
+                  // the way it already reads everywhere else in the app.
                   const detailEntries = jobModal.measurementDetails ? Object.entries(jobModal.measurementDetails) : [];
-                  if (detailEntries.length) {
-                    return (
-                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
-                        {detailEntries.map(([key, value]) => (
-                          <li key={key} style={{ marginBottom: 4 }}><strong style={{ fontWeight: 600 }}>{key}:</strong> {value}</li>
-                        ))}
-                      </ul>
-                    );
-                  }
-                  const writtenLines = String(jobModal.measurements || '').split(/[\n,]/).map((line) => line.trim()).filter(Boolean);
-                  if (writtenLines.length) {
-                    return (
-                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
-                        {writtenLines.map((line, index) => (
-                          <li key={`${line}-${index}`} style={{ marginBottom: 4 }}>{line}</li>
-                        ))}
-                      </ul>
-                    );
-                  }
-                  return <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>;
+                  const rows = detailEntries.length
+                    ? detailEntries.map(([key, value]) => [key.replace(/_/g, ' '), value])
+                    : String(jobModal.measurements || '').split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line) => {
+                      const [label, ...rest] = line.split(':');
+                      return rest.length ? [label.trim(), rest.join(':').trim()] : [line, ''];
+                    });
+                  if (!rows.length) return <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>;
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, margin: '0 -14px -12px', borderTop: '1px solid #f3ede5' }}>
+                      {rows.map(([label, value], index) => (
+                        <div key={`${label}-${index}`} style={{ padding: '8px 14px', borderBottom: '1px solid #f3ede5' }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 2 }}>{value || '—'}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
                 })()}
               </div>
 
@@ -4996,26 +5243,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                   </select>
                   {jobModal.fabricAllocated ? <span className="os-fabric-hint">Already allocated — stock has been taken for this job.</span> : null}
                 </div>
-                {/* The customer's delivery date is the shop's business. A
-                    tailor works to a date Production sets, which is normally
-                    earlier — it leaves room for checking and finishing. */}
-                <label className="os-field">
-                  <span>Tailor&apos;s due date</span>
-                  <input
-                    type="date"
-                    value={jobModal.tailorDueDate || ''}
-                    max={jobModal.delivery || undefined}
-                    onChange={(e) => {
-                      setJobModal((j) => ({ ...j, tailorDueDate: e.target.value }));
-                      onUpdateJob(jobModal.id, { tailorDueDate: e.target.value });
-                    }}
-                  />
-                  <span className="os-fabric-hint">
-                    {jobModal.delivery
-                      ? `Customer's delivery date is ${new Date(`${jobModal.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, which the tailor does not see.`
-                      : 'The tailor does not see the customer\'s delivery date.'}
-                  </span>
-                </label>
+                {/* Each item's tailor due date sits with the item, above. */}
                 {/* Quantity now sits against each fabric above. */}
                 <label className="os-field" style={{ gridColumn: '1 / -1' }}>
                   <span>Production note</span>
@@ -5035,43 +5263,40 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
 
               {/* Action buttons */}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {/* Once fabric is allocated the button had nothing left to do
-                    and simply restated the Fabric Status panel above, so it
-                    stands down rather than sitting there as a dead control. */}
-                {!jobModal.fabricAllocated ? (
-                  <button
-                    type="button"
-                    disabled={allocatingJobId === jobModal.id}
-                    onClick={() => allocateFabricForModal()}
-                    style={{ flex: 1, padding: '10px 14px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', color: '#5a4e42', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                  >
-                    {allocatingJobId === jobModal.id ? 'Allocating…' : <><Package size={14} /> Allocate Fabric</>}
-                  </button>
-                ) : null}
+                {/* Starting work needs a tailor, and starting it allocates the
+                    fabric — Production shouldn't have to do that as a separate
+                    step first. */}
                 <button
                   type="button"
-                  disabled={jobModal.status === 'In Progress' || jobModal.status === 'Ready'}
-                  onClick={() => {
-                    const updatedJob = { ...jobModal, status: 'In Progress' };
-                    setJobModal(updatedJob);
-                    Promise.resolve(onUpdateJob(jobModal.id, { status: 'In Progress' }))
-                      .then(() => notify('Job set to In Progress', 'success'))
-                      .catch((error) => {
-                        setJobModal(jobModal);
-                        notify(error.response?.data?.message || 'Unable to update this job', 'error');
-                      });
+                  disabled={startedJob || settingInProgress || allocatingJobId === jobModal.id || !hasTailor}
+                  title={!hasTailor ? 'Assign a tailor first' : undefined}
+                  onClick={async () => {
+                    const before = jobModal;
+                    setSettingInProgress(true);
+                    try {
+                      if (!before.fabricAllocated && !(await allocateFabricForModal())) return;
+                      setJobModal((current) => ({ ...current, status: 'In Progress' }));
+                      await onUpdateJob(before.id, { status: 'In Progress' });
+                      notify('Fabric allocated and job set to In Progress', 'success');
+                    } catch (error) {
+                      setJobModal((current) => ({ ...current, status: before.status }));
+                      notify(error.response?.data?.message || 'Unable to update this job', 'error');
+                    } finally {
+                      setSettingInProgress(false);
+                    }
                   }}
-                  style={{ flex: 1, padding: '10px 14px', border: '1px solid', borderColor: (jobModal.status === 'In Progress' || jobModal.status === 'Ready') ? '#c3e8d4' : '#ddd5c8', borderRadius: 8, background: (jobModal.status === 'In Progress' || jobModal.status === 'Ready') ? '#f0faf4' : '#fff', color: (jobModal.status === 'In Progress' || jobModal.status === 'Ready') ? '#2a7d4f' : '#5a4e42', fontSize: 13, fontWeight: 700, cursor: (jobModal.status === 'In Progress' || jobModal.status === 'Ready') ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  style={{ flex: 1, padding: '10px 14px', border: '1px solid', borderColor: startedJob ? '#c3e8d4' : '#ddd5c8', borderRadius: 8, background: startedJob ? '#f0faf4' : '#fff', color: startedJob ? '#2a7d4f' : '#5a4e42', opacity: !startedJob && !hasTailor ? 0.5 : 1, fontSize: 13, fontWeight: 700, cursor: startedJob ? 'default' : hasTailor ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 >
-                  {(jobModal.status === 'In Progress' || jobModal.status === 'Ready') ? <><CheckCircle size={14} /> In Progress</> : 'Set In Progress'}
+                  {startedJob ? <><CheckCircle size={14} /> In Progress</> : settingInProgress ? 'Starting…' : 'Set In Progress'}
                 </button>
                 {/* Marking a job Ready notifies the store that the customer can
                     collect, so it asks first rather than firing on one tap. */}
                 <button
                   type="button"
-                  disabled={jobModal.status === 'Ready'}
+                  disabled={jobModal.status !== 'In Progress'}
+                  title={jobModal.status !== 'In Progress' && jobModal.status !== 'Ready' ? 'Set the job In Progress first' : undefined}
                   onClick={() => setConfirmReady(jobModal)}
-                  style={{ flex: 1, padding: '10px 14px', border: 'none', borderRadius: 8, background: jobModal.status === 'Ready' ? '#f0faf4' : '#1a1611', color: jobModal.status === 'Ready' ? '#2a7d4f' : '#fff', fontSize: 13, fontWeight: 700, cursor: jobModal.status === 'Ready' ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  style={{ flex: 1, padding: '10px 14px', border: 'none', borderRadius: 8, background: jobModal.status === 'Ready' ? '#f0faf4' : jobModal.status === 'In Progress' ? '#1a1611' : '#e6e1d9', color: jobModal.status === 'Ready' ? '#2a7d4f' : jobModal.status === 'In Progress' ? '#fff' : '#a39a8c', fontSize: 13, fontWeight: 700, cursor: jobModal.status === 'In Progress' ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 >
                   {jobModal.status === 'Ready' ? <><CheckCircle size={14} /> Ready for Collection</> : 'Mark as Ready'}
                 </button>
@@ -7183,7 +7408,7 @@ function OrderTableLike({ columns, rows }) {
 function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Overview') return <Overview role={role} currentRole={viewProps.currentRole} sentInvoices={viewProps.sentInvoices} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} onApproveInvoice={viewProps.onApproveInvoice} onNavigate={viewProps.onNavigate} releasePercent={viewProps.releasePercent} />;
   if (activeView === 'Invoices') {
-    if (role === 'accounts') return <AccountsInvoicesPage sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} onInvoiceUpdated={viewProps.onInvoiceUpdated} releasePercent={viewProps.releasePercent} />;
+    if (role === 'accounts') return <AccountsInvoicesPage sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} onInvoiceUpdated={viewProps.onInvoiceUpdated} currentRole={viewProps.currentRole} releasePercent={viewProps.releasePercent} />;
     if (['store_manager', 'owner', 'admin'].includes(role)) {
       return (
         <StoreInvoicesView
@@ -7194,6 +7419,7 @@ function renderView(activeView, role, viewProps = {}) {
           onInvoiceChanged={viewProps.onInvoiceUpdated}
           onInvoiceDeleted={viewProps.onInvoiceDeleted}
           releasePercent={viewProps.releasePercent}
+          onNavigate={viewProps.onNavigate}
         />
       );
     }
@@ -7202,7 +7428,17 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Orders') return ['store_manager', 'owner', 'admin'].includes(role) ? <StoreManagerOrdersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} /> : <OrdersView sentInvoices={viewProps.sentInvoices} />;
   if (activeView === 'Customers') return role === 'store_manager' || role === 'owner' || role === 'admin' ? <StoreManagerCustomersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} currentRole={viewProps.currentRole} /> : <CustomersView />;
   if (activeView === 'New Invoice') return <NewInvoiceView currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
-  if (activeView === 'Order Sheet') return <OrderSheetView sentInvoices={viewProps.sentInvoices} onCreateJob={viewProps.onCreateJob} />;
+  if (activeView === 'Order Sheet') {
+    return (
+      <OrderSheetView
+        sentInvoices={viewProps.sentInvoices}
+        onCreateJob={viewProps.onCreateJob}
+        onOrderSheetUpdated={viewProps.onOrderSheetUpdated}
+        onNavigate={viewProps.onNavigate}
+      />
+    );
+  }
+  if (activeView === 'Order Sheets') return <StoreManagerOrderSheetsPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} />;
   if (activeView === 'Payments') return role === 'accounts' || role === 'owner'
     ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} onInvoiceUpdated={viewProps.onInvoiceUpdated} />
     : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} releasePercent={viewProps.releasePercent} />;
@@ -7456,6 +7692,26 @@ function App() {
 
   const createProductionJob = (job) => {
     setProductionJobs((current) => [job, ...current]);
+    // Without this, a freshly raised order sheet was invisible on the Store
+    // Manager's own Order Sheets and Orders pages — both read `sentInvoices`,
+    // not `productionJobs` — until the next full reload happened to refetch it.
+    if (job?.invoiceNumber) {
+      setSentInvoices((current) => current.map((invoice) => (
+        invoice.invoiceNumber === job.invoiceNumber ? { ...invoice, orderSheet: job } : invoice
+      )));
+    }
+  };
+
+  // An order sheet corrected before Production picks it up — see
+  // OrderSheetView's edit mode. Kept in both lists the app already keeps: the
+  // raw invoice (`sentInvoices`, what the Order Sheets/Orders pages read) and
+  // the derived job (`productionJobs`, what the Production board reads).
+  const applyOrderSheetUpdate = (invoiceNumber, nextOrderSheet) => {
+    if (!invoiceNumber || !nextOrderSheet) return;
+    setSentInvoices((current) => current.map((invoice) => (
+      invoice.invoiceNumber === invoiceNumber ? { ...invoice, orderSheet: nextOrderSheet } : invoice
+    )));
+    setProductionJobs((current) => mergeJobsByInvoice(current, [productionJobFromInvoice({ invoiceNumber, orderSheet: nextOrderSheet })]));
   };
 
   // Same shape as updateInvoiceApproval: returns the request's promise, and
@@ -7725,6 +7981,7 @@ function App() {
                 productionJobs: approvedProductionJobs,
                 blockedProductionJobs,
                 onCreateJob: createProductionJob,
+                onOrderSheetUpdated: applyOrderSheetUpdate,
                 onUpdateJob: updateProductionJob,
                 onOverrideHold: overrideProductionHold,
                 releasePercent,

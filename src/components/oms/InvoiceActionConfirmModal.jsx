@@ -9,6 +9,20 @@ const actionDetails = {
     confirmLabel: 'Yes, Approve Invoice',
     description: (invoice) => `Are you sure you want to approve ${invoice.invoiceNumber} for ${invoice.customer}? The invoice will be released to Production.`,
   },
+  ApprovedComplete: {
+    tone: 'approve',
+    icon: '✓',
+    title: 'Approve Completed Payment?',
+    confirmLabel: 'Yes, Approve Completed Payment',
+    description: (invoice) => `Confirm that ${invoice.invoiceNumber} for ${invoice.customer} has been paid in full? It will be released to Production.`,
+  },
+  ApprovedPartial: {
+    tone: 'partial',
+    icon: '◔',
+    title: 'Approve Partial Payment?',
+    confirmLabel: 'Yes, Approve Partial Payment',
+    description: (invoice) => `Approve the part payment received for ${invoice.invoiceNumber} for ${invoice.customer}? It will be released to Production and the outstanding balance will remain on the invoice.`,
+  },
   Rejected: {
     tone: 'reject',
     icon: '×',

@@ -41,8 +41,13 @@ export default function OrderDetailsPage({ order, onBack }) {
 
   const deliveryDate = job.delivery || order.deliveryDate || order.dueDate;
   const days = daysUntilDue(deliveryDate);
-  const orderNote = job.productionNote || order.itemNote
-    || (Array.isArray(order.notes) ? order.notes[0] : order.notes) || '';
+  // Production's own note on the job, or else the invoice's notes — not
+  // `order.itemNote`, which is really an item's note in disguise and would
+  // otherwise stand in for the invoice notes whenever an item happened to
+  // have one of its own. Each item's note already shows against its own
+  // line below.
+  const invoiceNotes = Array.isArray(order.notes) ? order.notes.filter(Boolean) : (order.notes ? [order.notes] : []);
+  const orderNote = job.productionNote || invoiceNotes.join(' · ');
 
   // Measurements as figures, taken from the order sheet. A fixed 42in chest and
   // 34in waist used to be printed on every order, which is a set of numbers a

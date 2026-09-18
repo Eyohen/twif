@@ -367,7 +367,7 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
                 fontSize: 12, color: '#5a4e42', cursor: onViewMeasurements ? 'pointer' : 'not-allowed',
                 fontWeight: 500, opacity: onViewMeasurements ? 1 : 0.5,
               }}
-            >View Measurements</button>
+            >{customer.measurementsAdded ? 'View Measurements' : 'Add Measurements'}</button>
           </div>
 
           {/* Internal Notes */}

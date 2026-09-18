@@ -33,8 +33,12 @@ export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onR
     description: line.description || line.name || 'Item',
     quantity: Number(line.quantity || 1),
     amount: Number(line.amount ?? (Number(line.rate || 0) * Number(line.quantity || 1))),
+    note: line.note || '',
   }));
-  const note = invoice.itemNote || (Array.isArray(invoice.notes) ? invoice.notes[0] : invoice.notes) || '';
+  // Kept apart rather than merged into one field — a note left on an item and
+  // the invoice's own notes answer different questions, and folding them
+  // together with `||` used to mean only one of them was ever shown.
+  const invoiceNotes = Array.isArray(invoice.notes) ? invoice.notes.filter(Boolean) : (invoice.notes ? [invoice.notes] : []);
 
   return (
     <div className="os-page" style={{ maxWidth: 1100 }}>
@@ -139,7 +143,10 @@ export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onR
                   <tbody>
                     {items.map((line, index) => (
                       <tr key={`${line.description}-${index}`}>
-                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#1a1611' }}>{line.description}</td>
+                        <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#1a1611' }}>
+                          {line.description}
+                          {line.note ? <div style={{ marginTop: 3, fontSize: 12, fontWeight: 400, color: '#8a7a6a' }}>{line.note}</div> : null}
+                        </td>
                         <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', color: '#5a4e42', textAlign: 'right' }}>{line.quantity}</td>
                         <td style={{ padding: '8px 0', borderBottom: '1px solid #f3ede5', fontWeight: 600, color: '#1a1611', textAlign: 'right' }}>{money.format(line.amount)}</td>
                       </tr>
@@ -167,10 +174,14 @@ export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onR
                 </div>
               </div>
 
-              {note ? (
-                <p style={{ margin: 0, fontSize: 13, color: '#5a4e42', lineHeight: 1.6, background: '#faf7f3', padding: '10px 12px', borderRadius: 8, border: '1px solid #eee5da' }}>
-                  {note}
-                </p>
+              {invoiceNotes.length ? (
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
+                  {invoiceNotes.map((entry, index) => (
+                    <li key={index} style={{ fontSize: 13, color: '#5a4e42', lineHeight: 1.6, background: '#faf7f3', padding: '10px 12px', borderRadius: 8, border: '1px solid #eee5da' }}>
+                      {entry}
+                    </li>
+                  ))}
+                </ul>
               ) : null}
             </div>
           </div>

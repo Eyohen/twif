@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CheckSquare, Clock, User, Package, ArrowRight, Play, CheckCircle, ChevronDown, ChevronUp, Calendar, Ruler, Image, Scissors, Filter } from 'lucide-react';
 import { worksOnJob } from '../../utils/oms';
 import JobCommentThread from '../../components/oms/JobCommentThread';
+import Pagination from '../../components/oms/Pagination';
 
 // Every garment on the order, not just the first — a card or a confirmation
 // that only ever named item 1 read like a one-item job even when there were
@@ -21,6 +22,17 @@ const fabricNamesOf = (list) => (Array.isArray(list) ? list : [])
   .filter(Boolean);
 const orderFabricLabelFor = (order) => fabricNamesOf(order.fabrics).join(', ') || order.fabric || '';
 const itemFabricLabelFor = (item, order) => fabricNamesOf(item?.fabrics).join(', ') || item?.fabric || orderFabricLabelFor(order);
+
+// A reference image is stored as a data URL, so the browser can save it
+// directly; the file is named after its label so a folder of them makes sense.
+const imageFileName = (image, fallback) => {
+  const type = /^data:image\/([a-z0-9+.-]+)/i.exec(image.dataUrl || '')?.[1] || 'png';
+  const extension = type === 'jpeg' ? 'jpg' : type.replace(/\+.*/, '');
+  const base = String(image.label || image.name || fallback).replace(/\.[a-z0-9]{2,4}$/i, '').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') || fallback;
+  return `${base}.${extension}`;
+};
+
+const formatDue = (value) => new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 
 export default function MyTasksPage({ compact = false, currentRole, productionJobs = [], onUpdateJob }) {
   const tailorName = currentRole?.name?.split(' (')[0] || '';
@@ -70,6 +82,16 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
     ? allAssigned
     : allAssigned.filter((order) => getStatus(order) === FILTER_STATUS[filter]);
 
+  // Every job ever assigned to this tailor stays in the list forever — there
+  // is no archive — so rendering every one of them, each an expandable card
+  // with its own images, is what made this page slower to open the longer a
+  // tailor had been working.
+  const [page, setPage] = useState(1);
+  const TASKS_PAGE_SIZE = 10;
+  const taskPageCount = Math.max(1, Math.ceil(assignedJobs.length / TASKS_PAGE_SIZE));
+  const currentTaskPage = Math.min(page, taskPageCount);
+  const visibleJobs = assignedJobs.slice((currentTaskPage - 1) * TASKS_PAGE_SIZE, currentTaskPage * TASKS_PAGE_SIZE);
+
   return (
     <div className="os-page">
 
@@ -112,7 +134,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
 
       {/* Task List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {assignedJobs.length ? assignedJobs.map((order) => {
+        {assignedJobs.length ? visibleJobs.map((order) => {
           const status = getStatus(order);
           const isExpanded = expandedId === order.id;
           const canStart = status === 'in_queue';
@@ -261,6 +283,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                         {detailItems.length > 1 ? (
                           <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             Item {itemIndex + 1}: {item.item || 'Unnamed item'}
+                            {item.tailorDueDate ? <span style={{ marginLeft: 10, textTransform: 'none', letterSpacing: 0, color: '#a76900' }}>Due {formatDue(item.tailorDueDate)}</span> : null}
                           </h4>
                         ) : null}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
@@ -308,16 +331,24 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                                 {itemImages.map((image, index) => (
                                   image.dataUrl ? (
-                                    <button
-                                      key={`${image.label}-${index}`}
-                                      type="button"
-                                      className="tailor-style-image"
-                                      onClick={() => setViewingImage(image)}
-                                      title={image.label}
-                                    >
-                                      <img src={image.dataUrl} alt={image.label || `Reference ${index + 1}`} />
-                                      <span>{image.label || `Image ${index + 1}`}</span>
-                                    </button>
+                                    <div key={`${image.label}-${index}`} style={{ display: 'grid', gap: 4 }}>
+                                      <button
+                                        type="button"
+                                        className="tailor-style-image"
+                                        onClick={() => setViewingImage(image)}
+                                        title={image.label}
+                                      >
+                                        <img src={image.dataUrl} alt={image.label || `Reference ${index + 1}`} />
+                                        <span>{image.label || `Image ${index + 1}`}</span>
+                                      </button>
+                                      <a
+                                        className="tailor-style-download"
+                                        href={image.dataUrl}
+                                        download={imageFileName(image, `reference-${index + 1}`)}
+                                      >
+                                        Download
+                                      </a>
+                                    </div>
                                   ) : (
                                     // Older order sheets recorded a filename rather
                                     // than an upload; naming it still helps.
@@ -405,6 +436,10 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
         )}
       </div>
 
+      {assignedJobs.length ? (
+        <Pagination page={currentTaskPage} pageSize={TASKS_PAGE_SIZE} total={assignedJobs.length} onPage={setPage} noun="tasks" />
+      ) : null}
+
       {viewingImage?.dataUrl ? (
         <div
           className="review-evidence-lightbox"
@@ -414,7 +449,16 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
           onClick={() => setViewingImage(null)}
         >
           <button type="button" className="review-evidence-close" onClick={() => setViewingImage(null)} aria-label="Close">×</button>
-          <img src={viewingImage.dataUrl} alt={viewingImage.label || 'Style reference'} onClick={(event) => event.stopPropagation()} />
+          <div className="review-evidence-lightbox-body" onClick={(event) => event.stopPropagation()}>
+            <img src={viewingImage.dataUrl} alt={viewingImage.label || 'Style reference'} />
+            <a
+              className="tailor-style-download tailor-style-download-large"
+              href={viewingImage.dataUrl}
+              download={imageFileName(viewingImage, 'reference')}
+            >
+              Download image
+            </a>
+          </div>
         </div>
       ) : null}
 

@@ -1522,9 +1522,23 @@ dd {
 .os-field em, .os-field-label em { font-style: normal; font-weight: 400; text-transform: none; letter-spacing: 0; color: #9a8a7a; }
 .os-field input, .os-field select, .os-field textarea { padding: 10px 12px; border: 1px solid #ddd5c8; border-radius: 8px; font-size: 14px; color: #1a1611; background: #fff; transition: border-color 0.15s; font-family: inherit; }
 .os-field input:focus, .os-field select:focus, .os-field textarea:focus { outline: none; border-color: #c97b08; box-shadow: 0 0 0 3px rgba(201,123,8,0.08); }
+.os-field input:disabled, .os-field select:disabled, .os-field textarea:disabled { background: #faf7f3; color: #8a7a6a; cursor: not-allowed; }
 .os-field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
 .os-field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23998877' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; cursor: pointer; }
 .os-department-note { margin: 10px 0 0; padding: 8px 10px; background: #fffbf0; border: 1px solid #f0ddb0; border-radius: 6px; color: #7a6030; font-size: 12px; line-height: 1.5; }
+.os-department-fields + .os-department-fields { margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee5da; }
+.os-department-fields-title { margin: 0 0 10px; font-size: 12px; font-weight: 700; color: #c97b08; text-transform: uppercase; letter-spacing: .06em; }
+.department-picker { display: grid; gap: 8px; }
+.department-chosen { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.department-chosen li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border: 1px solid #eee5da; border-radius: 10px; background: #faf7f3; padding: 9px 11px;
+}
+.department-chosen strong { font-size: 13px; color: #1a1611; }
+.department-chosen li > button {
+  width: 30px; height: 30px; flex-shrink: 0; border: 1px solid #f0c8b8; border-radius: 8px;
+  background: #fff5f0; color: #8a3520; font-size: 15px; cursor: pointer;
+}
 .os-fabric-hint { display: flex; align-items: center; gap: 5px; margin-top: 2px; font-size: 11px; color: #7a6a5a; }
 
 .os-invoice-chip { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #f8f5f0; border: 1px solid #e8ddd0; border-radius: 10px; }
@@ -2196,6 +2210,7 @@ dd {
 .store-detail-toolbar { min-height: 42px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .store-detail-toolbar button { border: 0; background: transparent; font-size: 9px; }.store-detail-toolbar > div { display: flex; gap: 8px; }.store-detail-toolbar > div button { min-height: 34px; border: 1px solid #e8e0d5; border-radius: 6px; background: #fff; padding: 0 12px; }
 .store-order-detail { max-width: 1120px; margin: 0 auto; }
+.store-invoice-edit { max-width: 820px; margin: 0 auto; }
 .store-order-hero { position: relative; min-height: 170px; border: 1px solid #eee5da; border-radius: 8px; background: #fff; padding: 22px; }
 .store-order-hero > div > span { color: #777; font-size: 11px; font-weight: 700; letter-spacing: .12em; }.store-order-hero h2 { margin: 10px 0 5px; font-family: var(--font-display); font-size: 27px; }.store-order-hero p { margin: 0; color: #777; font-size: 13px; }
 .store-order-hero > .status { position: absolute; top: 20px; right: 20px; }
@@ -10749,7 +10764,7 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 .owner-panel-range span { color: #8a7a6a; font-size: 12px; }
 
 /* Correcting an invoice after it has gone out. */
-.edit-invoice { max-width: 640px; display: grid; gap: 14px; }
+.edit-invoice { display: grid; gap: 14px; border: 1px solid #eee5da; border-radius: 12px; background: #fff; padding: 22px; }
 .edit-invoice h3 { margin: 0; font-size: 17px; color: #1a1611; }
 .edit-invoice-note { margin: 0; font-size: 12px; color: #7a6030; background: #fffbf0; border: 1px solid #f0ddb0; border-radius: 8px; padding: 9px 11px; }
 .edit-invoice-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
@@ -10776,12 +10791,25 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 .edit-invoice-total dt { color: #5a4e42; }
 .edit-invoice-total dd { margin: 0; text-align: right; color: #1a1611; }
 .edit-invoice-error { margin: 0; border: 1px solid #f0c8b8; border-radius: 8px; background: #fff5f0; color: #8a3520; padding: 9px 11px; font-size: 12px; }
-.edit-invoice-actions { display: flex; gap: 10px; justify-content: flex-end; }
+/* Sticky so Save/Cancel stay reachable while scrolling a long invoice —
+   this used to sit at the very bottom of the form, which meant scrolling
+   all the way down (and back up to keep editing) just to save. */
+.edit-invoice-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+  position: sticky; bottom: 0; z-index: 5;
+  margin: 0 -22px -22px; padding: 14px 22px;
+  background: #fff; border-top: 1px solid #eee5da; border-radius: 0 0 12px 12px;
+}
 .edit-invoice-actions button {
   border: 1px solid #ddd5c8; border-radius: 8px; background: #fff; color: #5a4e42;
   font: inherit; font-size: 13px; font-weight: 600; padding: 10px 18px; cursor: pointer;
 }
 .edit-invoice-actions .primary { background: #1a1611; border-color: #1a1611; color: #fff; }
+
+@media (max-width: 780px) {
+  /* Clears the fixed mobile bottom nav, which otherwise sits on top of it. */
+  .edit-invoice-actions { bottom: calc(92px + env(safe-area-inset-bottom)); }
+}
 
 @media (max-width: 620px) {
   .edit-invoice-lines > div { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
@@ -10930,3 +10958,13 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   margin: 9px 0 0; padding-top: 9px; border-top: 1px dashed #ddd5c8;
   font-size: 11px; color: #8a7a6a;
 }
+
+.tailor-assign-due { display: grid; gap: 4px; margin-bottom: 10px; max-width: 260px; }
+.tailor-assign-due > span { font-size: 11px; font-weight: 700; color: #8a7a6a; }
+.tailor-assign-due input { border: 1px solid #ddd5c8; border-radius: 8px; background: #fff; font: inherit; font-size: 12px; padding: 6px 9px; color: #1a1611; }
+.tailor-assign-due small { font-size: 11px; color: #8a7a6a; }
+.tailor-assign-scores-title { flex-basis: 100%; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #8a7a6a; }
+
+.tailor-style-download { font-size: 11px; font-weight: 700; color: #a76900; text-align: center; text-decoration: none; padding: 4px 0; border: 1px solid #e8d9a0; border-radius: 6px; background: #fffbf0; }
+.tailor-style-download:hover { background: #fff3d1; }
+.tailor-style-download-large { padding: 8px 16px; font-size: 13px; }

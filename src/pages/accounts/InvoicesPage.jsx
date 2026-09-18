@@ -9,7 +9,7 @@ import ReviewInvoicePage from './ReviewInvoicePage';
 const KPI_COUNT = 4;
 const PAGE_SIZE = 8;
 
-export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoice, onInvoiceUpdated }) {
+export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoice, onInvoiceUpdated, currentRole, releasePercent }) {
   const invoices = sentInvoices;
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
@@ -102,6 +102,8 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
   if (reviewInvoice) {
     return <ReviewInvoicePage
       invoice={reviewInvoice}
+      roleId={currentRole?.id}
+      releasePercent={releasePercent}
       onBack={closeReview}
       onReview={async (invoice, status) => {
         // Only reflected locally once the server has actually accepted the
