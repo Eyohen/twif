@@ -2617,10 +2617,29 @@ function InvoiceDocumentPreview({ html, invoiceNumber }) {
 }
 
 function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
-  const stores = useStores();
+  // Only the stores an Owner or Admin has created and left active — read from
+  // the server each time this opens and whenever the tab regains focus, so a
+  // store added in another tab shows up here without a reload. There is no
+  // built-in list to fall back on.
+  const [stores, setStores] = useState([]);
+  const [storesLoaded, setStoresLoaded] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const load = () => api.get('/oms/stores')
+      .then((response) => {
+        if (!live) return;
+        const list = response.data?.data?.stores;
+        if (Array.isArray(list)) setStores(list.filter((store) => store.status === 'active'));
+        setStoresLoaded(true);
+      })
+      .catch(() => { if (live) setStoresLoaded(true); });
+    load();
+    window.addEventListener('focus', load);
+    return () => { live = false; window.removeEventListener('focus', load); };
+  }, []);
   const storeLabel = (key) => stores.find((store) => store.key === key)?.name || key;
   const [form, setForm] = useState({
-    store: 'ikeja',
+    store: '',
     invoiceNumber: invoiceSeed(),
     trackingToken: trackingTokenSeed(),
     invoiceDate: todayIso(),
@@ -2718,6 +2737,15 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     : Math.min(toNumber(form.amountReceived), balanceDue);
   const outstanding = Math.max(balanceDue - amountPaidNow, 0);
 
+  // Keeps the chosen store real: the first one is picked once the list
+  // arrives, and a store that has since been deleted or deactivated is dropped.
+  useEffect(() => {
+    if (!storesLoaded) return;
+    setForm((current) => (stores.some((store) => store.key === current.store)
+      ? current
+      : { ...current, store: stores[0]?.key || '' }));
+  }, [stores, storesLoaded]);
+
   const updateForm = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
@@ -2799,6 +2827,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   };
 
   const validateInvoice = () => {
+    if (!form.store) return 'Choose a sending store. An Admin or Owner needs to add one if the list is empty.';
     if (!form.customerName.trim()) return 'Select a customer.';
     if (!items.some((item) => item.description.trim())) return 'Add at least one invoice item.';
     if (evidenceRequired && !paymentEvidence) return 'Upload payment evidence for a partially or fully paid invoice.';
@@ -2942,7 +2971,8 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
               </label>
               <label className="os-field">
                 <span>Sending Store</span>
-                <select value={form.store} onChange={(event) => updateForm('store', event.target.value)}>
+                <select value={form.store} onChange={(event) => updateForm('store', event.target.value)} disabled={!stores.length}>
+                  {!stores.length ? <option value="">{storesLoaded ? 'No stores yet — an Admin or Owner must add one' : 'Loading stores…'}</option> : null}
                   {stores.map((store) => <option key={store.key} value={store.key}>{store.name}</option>)}
                 </select>
               </label>
