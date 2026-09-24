@@ -25,6 +25,7 @@ import { roles, inventoryCategories, navByRole, accountTypeByRole } from './conf
 import { Stat, Status, SectionHeader } from './components/oms/Common';
 import useLabelledTables from './hooks/useLabelledTables';
 import useCarouselIndicators from './hooks/useCarouselIndicators';
+import { usePaymentEvidence } from './hooks/usePaymentEvidence';
 import InvoiceActionConfirmModal from './components/oms/InvoiceActionConfirmModal';
 import JobCommentThread from './components/oms/JobCommentThread';
 import RecordPaymentForm from './components/oms/RecordPaymentForm';
@@ -143,6 +144,19 @@ const NAV_ICONS = {
   Memberships: Star,
   'Shopify Sync': RefreshCw,
 };
+
+// The single-sheet screen is where a role raises a new order sheet, so it
+// reads as "Create Order Sheet" in the nav for everyone who has it — the
+// identifier itself is still the plain 'Order Sheet' view/route, unchanged.
+const NAV_LABEL_OVERRIDES = {
+  store_manager: { 'Order Sheet': 'Create Order Sheet' },
+  owner: { 'Order Sheet': 'Create Order Sheet' },
+  admin: { 'Order Sheet': 'Create Order Sheet' },
+};
+
+function navLabel(role, item) {
+  return NAV_LABEL_OVERRIDES[role]?.[item] || item;
+}
 
 function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], onUpdateJob, onApproveInvoice, onNavigate, releasePercent }) {
   const isTailor = role === 'tailor';
@@ -1645,6 +1659,58 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   // partial payment may want to keep going, e.g. correcting a line item next.
   const [invoiceState, setInvoiceState] = useState(invoice);
 
+  // Once Accounts have approved this invoice, the store it was raised for and
+  // the evidence they approved against are part of the books — the same
+  // reason an approved invoice can no longer be deleted.
+  const isApproved = invoiceApprovalStatus(invoiceState) === 'Approved';
+
+  // `invoice.store` only ever carries the short display name ("Lekki"), so
+  // the select is seeded from the live store list and resolves that name
+  // back to the key the server actually needs — sending the name itself
+  // would silently fall back to the default store for anything not named
+  // exactly "Lekki" or "Ikeja".
+  const [storeOptions, setStoreOptions] = useState([]);
+  const [storeKey, setStoreKey] = useState('');
+  useEffect(() => {
+    api.get('/oms/stores')
+      .then((response) => {
+        const list = response.data?.data?.stores;
+        if (!Array.isArray(list)) return;
+        const active = list.filter((store) => store.status === 'active')
+          .map((store) => ({ key: store.key, label: store.name.replace(/\s+Store$/i, '').trim() || store.name }));
+        setStoreOptions(active);
+        const match = active.find((option) => option.label.toLowerCase() === String(invoice.store || '').toLowerCase());
+        setStoreKey(match?.key || active[0]?.key || '');
+      })
+      .catch(() => {});
+    // Only needs the invoice's store once, at open — not on every re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Existing evidence images, previewed the same way the read-only gallery
+  // does, so a store manager can see what they're about to delete.
+  const paymentEvidence = invoiceState.paymentEvidence || [];
+  const { urls: existingEvidenceUrls } = usePaymentEvidence(invoice.invoiceNumber, paymentEvidence.length);
+  const [removedEvidenceIndexes, setRemovedEvidenceIndexes] = useState([]);
+  const [newEvidence, setNewEvidence] = useState([]);
+  const toggleRemoveEvidence = (index) => setRemovedEvidenceIndexes((current) => (
+    current.includes(index) ? current.filter((value) => value !== index) : [...current, index]
+  ));
+  const selectNewEvidence = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setError('Payment evidence must be an image or screenshot.'); return; }
+    if (file.size > 5 * 1024 * 1024) { setError('Payment evidence must be smaller than 5 MB.'); return; }
+    setError('');
+    const reader = new FileReader();
+    reader.onload = () => setNewEvidence((current) => [
+      ...current, { name: file.name, type: file.type, size: file.size, dataUrl: reader.result, uploadedAt: new Date().toISOString(), note: '' },
+    ]);
+    reader.readAsDataURL(file);
+  };
+  const removeNewEvidence = (index) => setNewEvidence((current) => current.filter((_, position) => position !== index));
+
   const updateLine = (index, field, value) => setItems((current) => current.map((item, position) => (
     position === index ? { ...item, [field]: value } : item
   )));
@@ -1663,7 +1729,6 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   const alreadyPaid = toNumber(invoiceState.paid);
   const balanceDue = Math.max(0, newTotal - alreadyPaid);
   const belowPaid = newTotal < alreadyPaid;
-  const paymentEvidence = invoiceState.paymentEvidence || [];
 
   const handlePaymentRecorded = (updated) => {
     if (!updated) return;
@@ -1689,6 +1754,9 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
         customerPhone,
         customerEmail,
         dueDate,
+        ...(!isApproved && storeKey ? { store: storeKey } : {}),
+        ...(!isApproved && removedEvidenceIndexes.length ? { removePaymentEvidenceAt: removedEvidenceIndexes } : {}),
+        ...(!isApproved && newEvidence.length ? { addPaymentEvidence: newEvidence } : {}),
       });
       onSaved?.(response.data?.data?.invoice);
       onClose();
@@ -1726,6 +1794,17 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
           <label className="os-field">
             <span>Due date</span>
             <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+          </label>
+          <label className="os-field">
+            <span>Store</span>
+            <select
+              value={storeKey}
+              onChange={(event) => setStoreKey(event.target.value)}
+              disabled={isApproved}
+              title={isApproved ? 'Accounts have approved this invoice, so its store can no longer be changed' : undefined}
+            >
+              {storeOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+            </select>
           </label>
         </div>
 
@@ -1798,11 +1877,76 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
               onRecorded={handlePaymentRecorded}
             />
             <div style={{ marginTop: 14 }}>
-              <PaymentEvidenceGallery
-                invoiceNumber={invoice.invoiceNumber}
-                evidence={paymentEvidence}
-                emptyMessage="No payment proof attached yet."
-              />
+              {isApproved ? (
+                <PaymentEvidenceGallery
+                  invoiceNumber={invoice.invoiceNumber}
+                  evidence={paymentEvidence}
+                  emptyMessage="No payment proof attached yet."
+                />
+              ) : (
+                // Accounts hasn't signed off yet, so evidence attached at
+                // creation can still be corrected — an outdated screenshot
+                // removed, a better one added — right up until they do.
+                <div>
+                  {paymentEvidence.length ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                      {paymentEvidence.map((item, index) => {
+                        const pendingRemoval = removedEvidenceIndexes.includes(index);
+                        return (
+                          <div key={`${item.name}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: pendingRemoval ? 0.5 : 1 }}>
+                            {existingEvidenceUrls[index] ? (
+                              <img src={existingEvidenceUrls[index]} alt="Payment evidence preview" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, border: '1px solid #eee5da' }} />
+                            ) : (
+                              <div style={{ width: 48, height: 48, borderRadius: 6, background: '#faf7f3', border: '1px solid #eee5da' }} />
+                            )}
+                            <span style={{ fontSize: 12, color: '#5a4e42', flex: 1, textDecoration: pendingRemoval ? 'line-through' : 'none' }}>
+                              {item.name}{item.note ? ` — ${item.note}` : ''}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => toggleRemoveEvidence(index)}
+                              style={{ padding: '4px 10px', border: '1px solid', borderColor: pendingRemoval ? '#ddd5c8' : '#f3d5cc', borderRadius: 6, background: pendingRemoval ? '#fff' : '#fff5f0', color: pendingRemoval ? '#5a4e42' : '#8a3520', fontSize: 11, cursor: 'pointer' }}
+                            >
+                              {pendingRemoval ? 'Undo' : 'Delete'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 12, color: '#8a7a6a', marginTop: 0, marginBottom: 12 }}>No payment proof attached yet.</p>
+                  )}
+
+                  <div style={{ border: '1px dashed #ddd5c8', borderRadius: 8, padding: 14, background: '#faf7f3' }}>
+                    <div className="evidence-picker">
+                      <label>
+                        <Camera size={14} strokeWidth={1.8} />
+                        Take a photo
+                        <input type="file" accept="image/*" capture="environment" onChange={selectNewEvidence} />
+                      </label>
+                      <label>
+                        <Image size={14} strokeWidth={1.8} />
+                        Choose a file
+                        <input type="file" accept="image/*" onChange={selectNewEvidence} />
+                      </label>
+                    </div>
+                    {newEvidence.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                        {newEvidence.map((item, index) => (
+                          <div key={`${item.name}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <img src={item.dataUrl} alt="New payment evidence preview" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, border: '1px solid #eee5da' }} />
+                            <span style={{ fontSize: 12, color: '#5a4e42', flex: 1 }}>{item.name}</span>
+                            <button type="button" onClick={() => removeNewEvidence(index)} style={{ padding: '4px 10px', border: '1px solid #f3d5cc', borderRadius: 6, background: '#fff5f0', color: '#8a3520', fontSize: 11, cursor: 'pointer' }}>Remove</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <p style={{ fontSize: 12, color: '#8a7a6a', marginTop: newEvidence.length ? 8 : 6, marginBottom: 0 }}>
+                      New evidence is added when you save this invoice.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2616,6 +2760,10 @@ function InvoiceDocumentPreview({ html, invoiceNumber }) {
   );
 }
 
+// 'pos' reads as "Pos" under a plain capitalize-first-letter, not the
+// initialism store staff actually use.
+const paymentMethodLabel = (method) => (method === 'pos' ? 'POS' : `${method.charAt(0).toUpperCase()}${method.slice(1)}`);
+
 function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   // Only the stores an Owner or Admin has created and left active — read from
   // the server each time this opens and whenever the tab regains focus, so a
@@ -2706,12 +2854,15 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     setCustomerSearch('');
   };
   const [items, setItems] = useState([
-    { id: invoiceItemSeed(), description: '', rate: 0, quantity: 1, discountPercent: 0, amount: 0, note: '' },
+    { id: invoiceItemSeed(), description: '', rate: 0, quantity: 1, discountMode: 'percent', discountPercent: 0, discountAmount: 0, amount: 0, note: '' },
   ]);
   const [previewHtml, setPreviewHtml] = useState('');
   const [previewMode, setPreviewMode] = useState(false);
   const [previewTab, setPreviewTab] = useState('invoice');
   const [paymentEvidence, setPaymentEvidence] = useState(null);
+  // Kept separate from the evidence file itself so typing a clarification
+  // note doesn't get wiped if the store manager swaps the photo afterward.
+  const [evidenceNote, setEvidenceNote] = useState('');
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -2720,10 +2871,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   // so the printed figures could not be reconciled by hand.
   const billableItems = items.filter((item) => item.description.trim());
   const subtotal = billableItems.reduce((sum, item) => sum + (toNumber(item.rate) * toNumber(item.quantity)), 0);
-  const itemDiscountTotal = billableItems.reduce((sum, item) => {
-    const gross = toNumber(item.rate) * toNumber(item.quantity);
-    return sum + ((gross * toNumber(item.discountPercent)) / 100);
-  }, 0);
+  const itemDiscountTotal = billableItems.reduce((sum, item) => sum + toNumber(item.discountAmount), 0);
   // The elite discount follows the customer's membership rather than being
   // typed in — see the tier the customer is on, resolved below.
   const eliteDiscountAmount = Math.round(((subtotal - itemDiscountTotal) * elitePercent) / 100);
@@ -2750,20 +2898,45 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  // A store manager may know the discount either as a percent or as the
+  // naira figure they've agreed with a customer. Whichever one they type
+  // into is kept as-is; the other is back-computed so they never have to
+  // do that maths by hand, and the server still only ever sees discountPercent.
   const updateItem = (index, field, value) => {
     setItems((current) => current.map((item, itemIndex) => {
       if (itemIndex !== index) return item;
       const next = { ...item, [field]: value };
       const gross = toNumber(next.rate) * toNumber(next.quantity);
-      const discountAmount = (gross * toNumber(next.discountPercent)) / 100;
-      return { ...next, amount: Math.max(gross - discountAmount, 0) };
+
+      if (field === 'discountAmount') {
+        const amount = Math.min(Math.max(toNumber(value), 0), gross);
+        next.discountAmount = amount;
+        next.discountPercent = gross > 0 ? (amount / gross) * 100 : 0;
+      } else if (field === 'discountPercent') {
+        const percent = Math.min(Math.max(toNumber(value), 0), 100);
+        next.discountPercent = percent;
+        next.discountAmount = (gross * percent) / 100;
+      } else if (field !== 'discountMode') {
+        // rate/quantity/description/note changed — keep whichever unit the
+        // manager last typed in fixed and recompute the other from it.
+        if (next.discountMode === 'amount') {
+          const amount = Math.min(Math.max(toNumber(next.discountAmount), 0), gross);
+          next.discountAmount = amount;
+          next.discountPercent = gross > 0 ? (amount / gross) * 100 : 0;
+        } else {
+          const percent = toNumber(next.discountPercent);
+          next.discountAmount = (gross * percent) / 100;
+        }
+      }
+
+      return { ...next, amount: Math.max(gross - toNumber(next.discountAmount), 0) };
     }));
   };
 
   const addItem = () => {
     setItems((current) => [
       ...current,
-      { id: invoiceItemSeed(), description: '', rate: 0, quantity: 1, discountPercent: 0, amount: 0, note: '' },
+      { id: invoiceItemSeed(), description: '', rate: 0, quantity: 1, discountMode: 'percent', discountPercent: 0, discountAmount: 0, amount: 0, note: '' },
     ]);
   };
 
@@ -2812,6 +2985,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
       size: paymentEvidence.size,
       dataUrl: paymentEvidence.dataUrl,
       uploadedAt: paymentEvidence.uploadedAt,
+      note: evidenceNote.trim(),
     } : null,
   });
 
@@ -2882,7 +3056,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
         total: payload.balanceDue,
         emailStatus: 'Sent',
         paymentStatus: paymentStatusLabels[payload.paymentStatus],
-        paymentMethod: payload.paymentMethod.charAt(0).toUpperCase() + payload.paymentMethod.slice(1),
+        paymentMethod: paymentMethodLabel(payload.paymentMethod),
         orderStatus: paymentStatusLabels[payload.paymentStatus],
         item: firstItem.description || '',
         pieces: firstItem.quantity || 1,
@@ -3010,8 +3184,30 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
                       <input type="number" min="1" value={item.quantity} onChange={(event) => updateItem(index, 'quantity', event.target.value)} />
                     </label>
                     <label className="os-field">
-                      <span>Discount %</span>
-                      <input type="number" min="0" max="100" value={item.discountPercent} onChange={(event) => updateItem(index, 'discountPercent', event.target.value)} />
+                      <span>
+                        Discount
+                        {/* Some managers know the naira figure they've agreed
+                            with a customer rather than the percent it works
+                            out to — this toggle lets them type whichever one
+                            they have, and we do the conversion. */}
+                        <button
+                          type="button"
+                          onClick={() => updateItem(index, 'discountMode', item.discountMode === 'amount' ? 'percent' : 'amount')}
+                          style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: 0, textTransform: 'none', color: '#c97b08', background: 'none', border: '1px solid #e3d9c8', borderRadius: 5, padding: '1px 6px', cursor: 'pointer' }}
+                        >
+                          {item.discountMode === 'amount' ? 'Use %' : 'Use ₦'}
+                        </button>
+                      </span>
+                      {item.discountMode === 'amount' ? (
+                        <input type="number" min="0" value={item.discountAmount} onChange={(event) => updateItem(index, 'discountAmount', event.target.value)} />
+                      ) : (
+                        <input type="number" min="0" max="100" value={item.discountPercent} onChange={(event) => updateItem(index, 'discountPercent', event.target.value)} />
+                      )}
+                      <small style={{ fontSize: 11, fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#9a8a7a' }}>
+                        {item.discountMode === 'amount'
+                          ? `≈ ${toNumber(item.discountPercent).toFixed(1)}%`
+                          : `≈ ${money.format(toNumber(item.discountAmount))}`}
+                      </small>
                     </label>
                     <label className="os-field">
                       <span>Amount</span>
@@ -3074,6 +3270,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
                     <option value="" disabled>— Select method —</option>
                     <option value="transfer">Transfer</option>
                     <option value="card">Card</option>
+                    <option value="pos">POS</option>
                     <option value="check">Check</option>
                     <option value="cash">Cash</option>
                   </select>
@@ -3135,10 +3332,22 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
                         <img src={paymentEvidence.dataUrl} alt="Payment evidence preview" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, border: '1px solid #eee5da' }} />
                         <span style={{ fontSize: 12, color: '#5a4e42', flex: 1 }}>{paymentEvidence.name}</span>
-                        <button type="button" onClick={() => setPaymentEvidence(null)} style={{ padding: '4px 10px', border: '1px solid #f3d5cc', borderRadius: 6, background: '#fff5f0', color: '#8a3520', fontSize: 11, cursor: 'pointer' }}>Remove</button>
+                        <button type="button" onClick={() => { setPaymentEvidence(null); setEvidenceNote(''); }} style={{ padding: '4px 10px', border: '1px solid #f3d5cc', borderRadius: 6, background: '#fff5f0', color: '#8a3520', fontSize: 11, cursor: 'pointer' }}>Remove</button>
                       </div>
                     )}
                     {!paymentEvidence && <p style={{ fontSize: 12, color: '#8a7a6a', marginTop: 6, marginBottom: 0 }}>Upload a receipt screenshot or payment photo (max 5 MB)</p>}
+                    {/* A photo alone can't say "this only covers the deposit"
+                        or "the rest was paid in cash" — Accounts sees this
+                        alongside the image when reviewing the evidence. */}
+                    {paymentEvidence && (
+                      <textarea
+                        value={evidenceNote}
+                        onChange={(event) => setEvidenceNote(event.target.value)}
+                        placeholder="Optional note for Accounts about this evidence — e.g. covers a deposit only, split across two transfers…"
+                        rows={2}
+                        style={{ width: '100%', marginTop: 10, padding: '8px 10px', border: '1px solid #ddd5c8', borderRadius: 6, fontSize: 12, color: '#1a1611', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }}
+                      />
+                    )}
                   </div>
                 </label>
               ) : (
@@ -3200,7 +3409,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
               <dt>Payment</dt>
               <dd><Status>{paymentStatusLabels[form.paymentStatus] || '—'}</Status></dd>
               <dt>Method</dt>
-              <dd>{form.paymentMethod ? form.paymentMethod.charAt(0).toUpperCase() + form.paymentMethod.slice(1) : <span className="os-empty">—</span>}</dd>
+              <dd>{form.paymentMethod ? paymentMethodLabel(form.paymentMethod) : <span className="os-empty">—</span>}</dd>
               <dt>Subtotal</dt>
               <dd>{money.format(subtotal)}</dd>
               {itemDiscountTotal > 0 && <><dt>Item discounts</dt><dd style={{ color: '#2a7d4f' }}>-{money.format(itemDiscountTotal)}</dd></>}
@@ -3515,6 +3724,16 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
   // Distinct from `editingInvoiceNumber` (the URL param, cleared once used) so
   // the rest of the form can keep asking "am I editing?" after that happens.
   const [editingSheet, setEditingSheet] = useState(null);
+  // Guards against a slow network turning one click into two order sheets,
+  // and keeps the button disabled once a save lands — clicking it again with
+  // nothing changed would just resend the same content. Any further edit to
+  // the form (see the effect below) clears it and makes the button live again.
+  const [submitting, setSubmitting] = useState(false);
+  const [savedAndClean, setSavedAndClean] = useState(false);
+  useEffect(() => {
+    setSavedAndClean(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(sheetForm)]);
 
   // Measurements come from the customer's own profile rather than being typed
   // in fresh for every order, so the figures a tailor works to are the figures
@@ -3522,6 +3741,27 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
   useEffect(() => {
     api.get('/oms/customers')
       .then((response) => setCustomers(response.data?.data?.customers || []))
+      .catch(() => {});
+  }, []);
+
+  // The Store list here was two hardcoded options, so a store an Owner or
+  // Admin added on the Stores page was never selectable when raising an
+  // order sheet for it. Read from the server instead, same as invoices do —
+  // and strip " Store" the way the rest of this screen already names stores
+  // ("Lekki", not "Lekki Store"), so a new store fits the existing values
+  // rather than introducing a second naming convention for `store`.
+  const [storeOptions, setStoreOptions] = useState(['Lekki', 'Ikeja']);
+  useEffect(() => {
+    api.get('/oms/stores')
+      .then((response) => {
+        const list = response.data?.data?.stores;
+        if (!Array.isArray(list) || !list.length) return;
+        const names = list
+          .filter((store) => store.status === 'active')
+          .map((store) => store.name.replace(/\s+Store$/i, '').trim())
+          .filter(Boolean);
+        if (names.length) setStoreOptions(names);
+      })
       .catch(() => {});
   }, []);
 
@@ -3890,6 +4130,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
     // invoice-owned fields (customer, store, payment, tailor, status) are left
     // alone: the server merges this into what is already saved.
     if (editingSheet) {
+      setSubmitting(true);
       try {
         const response = await api.patch(`/oms/tracking/order-sheet/${editingSheet.trackingToken}`, {
           items: orderSheet.items,
@@ -3911,15 +4152,19 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
         onOrderSheetUpdated?.(editingSheet.invoiceNumber, response.data?.data?.orderSheet || orderSheet);
       } catch (error) {
         setMessage(error.response?.data?.message || 'The order sheet could not be updated.');
+        setSubmitting(false);
         return;
       }
       setMessage(`Order sheet saved with ${items.length} item${items.length === 1 ? '' : 's'}. The change is visible to Production immediately.`);
+      setSubmitting(false);
+      setSavedAndClean(true);
       return;
     }
 
     // The save used to be fired and forgotten: if the server refused it, the
     // failure was swallowed and the screen still said the sheet was saved, so
     // the Store Manager would leave believing production had it.
+    setSubmitting(true);
     try {
       await api.post('/oms/tracking/order-sheet', {
         trackingToken: orderSheet.trackingToken,
@@ -3928,12 +4173,15 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
       });
     } catch (error) {
       setMessage(error.response?.data?.message || 'The order sheet could not be saved. Nothing has been sent to Production.');
+      setSubmitting(false);
       return;
     }
 
     onCreateJob(orderSheet);
     setMessage(`Order sheet saved with ${items.length} item${items.length === 1 ? '' : 's'}. It will become visible to Production after Accounts approves the invoice.`);
     setSheetForm(emptySheetForm());
+    setSubmitting(false);
+    setSavedAndClean(true);
   };
 
   const linkedInvoice = sentInvoices.find((inv) => inv.invoiceNumber === sheetForm.invoiceNumber);
@@ -3999,6 +4247,20 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
                   <Status>{linkedInvoice.paymentStatus}</Status>
                 </div>
               )}
+              {/* selectInvoice can refuse right here — no customer profile,
+                  most often — and the only place this message used to show
+                  was all the way past every item card, by the submit button.
+                  Picking an invoice at the top of a long form produced a
+                  refusal nobody could see without scrolling past everything
+                  else, which read as the picker having silently stopped
+                  working. It has not: the invoice just needs a profile
+                  first, and that now says so right where the pick happened. */}
+              {message ? (
+                <div className={`os-message ${message.startsWith('Order sheet saved') ? 'os-msg-success' : 'os-msg-error'}`}>
+                  {message.startsWith('Order sheet saved') ? <CheckCircle size={15} /> : <AlertTriangle size={15} />}
+                  <span>{message}</span>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -4016,8 +4278,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
               <label className="os-field">
                 <span>Store</span>
                 <select value={sheetForm.store} onChange={(event) => updateSheetForm('store', event.target.value)} disabled={Boolean(editingSheet)}>
-                  <option>Lekki</option>
-                  <option>Ikeja</option>
+                  {storeOptions.map((name) => <option key={name}>{name}</option>)}
                 </select>
               </label>
             </div>
@@ -4316,9 +4577,13 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
             Add more items
           </button>
 
-          <button className="os-release-btn" type="submit">
+          <button className="os-release-btn" type="submit" disabled={submitting || savedAndClean}>
             <CheckCircle size={17} strokeWidth={2} />
-            {editingSheet ? 'Save Changes' : 'Release Order Sheet to Production'}
+            {submitting
+              ? 'Saving…'
+              : savedAndClean
+                ? 'Saved'
+                : editingSheet ? 'Save Changes' : 'Release Order Sheet to Production'}
           </button>
         </form>
 
@@ -4480,8 +4745,11 @@ const unscoredCount = (job) => (job.items || []).reduce((total, item) => (
   total + (item.tailors || []).filter((name) => item.scores?.[name]?.score === undefined).length
 ), 0);
 
-function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, currentRole, onOverrideHold }) {
+function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, currentRole, onOverrideHold, onApproveInvoice }) {
   const canOverrideHold = ['owner', 'admin'].includes(currentRole?.id);
+  const [pendingReject, setPendingReject] = useState(null);
+  const [heldPage, setHeldPage] = useState(1);
+  const HELD_PAGE_SIZE = 5;
   const [statusFilter, setStatusFilter] = useState('All');
   const [query, setQuery] = useState('');
   const [jobModal, setJobModal] = useState(null);
@@ -4547,7 +4815,11 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   const notify = (message, type = 'success') => {
     setToast({ message, type });
     window.clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = window.setTimeout(() => setToast(null), 3500);
+    // "Set In Progress" also allocates fabric as part of starting the job, so
+    // a missing fabric or quantity fails that click with only this toast to
+    // say why — a success toast can disappear quickly, but an error needs
+    // long enough to actually be read before it's gone.
+    toastTimerRef.current = window.setTimeout(() => setToast(null), type === 'error' ? 7000 : 3500);
   };
 
   const updateJobWithToast = (job, changes, message) => {
@@ -4721,6 +4993,24 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
         </div>
       ) : null}
 
+      {pendingReject && (
+        <InvoiceActionConfirmModal
+          invoice={pendingReject.job}
+          status="Rejected"
+          onCancel={() => setPendingReject(null)}
+          onConfirm={async () => {
+            const { job } = pendingReject;
+            setPendingReject(null);
+            try {
+              await onApproveInvoice?.(job.invoiceNumber, 'Rejected');
+              notify(`${job.invoiceNumber} was rejected and returned to the Store Manager`);
+            } catch (error) {
+              notify(error.response?.data?.message || 'Unable to reject this invoice', 'error');
+            }
+          }}
+        />
+      )}
+
       {/* Page Header */}
       <div className="os-page-header">
         <div className="os-page-title">
@@ -4764,7 +5054,12 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
               saw this card with a reason and no button, which is exactly what
               made it read as clutter rather than useful information. */}
           {canOverrideHold && blockedJobs.length ? (
-            <div className="os-card" style={{ borderColor: '#f0c8b8' }}>
+            // Active Jobs is the board's main job — an Owner or Admin opening
+            // Production to check on work in progress had to scroll past a
+            // list of held orders to reach it first. Flex `order` puts this
+            // card visually after Active Jobs without reshuffling the huge
+            // table markup that follows it.
+            <div className="os-card" style={{ borderColor: '#f0c8b8', order: 2 }}>
               <div className="os-card-head" style={{ background: '#fff7f3' }}>
                 <AlertCircle size={16} strokeWidth={1.5} style={{ color: '#8a3520' }} />
                 <div>
@@ -4773,7 +5068,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                 </div>
               </div>
               <div className="os-card-body" style={{ gap: 8 }}>
-                {blockedJobs.map(({ job, reason }) => (
+                {blockedJobs.slice((heldPage - 1) * HELD_PAGE_SIZE, heldPage * HELD_PAGE_SIZE).map(({ job, reason }) => (
                   <div
                     key={job.id || job.invoiceNumber}
                     style={{
@@ -4800,13 +5095,35 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                         }}
                       >Send to production anyway</button>
                     ) : null}
+                    {/* The alternative to overriding the hold — decline the
+                        invoice outright. It goes back to the Store Manager
+                        and drops off this board rather than sitting held. */}
+                    {canOverrideHold && !/measurements/i.test(reason) ? (
+                      <button
+                        type="button"
+                        onClick={() => setPendingReject({ job, reason })}
+                        style={{
+                          border: '1px solid #f0c8b8', borderRadius: 8, background: '#fff', color: '#8a3520',
+                          fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', whiteSpace: 'nowrap',
+                        }}
+                      >Reject</button>
+                    ) : null}
                   </div>
                 ))}
+              </div>
+              <div className="os-card-body" style={{ paddingTop: 0 }}>
+                <Pagination
+                  page={Math.min(heldPage, Math.max(1, Math.ceil(blockedJobs.length / HELD_PAGE_SIZE)))}
+                  pageSize={HELD_PAGE_SIZE}
+                  total={blockedJobs.length}
+                  onPage={setHeldPage}
+                  noun="held orders"
+                />
               </div>
             </div>
           ) : null}
 
-          <div className="os-card">
+          <div className="os-card" style={{ order: 1 }}>
             <div className="os-card-head">
               <ClipboardList size={16} strokeWidth={1.5} style={{ color: '#c97b08' }} />
               <div><strong>Active Jobs</strong><p>All production orders currently in the system</p></div>
@@ -5094,6 +5411,16 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                 </div>
               ) : null}
 
+              {/* "Anything else the tailor should know about the fit" — the
+                  store manager's free-text note from raising the order
+                  sheet. Distinct from the structured measurements below. */}
+              {jobModal.fitNote ? (
+                <div style={{ padding: '12px 14px', background: '#f0f4ff', border: '1px solid #c7d2f0', borderRadius: 8, fontSize: 13, color: '#5a4e42' }}>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Fit Notes</div>
+                  {jobModal.fitNote}
+                </div>
+              ) : null}
+
               {/* Full production detail per garment — design notes, the
                   fabric already chosen when the sheet was raised (including
                   whether the customer is supplying it themselves), and
@@ -5107,7 +5434,8 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                   ? item.fabrics
                   : (item.fabric ? [{ name: item.fabric, unit: item.fabricUnit, clientSupplied: false }] : []);
                 const itemImages = Array.isArray(item.styleImages) ? item.styleImages : [];
-                if (!item.designNotes && !itemFabrics.length && !itemImages.length) return null;
+                const itemDepartments = Array.isArray(item.departments) ? item.departments : [];
+                if (!item.designNotes && !itemFabrics.length && !itemImages.length && !itemDepartments.length) return null;
                 return (
                   <div key={`${item.item}-${index}`} style={{ border: '1px solid #eee5da', borderRadius: 8, padding: '12px 14px', display: 'grid', gap: 10 }}>
                     {list.length > 1 ? (
@@ -5134,6 +5462,42 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                         <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>Not specified — left to Production</p>
                       )}
                     </div>
+
+                    {/* Which department(s) this garment needs — embroidery,
+                        native, etc. — and the construction/style details
+                        entered for each, chosen when the order sheet was
+                        raised. Production, the tailor and Owner/Admin all
+                        need this to route and cut the work correctly. */}
+                    <div>
+                      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Department{itemDepartments.length > 1 ? 's' : ''}</div>
+                      {itemDepartments.length ? (
+                        <div style={{ display: 'grid', gap: 10 }}>
+                          {itemDepartments.map((departmentKey) => {
+                            const config = DEPARTMENT_FIELDS[departmentKey];
+                            const values = item.departmentFields?.[departmentKey] || {};
+                            return (
+                              <div key={departmentKey}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#c97b08', marginBottom: 4 }}>{config?.label || departmentKey}</div>
+                                {config?.fields?.length ? (
+                                  <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                                    {config.fields.map((field) => (
+                                      <li key={field.key} style={{ marginBottom: 2 }}>
+                                        <strong style={{ fontWeight: 600 }}>{field.label}:</strong> {values[field.key] || 'Not filled in'}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No fields configured for this department.</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No department assigned to this garment yet.</p>
+                      )}
+                    </div>
+
                     <div>
                       <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Reference Images ({itemImages.length})</div>
                       {itemImages.length ? (
@@ -7472,8 +7836,15 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Payments') return role === 'accounts' || role === 'owner'
     ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} onInvoiceUpdated={viewProps.onInvoiceUpdated} />
     : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} releasePercent={viewProps.releasePercent} />;
-  if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} blockedJobs={viewProps.blockedProductionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} onOverrideHold={viewProps.onOverrideHold} />;
-  if (activeView === 'Inventory') return role === 'accounts' ? <AccountsInventoryReconciliationPage /> : role === 'inventory_manager' ? <InventoryListPage currentRole={viewProps.currentRole} /> : role === 'owner' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode /> : <InventoryView />;
+  if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} blockedJobs={viewProps.blockedProductionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} onOverrideHold={viewProps.onOverrideHold} onApproveInvoice={viewProps.onApproveInvoice} />;
+  // Adding stock is limited to Inventory, Owner and Admin — Production Manager
+  // can see levels for planning but not create or edit records, and an Owner
+  // both adds directly and reviews the edit requests other roles submit.
+  if (activeView === 'Inventory') return role === 'accounts' ? <AccountsInventoryReconciliationPage />
+    : role === 'inventory_manager' || role === 'admin' ? <InventoryListPage currentRole={viewProps.currentRole} />
+    : role === 'owner' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode />
+    : role === 'production_manager' ? <InventoryListPage currentRole={viewProps.currentRole} readOnly />
+    : <InventoryView />;
   if (activeView === 'Reconciliations') return <InventoryView />;
   if (activeView === 'Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
   if (activeView === 'Tailors & Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
@@ -7801,12 +8172,19 @@ function App() {
     }
   };
 
+  // A rejected invoice goes back to the Store Manager and drops out of the
+  // production pipeline entirely — it belongs in neither list below, rather
+  // than lingering as "held" with a stale Awaiting Accounts approval reason.
+  const productionEligibleJobs = productionJobs.filter((job) => (
+    invoiceApprovalStatus(sentInvoices.find((invoice) => invoice.invoiceNumber === job.invoiceNumber)) !== 'Rejected'
+  ));
+
   // Only jobs that may actually be worked reach the board and the tailors.
-  const approvedProductionJobs = productionJobs.filter((job) => canShowJobInProduction(job, sentInvoices, releasePercent));
+  const approvedProductionJobs = productionEligibleJobs.filter((job) => canShowJobInProduction(job, sentInvoices, releasePercent));
 
   // The rest are held, each with the reason, so Production can see what is
   // stuck and chase it rather than wondering where an order went.
-  const blockedProductionJobs = productionJobs
+  const blockedProductionJobs = productionEligibleJobs
     .map((job) => ({ job, reason: productionBlockReason(job, sentInvoices, releasePercent) }))
     .filter((entry) => entry.reason);
 
@@ -7910,7 +8288,7 @@ function App() {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 {IconComp && <IconComp size={16} />}
-                {item}
+                {navLabel(role, item)}
               </NavLink>
             );
           })}
@@ -7968,15 +8346,16 @@ function App() {
               {currentRole?.name?.split(' (')[0] || 'twif OMS'}
               {accountTypeByRole[role]?.short ? <em> · {accountTypeByRole[role].short}</em> : null}
             </span>
-            <h1>{activeView === 'Portal Preview' ? 'Customer Tracking Preview' : role === 'accounts' && activeView === 'Overview' ? 'Account Dashboard' : role === 'accounts' && activeView === 'Inventory' ? 'Inventory Reconciliation' : role === 'inventory_manager' && activeView === 'Overview' ? 'Inventory Dashboard' : (role === 'inventory_manager' || role === 'owner') && activeView === 'Inventory' ? 'Inventory List' : activeView}</h1>
+            <h1>{activeView === 'Portal Preview' ? 'Customer Tracking Preview' : role === 'accounts' && activeView === 'Overview' ? 'Account Dashboard' : role === 'accounts' && activeView === 'Inventory' ? 'Inventory Reconciliation' : role === 'inventory_manager' && activeView === 'Overview' ? 'Inventory Dashboard' : ['inventory_manager', 'owner', 'admin', 'production_manager'].includes(role) && activeView === 'Inventory' ? 'Inventory List' : activeView}</h1>
             {role === 'production_manager' && activeView === 'Production' ? <p className="topbar-subtitle">Manage active jobs, assign tailors, confirm fabric and track production progress.</p> : null}
             {role === 'accounts' && activeView === 'Overview' ? <p className="topbar-subtitle">Review, approve and reconcile with confidence.</p> : null}
             {role === 'accounts' && activeView === 'Invoices' ? <p className="topbar-subtitle">Review, approve and manage customer invoices before they enter production.</p> : null}
             {role === 'accounts' && activeView === 'Payments' ? <p className="topbar-subtitle">Track and manage all payments received across stores.</p> : null}
             {role === 'accounts' && activeView === 'Inventory' ? <p className="topbar-subtitle">Reconcile fabric allocations, deductions and adjustments across all stores.</p> : null}
             {role === 'inventory_manager' && activeView === 'Overview' ? <p className="topbar-subtitle">Monitor stock levels, allocate fabrics and receive deliveries.</p> : null}
-            {role === 'inventory_manager' && activeView === 'Inventory' ? <p className="topbar-subtitle">View and manage all fabrics in stock.</p> : null}
-            {role === 'owner' && activeView === 'Inventory' ? <p className="topbar-subtitle">View inventory and review requested stock changes.</p> : null}
+            {(role === 'inventory_manager' || role === 'admin') && activeView === 'Inventory' ? <p className="topbar-subtitle">View and manage all fabrics in stock.</p> : null}
+            {role === 'owner' && activeView === 'Inventory' ? <p className="topbar-subtitle">Add stock directly, or review the edit requests other roles submit.</p> : null}
+            {role === 'production_manager' && activeView === 'Inventory' ? <p className="topbar-subtitle">View stock levels for planning. Adding or editing items is limited to Inventory, Owner and Admin.</p> : null}
             {role === 'store_manager' && activeView === 'Orders' ? <p className="topbar-subtitle">Manage and track all invoices and order sheets.</p> : null}
             {role === 'store_manager' && activeView === 'Invoices' ? <p className="topbar-subtitle">View sent invoices, monitor approvals and create new invoices.</p> : null}
             {role === 'owner' && activeView === 'Overview' ? <p className="topbar-subtitle">Real-time summary of your business performance and activity.</p> : null}
@@ -8030,10 +8409,11 @@ function App() {
       >
         {visibleNav.slice(0, visibleNav.length > 5 ? 4 : 5).map((item) => {
           const IconComp = NAV_ICONS[item];
+          const label = navLabel(role, item);
           return (
             <NavLink key={item} to={`/${roleSlug(role)}/${viewSlug(item)}`} onClick={() => setMobileMenuOpen(false)}>
               {IconComp ? <IconComp size={21} strokeWidth={1.7} /> : <LayoutDashboard size={21} strokeWidth={1.7} />}
-              <span>{item.length > 12 ? item.split(' ')[0] : item}</span>
+              <span>{label.length > 12 ? label.split(' ')[0] : label}</span>
             </NavLink>
           );
         })}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CheckSquare, Clock, User, Package, ArrowRight, Play, CheckCircle, ChevronDown, ChevronUp, Calendar, Ruler, Image, Scissors, Filter } from 'lucide-react';
 import { worksOnJob } from '../../utils/oms';
+import { DEPARTMENT_FIELDS } from '../../config/departmentFields';
 import JobCommentThread from '../../components/oms/JobCommentThread';
 import Pagination from '../../components/oms/Pagination';
 
@@ -276,6 +277,17 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                     </div>
                   ) : null}
 
+                  {/* "Anything else the tailor should know about the fit" —
+                      the store manager's free-text note from raising the
+                      order sheet, distinct from the structured measurements
+                      shown per item below. */}
+                  {order.fitNote ? (
+                    <div style={{ marginBottom: 16 }}>
+                      <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fit Notes</h4>
+                      <p style={{ margin: 0, fontSize: 13, color: '#5a4e42' }}>{order.fitNote}</p>
+                    </div>
+                  ) : null}
+
                   {detailItems.map((item, itemIndex) => {
                     const itemImages = Array.isArray(item.styleImages) ? item.styleImages : [];
                     return (
@@ -364,6 +376,39 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                             )}
                           </section>
                         </div>
+
+                        {/* Which department(s) this garment needs — embroidery,
+                            native, etc. — and the construction/style details
+                            entered for each when the order sheet was raised. */}
+                        {Array.isArray(item.departments) && item.departments.length ? (
+                          <div style={{ marginTop: 12 }}>
+                            <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              Department{item.departments.length > 1 ? 's' : ''}
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                              {item.departments.map((departmentKey) => {
+                                const config = DEPARTMENT_FIELDS[departmentKey];
+                                const values = item.departmentFields?.[departmentKey] || {};
+                                return (
+                                  <section key={departmentKey}>
+                                    <h5 style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: '#a76900' }}>{config?.label || departmentKey}</h5>
+                                    {config?.fields?.length ? (
+                                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                                        {config.fields.map((field) => (
+                                          <li key={field.key} style={{ marginBottom: 4 }}>
+                                            <strong style={{ fontWeight: 600 }}>{field.label}:</strong> {values[field.key] || 'Not filled in'}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No fields configured for this department.</p>
+                                    )}
+                                  </section>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}

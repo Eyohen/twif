@@ -476,6 +476,12 @@ export const productionJobFromInvoice = (invoice, customers = []) => {
       measurements,
       designNotes: sheet.designNotes || '',
       styleImages: Array.isArray(sheet.styleImages) ? sheet.styleImages : [],
+      // Older/single-item order sheets keep departments and their fields at
+      // the top level rather than per item — carried across here too, or
+      // Production, the tailor and Owner/Admin all lost which department a
+      // garment needed the moment it reached the job board.
+      departments: Array.isArray(sheet.departments) ? sheet.departments : [],
+      departmentFields: sheet.departmentFields && typeof sheet.departmentFields === 'object' ? sheet.departmentFields : {},
     }],
     pieces: toNumber(sheet.pieces || invoice.pieces) || 1,
     delivery: sheet.delivery || dateInputValue(invoice.deliveryDate),
@@ -505,6 +511,13 @@ export const productionJobFromInvoice = (invoice, customers = []) => {
       && Object.keys(sheet.measurementDetails).length
       ? sheet.measurementDetails
       : null,
+    // "Anything else the tailor should know about the fit" — a free-text note
+    // distinct from the structured figures above. `measurements` above falls
+    // back to a formatted copy of those same figures whenever this is empty,
+    // which is right for the fallback but wrong for showing the note itself:
+    // that fallback text isn't a note the store manager wrote, so it belongs
+    // on its own field rather than being read off `measurements`.
+    fitNote: String(sheet.measurements ?? '').trim(),
     designNotes: sheet.designNotes || '',
     note: sheet.note || sheet.designNotes || invoice.itemNote || '',
     productionNote: sheet.productionNote || '',
@@ -524,6 +537,8 @@ export const productionJobFromInvoice = (invoice, customers = []) => {
     productionOverride: sheet.productionOverride || null,
     assignedAt: sheet.assignedAt || 'Pending assignment',
     updatedAt: sheet.updatedAt,
+    departments: Array.isArray(sheet.departments) ? sheet.departments : [],
+    departmentFields: sheet.departmentFields && typeof sheet.departmentFields === 'object' ? sheet.departmentFields : {},
   };
 };
 

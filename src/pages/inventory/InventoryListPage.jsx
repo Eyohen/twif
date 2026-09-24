@@ -18,7 +18,7 @@ const selectStyle = {
   backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', cursor: 'pointer',
 };
 
-export default function InventoryListPage({ currentRole, ownerMode = false }) {
+export default function InventoryListPage({ currentRole, ownerMode = false, readOnly = false }) {
   const [items, setItems] = useState([]);
   const [types, setTypes] = useState([]);
   const [units, setUnits] = useState(['yards', 'units']);
@@ -179,7 +179,8 @@ export default function InventoryListPage({ currentRole, ownerMode = false }) {
         itemId={selectedItem.id}
         fallbackItem={selectedItem}
         onBack={() => setSelectedItem(null)}
-        onEdit={ownerMode ? () => setShowApprovals(true) : () => setEditingItem(selectedItem)}
+        onEdit={readOnly ? undefined : ownerMode ? () => setShowApprovals(true) : () => setEditingItem(selectedItem)}
+        readOnly={readOnly}
         approvalRequest={approvalRequest}
       />
     );
@@ -212,15 +213,16 @@ export default function InventoryListPage({ currentRole, ownerMode = false }) {
           >
             <Download size={14} /> Export
           </button>
-          {ownerMode ? (
+          {ownerMode && (
             <button
               type="button"
               onClick={() => setShowApprovals(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', background: '#1a1611', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', background: '#fff', border: '1px solid #ddd5c8', borderRadius: 8, color: '#5a4e42', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
             >
               <Edit2 size={14} /> Review Edit Requests
             </button>
-          ) : (
+          )}
+          {!readOnly && (
             <button
               type="button"
               onClick={() => { setForm({ ...EMPTY_FORM, type: types[0] || '' }); setFormError(''); setReceiveOpen(true); }}
@@ -372,7 +374,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false }) {
                       >
                         <Eye size={12} /> View
                       </button>
-                      {!ownerMode && (
+                      {!ownerMode && !readOnly && (
                         <button
                           type="button"
                           onClick={(event) => { event.stopPropagation(); setEditingItem(item); }}

@@ -29,16 +29,22 @@ export default function PaymentEvidenceGallery({ invoiceNumber, evidence, emptyM
       {urls.length ? (
         <div className="review-evidence-grid">
           {urls.map((url, index) => (
-            <button
-              type="button"
-              key={url}
-              className="review-evidence-frame"
-              onClick={() => setOpenIndex(index)}
-              aria-label={`Open payment evidence ${index + 1} full size`}
-            >
-              <img src={url} alt={`Payment evidence ${index + 1} for ${invoiceNumber}`} />
-              <span className="review-evidence-zoom"><Maximize2 size={13} /></span>
-            </button>
+            <div key={url}>
+              <button
+                type="button"
+                className="review-evidence-frame"
+                onClick={() => setOpenIndex(index)}
+                aria-label={`Open payment evidence ${index + 1} full size`}
+              >
+                <img src={url} alt={`Payment evidence ${index + 1} for ${invoiceNumber}`} />
+                <span className="review-evidence-zoom"><Maximize2 size={13} /></span>
+              </button>
+              {/* The store manager's own clarification for this photo — a
+                  deposit-only transfer, a split payment, and so on. */}
+              {list[index]?.note ? (
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#5a4e42', lineHeight: 1.5 }}>{list[index].note}</p>
+              ) : null}
+            </div>
           ))}
         </div>
       ) : (

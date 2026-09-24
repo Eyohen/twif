@@ -5,7 +5,7 @@ import { money, formatMoment } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import { stockStatus, itemImage, colourSwatch } from './item';
 
-export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, approvalRequest }) {
+export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, approvalRequest, readOnly = false }) {
   // The list row is shown immediately so the page never opens blank, then the
   // full record and its movements replace it.
   const [item, setItem] = useState(fallbackItem || null);
@@ -48,9 +48,11 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
           <h2>{item.name}</h2>
           <span>Everything recorded about this item, and where its stock has gone.</span>
         </div>
-        <button type="button" onClick={onEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-          <Edit3 size={13} />Edit Item
-        </button>
+        {!readOnly && (
+          <button type="button" onClick={onEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+            <Edit3 size={13} />Edit Item
+          </button>
+        )}
       </header>
 
       {loadError && (
