@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, Download, CheckCircle, Package, CreditCard, Ruler, Clock, User, AlertCircle, Scissors, Layers, Image as ImageIcon, ClipboardList } from 'lucide-react';
-import { api } from '../../lib/api';
-import { money, formatMoment, amountReceived, invoicePayable, invoiceApprovalStatus, invoiceDocumentPayload, downloadInvoicePdf, daysUntilDue, dueDateLabel, toNumber } from '../../utils/oms';
+import { useEffect } from 'react';
+import { ArrowLeft, CheckCircle, Package, CreditCard, Ruler, Clock, User, Scissors, Layers, Image as ImageIcon, ClipboardList } from 'lucide-react';
+import { money, formatMoment, amountReceived, invoicePayable, invoiceApprovalStatus, daysUntilDue, dueDateLabel, toNumber } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import { DEPARTMENT_FIELDS } from '../../config/departmentFields';
 
@@ -17,7 +16,6 @@ const outlineButton = {
 // garment's own fabric, construction choices and style references, not just
 // its name and a price.
 export default function OrderSheetDetailsPage({ order, onBack, onEdit, backLabel = 'Back to Order Sheets' }) {
-  const [notice, setNotice] = useState('');
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   const sheet = order.orderSheet || order.job || {};
@@ -69,16 +67,6 @@ export default function OrderSheetDetailsPage({ order, onBack, onEdit, backLabel
 
   const mayEdit = sheet.status === 'Order Sheet Confirmed';
 
-  const saveInvoicePdf = async () => {
-    setNotice('');
-    try {
-      const response = await api.post('/oms/invoices/html-preview', invoiceDocumentPayload(order), { responseType: 'text' });
-      await downloadInvoicePdf(response.data, order.invoiceNumber);
-    } catch (error) {
-      setNotice(error.response?.data?.message || 'Unable to produce this invoice right now.');
-    }
-  };
-
   const facts = [
     { key: 'Invoice No.', value: order.invoiceNumber },
     { key: 'Delivery Date', value: deliveryDate ? formatMoment(deliveryDate) : 'Not set', sub: dueDateLabel(deliveryDate), subColor: days !== null && days < 0 ? '#8a3520' : '#8a7a6a' },
@@ -114,17 +102,8 @@ export default function OrderSheetDetailsPage({ order, onBack, onEdit, backLabel
               Edit Order Sheet
             </button>
           ) : null}
-          <button type="button" onClick={saveInvoicePdf} style={outlineButton}>
-            <Download size={13} strokeWidth={1.8} /> Download Invoice
-          </button>
         </div>
       </div>
-
-      {notice && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, color: '#8a3520', fontSize: 13 }}>
-          <AlertCircle size={15} /> {notice}
-        </div>
-      )}
 
       {/* Header card */}
       <div className="os-card">

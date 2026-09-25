@@ -323,15 +323,23 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                                   A tailor cannot cut to "Measurements on file". One set
                                   for the whole order, not per item — shown once. */}
                               {order.measurementDetails || order.measurements ? (
-                                <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
-                                  {order.measurementDetails
-                                    ? Object.entries(order.measurementDetails).map(([key, value]) => (
-                                      <li key={key} style={{ marginBottom: 4 }}><strong style={{ fontWeight: 600 }}>{key}:</strong> {value}</li>
-                                    ))
-                                    : String(order.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line, index) => (
-                                      <li key={`${line}-${index}`} style={{ marginBottom: 4 }}>{line}</li>
-                                    ))}
-                                </ul>
+                                // Same label/value grid Production reads from — a
+                                // bulleted list read differently on the same figures
+                                // depending on which screen a tailor happened to be on.
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, border: '1px solid #eee5da', borderRadius: 8, overflow: 'hidden' }}>
+                                  {(order.measurementDetails
+                                    ? Object.entries(order.measurementDetails)
+                                    : String(order.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line) => {
+                                      const [label, ...rest] = line.split(':');
+                                      return rest.length ? [label.trim(), rest.join(':').trim()] : [line, ''];
+                                    })
+                                  ).map(([label, value], index) => (
+                                    <div key={`${label}-${index}`} style={{ padding: '8px 12px', borderBottom: '1px solid #f3ede5', background: '#faf7f3' }}>
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 2 }}>{value || '—'}</div>
+                                    </div>
+                                  ))}
+                                </div>
                               ) : (
                                 <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>
                               )}
@@ -403,6 +411,11 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                                     ) : (
                                       <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No fields configured for this department.</p>
                                     )}
+                                    {item.departmentNotes?.[departmentKey] ? (
+                                      <p style={{ margin: '6px 0 0', fontSize: 13, color: '#5a4e42', background: '#fffbf0', border: '1px solid #e8d9a0', borderRadius: 6, padding: '6px 8px' }}>
+                                        {item.departmentNotes[departmentKey]}
+                                      </p>
+                                    ) : null}
                                   </section>
                                 );
                               })}

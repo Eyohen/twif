@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors, Ruler, Award, Camera, Image, Layers, ListChecks } from 'lucide-react';
+import { LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors, Ruler, Award, Camera, Image, Layers, ListChecks, Save } from 'lucide-react';
 import { api, getStoredAccessToken, setStoredAccessToken } from './lib/api';
 import LoginPage from './pages/auth/LoginPage';
 import MyTasksPage from './pages/tailor/MyTasksPage';
@@ -1995,6 +1995,13 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
     ...(mayApprove && onApproveInvoice && invoiceApprovalStatus(invoice) !== 'Approved' && canApproveInvoice(invoice, releasePercent)
       ? [['Approve', <CheckCircle size={12} strokeWidth={2} />, () => approveInvoice(invoice)]]
       : []),
+    // Approving is a decision Accounts, Owner or Admin can make, but taking
+    // it back is heavier — the same reason only an Owner or Admin can
+    // approve a partial payment under the release threshold in the first
+    // place. The server refuses this for anyone else regardless.
+    ...(mayApprove && onApproveInvoice && invoiceApprovalStatus(invoice) === 'Approved'
+      ? [['Undo Approval', <RefreshCw size={12} strokeWidth={2} />, () => undoApproval(invoice)]]
+      : []),
     ...(mayDelete(invoice) ? [['Delete Invoice', <Trash2 size={12} strokeWidth={2} />, () => removeInvoice(invoice)]] : []),
   ];
 
@@ -2015,6 +2022,16 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
       setRowNotice(`${invoice.invoiceNumber} was approved.`);
     } catch (error) {
       setRowNotice(error.response?.data?.message || 'That invoice could not be approved.');
+    }
+  };
+
+  const undoApproval = async (invoice) => {
+    if (!window.confirm(`Withdraw the approval on ${invoice.invoiceNumber}? It goes back to Pending Accounts, and any order already in production is held again until it's approved a second time.`)) return;
+    try {
+      await onApproveInvoice(invoice.invoiceNumber, 'Pending Accounts');
+      setRowNotice(`${invoice.invoiceNumber}'s approval was withdrawn.`);
+    } catch (error) {
+      setRowNotice(error.response?.data?.message || 'That approval could not be withdrawn.');
     }
   };
 
@@ -2909,9 +2926,15 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
       const gross = toNumber(next.rate) * toNumber(next.quantity);
 
       if (field === 'discountAmount') {
-        const amount = Math.min(Math.max(toNumber(value), 0), gross);
+        // Clamping this to the current gross broke typing whenever Rate
+        // hadn't been filled in yet (gross 0) or was still smaller than the
+        // figure being typed — every keystroke snapped straight back to 0,
+        // which read as the field not accepting input at all. The line
+        // total below already floors at 0, so nothing is lost by letting the
+        // raw figure stand while the rest of the row is still being filled in.
+        const amount = Math.max(toNumber(value), 0);
         next.discountAmount = amount;
-        next.discountPercent = gross > 0 ? (amount / gross) * 100 : 0;
+        next.discountPercent = gross > 0 ? Math.min((amount / gross) * 100, 100) : 0;
       } else if (field === 'discountPercent') {
         const percent = Math.min(Math.max(toNumber(value), 0), 100);
         next.discountPercent = percent;
@@ -2920,9 +2943,9 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
         // rate/quantity/description/note changed — keep whichever unit the
         // manager last typed in fixed and recompute the other from it.
         if (next.discountMode === 'amount') {
-          const amount = Math.min(Math.max(toNumber(next.discountAmount), 0), gross);
+          const amount = Math.max(toNumber(next.discountAmount), 0);
           next.discountAmount = amount;
-          next.discountPercent = gross > 0 ? (amount / gross) * 100 : 0;
+          next.discountPercent = gross > 0 ? Math.min((amount / gross) * 100, 100) : 0;
         } else {
           const percent = toNumber(next.discountPercent);
           next.discountAmount = (gross * percent) / 100;
@@ -3032,7 +3055,11 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     }
   };
 
-  const sendInvoice = async () => {
+  // "Save" raises the same invoice record — visible to Accounts, Production,
+  // the Invoices list, everywhere — without attempting to email it. A
+  // customer with no email yet, or a mail provider that's down, used to mean
+  // the invoice couldn't be created at all rather than just not delivered.
+  const sendInvoice = async (skipEmail = false) => {
     setSending(true);
     setMessage('');
     const validationMessage = validateInvoice();
@@ -3040,7 +3067,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
 
     try {
       const payload = invoicePayload();
-      const response = await api.post('/oms/invoices/send-email', payload);
+      const response = await api.post('/oms/invoices/send-email', { ...payload, skipEmail });
       const serverInvoice = response.data?.data?.sentInvoice;
       const firstItem = payload.items[0] || {};
       onInvoiceSent(serverInvoice || {
@@ -3065,11 +3092,30 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
         trackingToken: payload.trackingToken,
         trackingUrl: payload.trackingUrl,
       });
-      setMessage(response.data.message || 'Invoice email sent');
+      setMessage(response.data.message || (skipEmail ? 'Invoice saved' : 'Invoice email sent'));
     } catch (error) {
-      setMessage(error.response?.data?.message || error.response?.data?.error || error.message || 'Unable to send invoice email');
+      setMessage(error.response?.data?.message || error.response?.data?.error || error.message || (skipEmail ? 'Unable to save invoice' : 'Unable to send invoice email'));
     } finally {
       setSending(false);
+    }
+  };
+
+  // A quick PDF of what's been filled in so far, without saving or sending
+  // anything — the same document `html-preview` already builds for the
+  // Preview screen, just reachable without leaving the form first.
+  const [downloading, setDownloading] = useState(false);
+  const downloadInvoiceDraft = async () => {
+    setMessage('');
+    const validationMessage = validateInvoice();
+    if (validationMessage) { setMessage(validationMessage); return; }
+    setDownloading(true);
+    try {
+      const response = await api.post('/oms/invoices/html-preview', invoicePayload(), { responseType: 'text' });
+      await saveInvoicePdf(response.data, form.invoiceNumber);
+    } catch (error) {
+      setMessage(error.response?.data?.message || error.message || 'Unable to download invoice');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -3079,7 +3125,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
       <section className="invoice-preview-title"><div><h2>{previewTab === 'invoice' ? 'Invoice Preview' : 'Email Preview'}</h2><p>This is how your {previewTab === 'invoice' ? 'invoice' : 'email'} will appear to the customer.</p></div><nav><button className={previewTab === 'invoice' ? 'active' : ''} onClick={() => setPreviewTab('invoice')}>Invoice Preview</button><button className={previewTab === 'email' ? 'active' : ''} onClick={() => setPreviewTab('email')}>Email Preview</button></nav></section>
       {previewTab === 'invoice' ? <InvoiceDocumentPreview html={previewHtml} invoiceNumber={form.invoiceNumber} /> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your twif Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], [outstanding > 0 ? 'Amount Due' : 'Paid In Full', money.format(outstanding > 0 ? outstanding : balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div>{/* These two are part of the picture of the email, not controls on this screen — clicking them here did nothing. */}<span>Download Invoice PDF</span><span>Track Your Order</span></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>{outstanding > 0 ? 'Balance Due' : 'Paid In Full'}</span><strong>{money.format(outstanding > 0 ? outstanding : balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your twif Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
       {message ? <div className="invoice-message">{message}</div> : null}
-      <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => saveInvoicePdf(previewHtml, form.invoiceNumber)}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={sendInvoice} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
+      <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => saveInvoicePdf(previewHtml, form.invoiceNumber)}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={() => sendInvoice(false)} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
     </div>;
   }
 
@@ -3193,9 +3239,9 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
                         <button
                           type="button"
                           onClick={() => updateItem(index, 'discountMode', item.discountMode === 'amount' ? 'percent' : 'amount')}
-                          style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: 0, textTransform: 'none', color: '#c97b08', background: 'none', border: '1px solid #e3d9c8', borderRadius: 5, padding: '1px 6px', cursor: 'pointer' }}
+                          style={{ marginLeft: 6, fontSize: 12, fontWeight: 800, letterSpacing: 0, textTransform: 'none', color: '#c97b08', background: 'none', border: '1px solid #e3d9c8', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}
                         >
-                          {item.discountMode === 'amount' ? 'Use %' : 'Use ₦'}
+                          {item.discountMode === 'amount' ? 'Use %' : 'Use Figures'}
                         </button>
                       </span>
                       {item.discountMode === 'amount' ? (
@@ -3378,16 +3424,40 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
           </div>
 
           {message ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderRadius: 8, background: message.includes('sent') || message.includes('Sent') ? '#f0faf4' : '#fff5f0', border: '1px solid', borderColor: message.includes('sent') || message.includes('Sent') ? '#c3e8d4' : '#f3d5cc', fontSize: 13, color: message.includes('sent') || message.includes('Sent') ? '#2a7d4f' : '#8a3520' }}>
-              {message.includes('sent') || message.includes('Sent') ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderRadius: 8, background: /sent|saved/i.test(message) ? '#f0faf4' : '#fff5f0', border: '1px solid', borderColor: /sent|saved/i.test(message) ? '#c3e8d4' : '#f3d5cc', fontSize: 13, color: /sent|saved/i.test(message) ? '#2a7d4f' : '#8a3520' }}>
+              {/sent|saved/i.test(message) ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
               <span>{message}</span>
             </div>
           ) : null}
 
-          <button className="os-release-btn" type="submit" disabled={sending}>
-            <CheckCircle size={17} strokeWidth={2} />
-            {sending ? 'Sending Invoice…' : 'Send Invoice'}
-          </button>
+          {/* Save keeps the invoice off the customer's inbox entirely — for
+              when the email isn't known yet, or a receipt is being handed
+              over in person instead. Download is a quick look at the
+              document without saving or sending anything. */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              type="button"
+              onClick={() => sendInvoice(true)}
+              disabled={sending || downloading}
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px 16px', border: '1px solid #ddd5c8', borderRadius: 10, background: '#fff', color: '#1a1611', fontSize: 14, fontWeight: 700, cursor: sending || downloading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+            >
+              <Save size={16} strokeWidth={2} />
+              {sending ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={downloadInvoiceDraft}
+              disabled={sending || downloading}
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px 16px', border: '1px solid #ddd5c8', borderRadius: 10, background: '#fff', color: '#1a1611', fontSize: 14, fontWeight: 700, cursor: sending || downloading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+            >
+              <Download size={16} strokeWidth={2} />
+              {downloading ? 'Preparing…' : 'Download'}
+            </button>
+            <button className="os-release-btn" type="submit" disabled={sending || downloading} style={{ flex: 1 }}>
+              <CheckCircle size={17} strokeWidth={2} />
+              {sending ? 'Sending…' : 'Send'}
+            </button>
+          </div>
         </form>
 
         {/* Sidebar */}
@@ -4942,6 +5012,27 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
     jobFabrics.filter((entry) => entry.fabricId !== fabricId)
   );
 
+  // A single note for the whole order left one department reading
+  // instructions meant for another — this keeps the note with the garment and
+  // the department actually doing that work. Older, single-item order sheets
+  // have no `items` array; the modal itself stands in for item 0 then, same
+  // as everywhere else this fallback is used.
+  const updateItemDepartmentNote = (itemIndex, departmentKey, value) => {
+    if (jobModal.items?.length) {
+      const nextItems = jobModal.items.map((item, index) => (
+        index === itemIndex
+          ? { ...item, departmentNotes: { ...item.departmentNotes, [departmentKey]: value } }
+          : item
+      ));
+      setJobModal((current) => ({ ...current, items: nextItems }));
+      onUpdateJob(jobModal.id, { items: nextItems });
+    } else {
+      const nextNotes = { ...jobModal.departmentNotes, [departmentKey]: value };
+      setJobModal((current) => ({ ...current, departmentNotes: nextNotes }));
+      onUpdateJob(jobModal.id, { departmentNotes: nextNotes });
+    }
+  };
+
   const allocateFabricForModal = async () => {
     if (!jobModal) return false;
     if (jobModal.fabric === 'Client supplied') {
@@ -5479,7 +5570,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                               <div key={departmentKey}>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: '#c97b08', marginBottom: 4 }}>{config?.label || departmentKey}</div>
                                 {config?.fields?.length ? (
-                                  <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                                  <ul style={{ margin: '0 0 8px', padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
                                     {config.fields.map((field) => (
                                       <li key={field.key} style={{ marginBottom: 2 }}>
                                         <strong style={{ fontWeight: 600 }}>{field.label}:</strong> {values[field.key] || 'Not filled in'}
@@ -5487,8 +5578,21 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                                     ))}
                                   </ul>
                                 ) : (
-                                  <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No fields configured for this department.</p>
+                                  <p style={{ margin: '0 0 8px', fontSize: 13, color: '#b0a090' }}>No fields configured for this department.</p>
                                 )}
+                                {/* Instructions belong with the garment and the
+                                    department doing the work — a single note
+                                    for the whole order left the suit department
+                                    reading notes meant for embroidery. */}
+                                <label className="os-field">
+                                  <span style={{ fontSize: 10.5 }}>Instructions for {config?.label || departmentKey}</span>
+                                  <textarea
+                                    value={item.departmentNotes?.[departmentKey] || ''}
+                                    onChange={(event) => updateItemDepartmentNote(index, departmentKey, event.target.value)}
+                                    placeholder="Instructions for the tailor working this department..."
+                                    rows={2}
+                                  />
+                                </label>
                               </div>
                             );
                           })}
@@ -5639,10 +5743,10 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                 </div>
                 {/* Each item's tailor due date sits with the item, above. */}
                 {/* Quantity now sits against each fabric above. */}
-                <label className="os-field" style={{ gridColumn: '1 / -1' }}>
-                  <span>Production note</span>
-                  <textarea value={jobModal.productionNote || ''} onChange={(e) => { setJobModal((j) => ({ ...j, productionNote: e.target.value })); onUpdateJob(jobModal.id, { productionNote: e.target.value }); }} placeholder="Instructions for tailor..." rows={2} />
-                </label>
+                {/* A single note here read to every department on every item,
+                    which meant embroidery saw instructions meant for the suit
+                    department. Instructions now live with each item's
+                    department, in the section above. */}
               </div>
 
               {/* The scope calls for a comment thread on the job sheet, so a
@@ -8319,8 +8423,7 @@ function App() {
             </span>
           </div>
           <button type="button" className="sidebar-logout" onClick={() => handleLogout()}>
-            <LogOut size={16} strokeWidth={1.8} />
-            Log out
+            Logout
           </button>
         </div>
       </aside>

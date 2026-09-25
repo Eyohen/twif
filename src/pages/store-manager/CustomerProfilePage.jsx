@@ -400,6 +400,7 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
               </div>
               <div style={{ padding: '8px 16px', fontSize: 11, color: '#8a7a6a' }}>
                 {customer.updatedAt ? `Last updated ${new Date(customer.updatedAt).toLocaleDateString('en-GB')}` : 'Not updated yet'}
+                {measurements.measuredBy ? ` · Measured by ${measurements.measuredBy}${measurements.measuredAt ? ` on ${new Date(measurements.measuredAt).toLocaleDateString('en-GB')}` : ''}` : ''}
               </div>
             </div>
           </div>

@@ -63,13 +63,17 @@ function BodyFigure({ back = false }) {
   );
 }
 
-export default function MeasurementsPage({ customer, onBack, onSaved }) {
+export default function MeasurementsPage({ customer, currentRole, onBack, onSaved }) {
   const stored = customer.measurements || {};
   const [editing, setEditing] = useState(false);
   const [values, setValues] = useState(() => ({
     ...Object.fromEntries(MEASUREMENT_FIELDS.map((field) => [field.key, readValue(stored, field.key)])),
     additionalInformation: stored.additionalInformation || '',
   }));
+  // Who actually stood at the counter and took these figures — shown
+  // wherever the measurements themselves are, not just logged and forgotten.
+  const [measuredBy, setMeasuredBy] = useState(stored.measuredBy || '');
+  const [measuredAt, setMeasuredAt] = useState(stored.measuredAt || '');
   const [draft, setDraft] = useState(values);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -103,14 +107,19 @@ export default function MeasurementsPage({ customer, onBack, onSaved }) {
 
       // Only the profile block is carried over; the rest of `measurements`
       // holds unrelated profile fields that must not be flattened away.
+      const attributedAt = new Date().toISOString();
+      const attributedBy = currentRole?.name || 'Store Manager';
+      const nextMeasurements = { ...draft, measuredBy: attributedBy, measuredAt: attributedAt };
       await api.patch(`/oms/customers/${customerId}`, {
         fullName: customer.fullName,
         phone: customer.phone,
         email: customer.email,
         ...(stored.profile || {}),
-        measurements: draft,
+        measurements: nextMeasurements,
       });
       setValues(draft);
+      setMeasuredBy(attributedBy);
+      setMeasuredAt(attributedAt);
       setEditing(false);
       setMessage(customerId === customer.id
         ? 'Measurements saved.'
@@ -228,10 +237,8 @@ export default function MeasurementsPage({ customer, onBack, onSaved }) {
             </div>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#b0a090', marginTop: 4 }}>
               <Clock size={10} />
-              {/* This read "by Bola" for every customer whoever saved them —
-                  and who took a measurement is not recorded anywhere, so it
-                  cannot be shown honestly. */}
               Last updated: {customer.updatedAt ? new Date(customer.updatedAt).toLocaleDateString('en-GB') : 'not recorded'}
+              {measuredBy ? ` · Measured by ${measuredBy}${measuredAt ? ` on ${new Date(measuredAt).toLocaleDateString('en-GB')}` : ''}` : ''}
             </span>
           </div>
 

@@ -482,6 +482,8 @@ export const productionJobFromInvoice = (invoice, customers = []) => {
       // garment needed the moment it reached the job board.
       departments: Array.isArray(sheet.departments) ? sheet.departments : [],
       departmentFields: sheet.departmentFields && typeof sheet.departmentFields === 'object' ? sheet.departmentFields : {},
+      // Per-department tailor instructions, same single-item fallback as above.
+      departmentNotes: sheet.departmentNotes && typeof sheet.departmentNotes === 'object' ? sheet.departmentNotes : {},
     }],
     pieces: toNumber(sheet.pieces || invoice.pieces) || 1,
     delivery: sheet.delivery || dateInputValue(invoice.deliveryDate),
@@ -539,6 +541,7 @@ export const productionJobFromInvoice = (invoice, customers = []) => {
     updatedAt: sheet.updatedAt,
     departments: Array.isArray(sheet.departments) ? sheet.departments : [],
     departmentFields: sheet.departmentFields && typeof sheet.departmentFields === 'object' ? sheet.departmentFields : {},
+    departmentNotes: sheet.departmentNotes && typeof sheet.departmentNotes === 'object' ? sheet.departmentNotes : {},
   };
 };
 

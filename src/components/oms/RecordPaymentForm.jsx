@@ -38,6 +38,10 @@ export default function RecordPaymentForm({ invoiceNumber, balance, defaultMetho
   const submit = async (event) => {
     event.preventDefault();
     setError('');
+    // A payment recorded with nothing behind it left Accounts nowhere to
+    // check the figure against — the same reason evidence is required when
+    // an invoice is first raised as paid or partially paid.
+    if (!evidenceList.length) { setError('Attach a receipt screenshot or payment photo before recording this payment.'); return; }
     setSaving(true);
     try {
       const response = await api.patch(`/oms/invoices/${invoiceNumber}/payment`, {
@@ -110,11 +114,11 @@ export default function RecordPaymentForm({ invoiceNumber, balance, defaultMetho
           </div>
         )}
         <p style={{ fontSize: 12, color: '#8a7a6a', marginTop: evidenceList.length ? 8 : 6, marginBottom: 0 }}>
-          {evidenceList.length ? 'Add another receipt screenshot or payment photo, if there is one.' : 'Optional: attach a receipt screenshot or payment photo (max 5 MB). You can add more than one.'}
+          {evidenceList.length ? 'Add another receipt screenshot or payment photo, if there is one.' : 'Required: attach a receipt screenshot or payment photo (max 5 MB). You can add more than one.'}
         </p>
       </div>
 
-      <button type="submit" disabled={saving || amount === ''}>
+      <button type="submit" disabled={saving || amount === '' || !evidenceList.length}>
         <Check size={14} /> {saving ? 'Recording…' : 'Record payment'}
       </button>
       {error ? <p className="record-payment-error">{error}</p> : null}

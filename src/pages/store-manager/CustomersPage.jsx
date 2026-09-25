@@ -134,6 +134,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
     return (
       <MeasurementsPage
         customer={measurementCustomer}
+        currentRole={currentRole}
         onBack={() => setMeasurementCustomer(null)}
         // Nothing was told about the save, so the list kept the customer as
         // they were before it — and reopening their measurements showed the
@@ -523,10 +524,8 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                 <input value={createForm.phone} onChange={(event) => setCreateForm({ ...createForm, phone: event.target.value })} required placeholder="08012345678" />
               </label>
               <label className="os-field">
-                <span>Email Address</span>
-                {/* The invoice and the tracking link both go to this address,
-                    so it was never really optional. */}
-                <input type="email" value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} required placeholder="name@example.com" />
+                <span>Email Address <em style={{ fontWeight: 400, fontSize: 10, textTransform: 'none' }}>(optional)</em></span>
+                <input type="email" value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} placeholder="name@example.com" />
               </label>
               <label className="os-field os-field-full">
                 <span>Customer Type</span>

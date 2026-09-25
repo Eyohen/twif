@@ -28,7 +28,27 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
     status: customer.status || '',
     website: customer.website || '',
     elite: Boolean(customer.eliteMember),
+    // Neither chip list did anything before — no way to add one, and the ×
+    // on the handful shown by default wasn't wired to anything. They start
+    // empty now, the way an unmeasured customer has no preferences yet.
+    fabricPreferences: Array.isArray(customer.fabricPreferences) ? customer.fabricPreferences : [],
+    colorPreferences: Array.isArray(customer.colorPreferences) ? customer.colorPreferences : [],
   });
+  const [newFabricPreference, setNewFabricPreference] = useState('');
+  const [newColorPreference, setNewColorPreference] = useState('');
+  const addPreference = (field, value, setValue) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setForm((current) => (
+      current[field].some((entry) => entry.toLowerCase() === trimmed.toLowerCase())
+        ? current
+        : { ...current, [field]: [...current[field], trimmed] }
+    ));
+    setValue('');
+  };
+  const removePreference = (field, value) => setForm((current) => ({
+    ...current, [field]: current[field].filter((entry) => entry !== value),
+  }));
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -241,24 +261,52 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
               </label>
               <div className="os-field">
                 <span>Fabric Preferences</span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {['Wool', 'Linen', 'Cotton'].map((fabric) => (
-                    <span key={fabric} style={{
-                      padding: '4px 10px', background: '#faf7f3', border: '1px solid #ddd5c8',
-                      borderRadius: 20, fontSize: 12, color: '#5a4e42', cursor: 'pointer',
-                    }}>{fabric} ×</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: form.fabricPreferences.length ? 8 : 0 }}>
+                  {form.fabricPreferences.map((fabric) => (
+                    <button
+                      type="button"
+                      key={fabric}
+                      onClick={() => removePreference('fabricPreferences', fabric)}
+                      style={{
+                        padding: '4px 10px', background: '#faf7f3', border: '1px solid #ddd5c8',
+                        borderRadius: 20, fontSize: 12, color: '#5a4e42', cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >{fabric} ×</button>
                   ))}
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    value={newFabricPreference}
+                    onChange={(event) => setNewFabricPreference(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addPreference('fabricPreferences', newFabricPreference, setNewFabricPreference); } }}
+                    placeholder="e.g. Wool"
+                  />
+                  <button type="button" onClick={() => addPreference('fabricPreferences', newFabricPreference, setNewFabricPreference)} style={{ padding: '9px 14px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', color: '#5a4e42', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Add</button>
                 </div>
               </div>
               <div className="os-field">
                 <span>Color Preferences</span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {['Navy', 'Black', 'Grey', 'White'].map((color) => (
-                    <span key={color} style={{
-                      padding: '4px 10px', background: '#faf7f3', border: '1px solid #ddd5c8',
-                      borderRadius: 20, fontSize: 12, color: '#5a4e42', cursor: 'pointer',
-                    }}>{color} ×</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: form.colorPreferences.length ? 8 : 0 }}>
+                  {form.colorPreferences.map((color) => (
+                    <button
+                      type="button"
+                      key={color}
+                      onClick={() => removePreference('colorPreferences', color)}
+                      style={{
+                        padding: '4px 10px', background: '#faf7f3', border: '1px solid #ddd5c8',
+                        borderRadius: 20, fontSize: 12, color: '#5a4e42', cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >{color} ×</button>
                   ))}
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    value={newColorPreference}
+                    onChange={(event) => setNewColorPreference(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addPreference('colorPreferences', newColorPreference, setNewColorPreference); } }}
+                    placeholder="e.g. Navy"
+                  />
+                  <button type="button" onClick={() => addPreference('colorPreferences', newColorPreference, setNewColorPreference)} style={{ padding: '9px 14px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', color: '#5a4e42', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Add</button>
                 </div>
               </div>
             </div>

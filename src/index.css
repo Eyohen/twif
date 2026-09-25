@@ -684,6 +684,14 @@ input[readonly] {
 .sidebar nav {
   display: grid;
   gap: 3px;
+  /* A role with enough views (Owner's 19, say) grew past 100vh and pushed
+     the footer — the signed-in identity and Log out — off the bottom of the
+     screen entirely, with the sidebar itself never scrolling to reach it.
+     The nav list scrolls on its own now; the footer stays put. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .sidebar button,

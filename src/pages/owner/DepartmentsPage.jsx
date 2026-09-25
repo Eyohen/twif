@@ -21,12 +21,16 @@ export default function DepartmentsPage() {
 
   const addDepartment = async (event) => {
     event.preventDefault();
-    if (!name.trim()) return;
+    // Clicking with nothing typed did nothing at all — not even a message —
+    // which read exactly like the button being broken.
+    if (!name.trim()) { setMessage('Type a department name first.'); return; }
     setSaving(true);
     setMessage('');
     try {
-      await api.post('/oms/departments', { name: name.trim() });
+      const added = name.trim();
+      await api.post('/oms/departments', { name: added });
       setName('');
+      setMessage(`"${added}" was added.`);
       reload();
     } catch (error) {
       setMessage(error.response?.data?.message || 'That department could not be saved.');
@@ -58,7 +62,12 @@ export default function DepartmentsPage() {
       </div>
 
       {message && (
-        <div style={{ padding: '10px 14px', background: '#fff5f0', border: '1px solid #f3c5b5', borderRadius: 8, color: '#8a3520', fontSize: 13 }}>
+        <div style={{
+          padding: '10px 14px', borderRadius: 8, fontSize: 13,
+          background: message.includes('was added') ? '#f0faf4' : '#fff5f0',
+          border: `1px solid ${message.includes('was added') ? '#c3e8d4' : '#f3c5b5'}`,
+          color: message.includes('was added') ? '#2a7d4f' : '#8a3520',
+        }}>
           {message}
         </div>
       )}
