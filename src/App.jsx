@@ -7720,7 +7720,7 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
     return (
       <main className="tracking-page">
         <section className="tracking-card">
-          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>twif</strong></div>
+          <div className="brand-lockup tracking-brand"><img className="mark" src="/logo.jpeg" alt="twif" /><strong>twif</strong></div>
           <p>Loading order status...</p>
         </section>
       </main>
@@ -7731,7 +7731,7 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
     return (
       <main className="tracking-page">
         <section className="tracking-card">
-          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>twif</strong></div>
+          <div className="brand-lockup tracking-brand"><img className="mark" src="/logo.jpeg" alt="twif" /><strong>twif</strong></div>
           <h1>Tracking Link Not Found</h1>
           <p>Please confirm the invoice link with The Way It Fits.</p>
         </section>
@@ -7744,7 +7744,7 @@ function CustomerTrackingPage({ token, productionJobs = [], sentInvoices = [] })
       <section className="tracking-card">
         <div className="tracking-top">
           <div className="brand-lockup tracking-brand">
-            <div className="mark">TW</div>
+            <img className="mark" src="/logo.jpeg" alt="twif" />
             <div>
               <strong>twif</strong>
               <span>The Way It Fits</span>
@@ -7847,7 +7847,7 @@ function CustomerPortalPage({ token, sentInvoices = [] }) {
     return (
       <main className="tracking-page">
         <section className="tracking-card">
-          <div className="brand-lockup tracking-brand"><div className="mark">TW</div><strong>twif</strong></div>
+          <div className="brand-lockup tracking-brand"><img className="mark" src="/logo.jpeg" alt="twif" /><strong>twif</strong></div>
           <h1>{loading ? 'Loading your profile...' : 'Customer Profile Not Found'}</h1>
           {!loading && <a className="tracking-profile-link portal-back-link" href={`/c/${encodeURIComponent(token)}`}>Back to tracking</a>}
         </section>
@@ -7866,7 +7866,7 @@ function CustomerPortalPage({ token, sentInvoices = [] }) {
 
   return (
     <main className="client-portal-shell">
-      <aside className="client-portal-nav"><div className="brand-lockup tracking-brand"><div className="mark">TW</div><div><strong>twif</strong><span>The Way It Fits</span></div></div>{/* Nine links pointed at anchors that did not exist, so only the first
+      <aside className="client-portal-nav"><div className="brand-lockup tracking-brand"><img className="mark" src="/logo.jpeg" alt="twif" /><div><strong>twif</strong><span>The Way It Fits</span></div></div>{/* Nine links pointed at anchors that did not exist, so only the first
               one did anything. These are the sections the page actually has,
               and each now scrolls to it. */}
           <nav>{[['⌂','Dashboard','portal-top'],['▣','Order History','order-history'],['♙','Contact Details','contact-details'],['♧','Membership','membership'],['♡','Saved Styles','saved-styles']].map(([icon,label,anchor],index)=><a className={index===0?'active':''} href={`#${anchor}`} key={label}><i>{icon}</i>{label}</a>)}</nav><section><strong>Need help?</strong><small>Chat with us on WhatsApp</small><a href="https://wa.me/2347056336710">◉ &nbsp; Chat Now</a></section><a className="portal-logout" href={`/c/${encodeURIComponent(token)}`}>← &nbsp; Back to tracking</a></aside>
@@ -8375,7 +8375,7 @@ function App() {
       {mobileMenuOpen && <button className="drawer-scrim" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />}
       <aside className="sidebar" aria-label="Main navigation">
         <div className="brand-lockup">
-          <div className="mark">TW</div>
+          <img className="mark" src="/logo.jpeg" alt="twif" />
           <div>
             <strong>twif</strong>
             <span>The Way It Fits</span>
