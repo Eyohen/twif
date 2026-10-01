@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CheckSquare, Clock, User, Package, ArrowRight, Play, CheckCircle, ChevronDown, ChevronUp, Calendar, Ruler, Image, Scissors, Filter } from 'lucide-react';
 import { worksOnJob } from '../../utils/oms';
 import { DEPARTMENT_FIELDS } from '../../config/departmentFields';
@@ -43,6 +44,18 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
   const [viewingImage, setViewingImage] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [error, setError] = useState('');
+
+  // A notification naming a job by invoice number should expand that task,
+  // not just land on the generic list.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedInvoice = searchParams.get('invoice');
+  useEffect(() => {
+    if (!requestedInvoice) return;
+    const match = allAssigned.find((order) => order.invoiceNumber === requestedInvoice);
+    if (!match) return;
+    setExpandedId(match.id);
+    setSearchParams({}, { replace: true });
+  }, [requestedInvoice, allAssigned, setSearchParams]);
 
   const getStatus = (order) => {
     if (order.status === 'Ready') return 'ready';

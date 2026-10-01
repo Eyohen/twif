@@ -1899,8 +1899,9 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
         </div>
 
         <dl className="edit-invoice-total">
-          <dt>New balance due</dt><dd><strong style={{ color: belowPaid ? '#8a3520' : undefined }}>{money.format(newTotal)}</strong></dd>
+          <dt>New invoice total</dt><dd><strong style={{ color: belowPaid ? '#8a3520' : undefined }}>{money.format(newTotal)}</strong></dd>
           <dt>Recorded as paid</dt><dd>{money.format(alreadyPaid)}</dd>
+          <dt>Balance due</dt><dd><strong>{money.format(balanceDue)}</strong></dd>
         </dl>
 
         {/* Recording what's come in since this invoice was raised, instead of
@@ -3059,6 +3060,9 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     customer: {
       name: form.customerName,
       phone: form.customerPhone,
+      // Only a real Customer row id — a picked customer who only exists as a
+      // past invoice (id prefixed 'sent-', synthesised client-side) isn't one.
+      ...(chosenCustomer?.id && !String(chosenCustomer.id).startsWith('sent-') ? { id: chosenCustomer.id } : {}),
     },
     items: items
       .filter((item) => item.description.trim())
@@ -4170,20 +4174,22 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
       // fit is written fresh for each order, not carried over from the
       // customer's stored measurement figures.
       measurementDetails,
+      // designNotes is the Production team's instructions for this garment —
+      // distinct from the invoice line's own note (delivery date, style
+      // details typed while raising the invoice) — so it starts blank here
+      // rather than carrying that invoice text over.
       items: invoiceItems
         ? invoiceItems.map((line) => ({
           ...emptyOrderItem(),
           item: line.description || line.name || '',
           pieces: toNumber(line.quantity) || 1,
           delivery: dateInputValue(invoice.deliveryDate),
-          designNotes: line.note || invoice.itemNote || '',
         }))
         : current.items.map((item, index) => (index === 0 ? {
           ...item,
           item: invoice.item || item.item,
           pieces: invoice.pieces || item.pieces,
           delivery: dateInputValue(invoice.deliveryDate, item.delivery),
-          designNotes: invoice.itemNote || item.designNotes,
         } : item)),
     }));
     return true;
@@ -4919,6 +4925,22 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   const [viewingImage, setViewingImage] = useState(null);
   const [page, setPage] = useState(1);
   const toastTimerRef = useRef(null);
+
+  // A notification (or any other deep link) names a job by invoice number;
+  // without this, landing on 'Production' always meant the generic list —
+  // opening the matching job's modal is otherwise only ever triggered by
+  // clicking "View" in the table/cards below.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedInvoice = searchParams.get('invoice');
+  useEffect(() => {
+    if (!requestedInvoice) return;
+    const match = productionJobs.find((job) => job.invoiceNumber === requestedInvoice)
+      || blockedJobs.find(({ job }) => job.invoiceNumber === requestedInvoice)?.job;
+    if (!match) return;
+    setJobModal(match);
+    setSearchParams({}, { replace: true });
+  }, [requestedInvoice, productionJobs, blockedJobs, setSearchParams]);
+
   const filteredJobs = productionJobs.filter((job) => (
     (statusFilter === 'All' ? true : job.status === statusFilter)
     && `${job.customer} ${job.invoiceNumber} ${job.item}`.toLowerCase().includes(query.toLowerCase())
@@ -7451,9 +7473,10 @@ const notificationDestination = (item, role) => {
     case 'account_approval':
       return { view: 'Invoices', params: invoiceParams };
     case 'payment_recorded':
-      // Accounts and the Owner keep the payment screens; a store manager is
-      // told about the money against the order they raised.
-      return { view: ['accounts', 'owner', 'admin'].includes(role) ? 'Payments' : 'Orders', params: invoiceParams };
+      // Accounts and the Owner keep the payment screens; a store manager
+      // lands on the invoice itself — 'Orders' never reads this param at
+      // all, which made this a dead end for them.
+      return { view: ['accounts', 'owner', 'admin'].includes(role) ? 'Payments' : 'Invoices', params: invoiceParams };
     case 'production_override':
       return { view: ['production_manager'].includes(role) ? 'Production' : 'Orders', params: invoiceParams };
     // A pending-approval event, not a production one — the order sheet hasn't
@@ -7463,11 +7486,11 @@ const notificationDestination = (item, role) => {
       return { view: 'Invoices', params: invoiceParams };
     case 'order_sheet_released':
     case 'production_ready':
-      return { view: role === 'store_manager' ? 'Orders' : 'Production' };
+      return { view: role === 'store_manager' ? 'Orders' : 'Production', params: invoiceParams };
     case 'tailor_assigned':
-      return { view: role === 'tailor' ? 'My Tasks' : 'Production' };
+      return { view: role === 'tailor' ? 'My Tasks' : 'Production', params: invoiceParams };
     case 'order_ready':
-      return { view: role === 'store_manager' ? 'Orders' : 'Production' };
+      return { view: role === 'store_manager' ? 'Orders' : 'Production', params: invoiceParams };
     case 'job_comment':
       return {
         view: role === 'tailor' ? 'My Tasks' : role === 'store_manager' ? 'Orders' : 'Production',

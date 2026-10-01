@@ -170,7 +170,7 @@ export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onR
                 ))}
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0 0', fontSize: 14 }}>
                   <span style={{ fontWeight: 700, color: '#1a1611' }}>Amount Payable</span>
-                  <span style={{ fontWeight: 800, color: '#1a1611', fontSize: 16 }}>{money.format(payable)}</span>
+                  <span style={{ fontWeight: 800, color: '#1a1611', fontSize: 16 }}>{money.format(balance === null ? payable : balance)}</span>
                 </div>
               </div>
 

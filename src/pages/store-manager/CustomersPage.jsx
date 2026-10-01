@@ -516,11 +516,11 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
             </div>
             <div className="os-grid-2">
               <label className="os-field os-field-full">
-                <span>Full Name</span>
+                <span>Full Name <span style={{ color: '#e05252' }}>*</span></span>
                 <input value={createForm.fullName} onChange={(event) => setCreateForm({ ...createForm, fullName: event.target.value })} required placeholder="e.g. Chukwuemeka Obi" />
               </label>
               <label className="os-field">
-                <span>Phone Number</span>
+                <span>Phone Number <span style={{ color: '#e05252' }}>*</span></span>
                 <input value={createForm.phone} onChange={(event) => setCreateForm({ ...createForm, phone: event.target.value })} required placeholder="08012345678" />
               </label>
               <label className="os-field">
