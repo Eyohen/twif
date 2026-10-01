@@ -9,6 +9,7 @@ import { api } from '../../lib/api';
 import { downloadCsv, csvStamp } from '../../utils/csv';
 import { formatMoment, useStores } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
+import { roles as staffRoles } from '../../config/oms';
 
 const roleLabel = (role) => ({
   admin: 'Admin',
@@ -554,11 +555,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
                 <label className="os-field">
                   <span>Role <span style={{ color: '#e05252' }}>*</span></span>
                   <select value={form.role} onChange={(e) => update('role', e.target.value)}>
-                    <option value="tailor">Tailor</option>
-                    <option value="store_manager">Store Manager</option>
-                    <option value="accounts">Accountant</option>
-                    <option value="production_manager">Production</option>
-                    <option value="admin">Admin</option>
+                    {staffRoles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}
                   </select>
                 </label>
                 <label className="os-field">

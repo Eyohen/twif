@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Camera, Image as ImageIcon, Check } from 'lucide-react';
 import { api } from '../../lib/api';
 
-const PAYMENT_METHODS = ['transfer', 'cash', 'card', 'check'];
+const PAYMENT_METHODS = ['transfer', 'cash', 'card', 'pos', 'check'];
+const paymentMethodLabel = (method) => (method === 'pos' ? 'POS' : `${method.charAt(0).toUpperCase()}${method.slice(1)}`);
 
 // Recording a payment against an invoice, wherever that needs doing —
 // Accounts' Payments screen, the invoice review screen, and Edit Invoice all
@@ -80,7 +81,7 @@ export default function RecordPaymentForm({ invoiceNumber, balance, defaultMetho
           <span>Method</span>
           <select value={method} onChange={(event) => setMethod(event.target.value)}>
             {PAYMENT_METHODS.map((option) => (
-              <option key={option} value={option}>{option.charAt(0).toUpperCase()}{option.slice(1)}</option>
+              <option key={option} value={option}>{paymentMethodLabel(option)}</option>
             ))}
           </select>
         </label>

@@ -179,7 +179,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
         itemId={selectedItem.id}
         fallbackItem={selectedItem}
         onBack={() => setSelectedItem(null)}
-        onEdit={readOnly ? undefined : ownerMode ? () => setShowApprovals(true) : () => setEditingItem(selectedItem)}
+        onEdit={readOnly ? undefined : () => setEditingItem(selectedItem)}
         readOnly={readOnly}
         approvalRequest={approvalRequest}
       />
@@ -374,7 +374,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
                       >
                         <Eye size={12} /> View
                       </button>
-                      {!ownerMode && !readOnly && (
+                      {!readOnly && (
                         <button
                           type="button"
                           onClick={(event) => { event.stopPropagation(); setEditingItem(item); }}

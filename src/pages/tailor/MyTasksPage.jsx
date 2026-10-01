@@ -401,13 +401,16 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                                   <section key={departmentKey}>
                                     <h5 style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: '#a76900' }}>{config?.label || departmentKey}</h5>
                                     {config?.fields?.length ? (
-                                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                                      <div className="os-grid-3">
                                         {config.fields.map((field) => (
-                                          <li key={field.key} style={{ marginBottom: 4 }}>
-                                            <strong style={{ fontWeight: 600 }}>{field.label}:</strong> {values[field.key] || 'Not filled in'}
-                                          </li>
+                                          <div key={field.key}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{field.label}</div>
+                                            <div style={{ fontSize: 13, color: values[field.key] ? '#1a1611' : '#b0a090', fontWeight: 600, marginTop: 3 }}>
+                                              {values[field.key] || 'Not filled in'}
+                                            </div>
+                                          </div>
                                         ))}
-                                      </ul>
+                                      </div>
                                     ) : (
                                       <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No fields configured for this department.</p>
                                     )}

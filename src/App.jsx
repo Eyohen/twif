@@ -1962,7 +1962,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   );
 }
 
-function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onApproveInvoice, onInvoiceChanged, onInvoiceDeleted, releasePercent, onNavigate }) {
+function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onApproveInvoice, onInvoiceChanged, onInvoiceDeleted, releasePercent, onNavigate, onOverrideHold }) {
   const [editingInvoice, setEditingInvoice] = useState(null);
   // An invoice belongs to whoever raised it and to the people who run the shop.
   // Removing one is the Owner's and Admin's alone — a store manager cannot
@@ -1989,10 +1989,12 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
     ['Download PDF', <Download size={12} strokeWidth={2} />, () => downloadInvoicePdf(invoice)],
     ['Resend Email', <RefreshCw size={12} strokeWidth={2} />, () => resendInvoiceEmail(invoice)],
     ...(mayEdit(invoice) ? [['Edit Invoice', <Edit2 size={12} strokeWidth={2} />, () => setEditingInvoice(invoice)]] : []),
-    // Approving needs the same payment threshold Production checks — an
-    // invoice that hasn't cleared it has no Approve action here at all,
-    // rather than one that fails after the fact.
-    ...(mayApprove && onApproveInvoice && invoiceApprovalStatus(invoice) !== 'Approved' && canApproveInvoice(invoice, releasePercent)
+    // Approving normally needs the same payment threshold Production checks —
+    // but an Owner or Admin may override that threshold (the server already
+    // allows it, see the account-approval route, and ReviewInvoicePage grants
+    // the same override to Accounts' queue), so a rejected or under-threshold
+    // invoice can still be re-approved by them rather than being stuck.
+    ...(mayApprove && onApproveInvoice && invoiceApprovalStatus(invoice) !== 'Approved'
       ? [['Approve', <CheckCircle size={12} strokeWidth={2} />, () => approveInvoice(invoice)]]
       : []),
     // Approving is a decision Accounts, Owner or Admin can make, but taking
@@ -2002,6 +2004,18 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
     ...(mayApprove && onApproveInvoice && invoiceApprovalStatus(invoice) === 'Approved'
       ? [['Undo Approval', <RefreshCw size={12} strokeWidth={2} />, () => undoApproval(invoice)]]
       : []),
+    // Mirrors the Production board's own "Send to production anyway" button
+    // (same guard: hidden when the hold is about missing measurements, since
+    // overriding the payment threshold doesn't fix that) so an Owner or Admin
+    // doesn't have to leave the invoice to release a held order.
+    ...(() => {
+      if (!mayApprove || !onOverrideHold) return [];
+      const job = productionJobFromInvoice(invoice);
+      if (!job) return [];
+      const reason = productionBlockReason(job, sentInvoices, releasePercent);
+      if (!reason || /measurements/i.test(reason)) return [];
+      return [['Send to Production Anyway', <ArrowRight size={12} strokeWidth={2} />, () => onOverrideHold(job, reason)]];
+    })(),
     ...(mayDelete(invoice) ? [['Delete Invoice', <Trash2 size={12} strokeWidth={2} />, () => removeInvoice(invoice)]] : []),
   ];
 
@@ -3026,6 +3040,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   const validateInvoice = () => {
     if (!form.store) return 'Choose a sending store. An Admin or Owner needs to add one if the list is empty.';
     if (!form.customerName.trim()) return 'Select a customer.';
+    if (!form.customerPhone.trim()) return 'Enter the customer\'s phone number.';
     if (!items.some((item) => item.description.trim())) return 'Add at least one invoice item.';
     if (evidenceRequired && !paymentEvidence) return 'Upload payment evidence for a partially or fully paid invoice.';
     // A part paid invoice with no figure is what left Accounts unable to
@@ -3182,8 +3197,8 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
                 </div>
               </label>
               <label className="os-field">
-                <span>Customer Phone</span>
-                <input value={form.customerPhone} onChange={(event) => updateForm('customerPhone', event.target.value)} placeholder="e.g. 08012345678" />
+                <span>Customer Phone *</span>
+                <input value={form.customerPhone} onChange={(event) => updateForm('customerPhone', event.target.value)} placeholder="e.g. 08012345678" required />
               </label>
               <label className="os-field os-field-full">
                 <span>Customer Email</span>
@@ -5570,13 +5585,16 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                               <div key={departmentKey}>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: '#c97b08', marginBottom: 4 }}>{config?.label || departmentKey}</div>
                                 {config?.fields?.length ? (
-                                  <ul style={{ margin: '0 0 8px', padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
+                                  <div className="os-grid-3" style={{ marginBottom: 8 }}>
                                     {config.fields.map((field) => (
-                                      <li key={field.key} style={{ marginBottom: 2 }}>
-                                        <strong style={{ fontWeight: 600 }}>{field.label}:</strong> {values[field.key] || 'Not filled in'}
-                                      </li>
+                                      <div key={field.key}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{field.label}</div>
+                                        <div style={{ fontSize: 13, color: values[field.key] ? '#1a1611' : '#b0a090', fontWeight: 600, marginTop: 3 }}>
+                                          {values[field.key] || 'Not filled in'}
+                                        </div>
+                                      </div>
                                     ))}
-                                  </ul>
+                                  </div>
                                 ) : (
                                   <p style={{ margin: '0 0 8px', fontSize: 13, color: '#b0a090' }}>No fields configured for this department.</p>
                                 )}
@@ -7361,7 +7379,9 @@ function ReportsView({ role }) {
 // API carries the event name and, where relevant, the invoice it refers to.
 const notificationDestination = (item, role) => {
   const { event, invoiceNumber } = item?.metadata || {};
-  const invoiceParams = invoiceNumber ? { invoice: invoiceNumber } : undefined;
+  // Accounts' Invoices view reads a different query-param key than the
+  // Owner/Admin/Store-Manager one does — each view is its own component.
+  const invoiceParams = invoiceNumber ? { [role === 'accounts' ? 'review' : 'invoice']: invoiceNumber } : undefined;
 
   switch (event) {
     case 'invoice_created':
@@ -7373,7 +7393,11 @@ const notificationDestination = (item, role) => {
       return { view: ['accounts', 'owner', 'admin'].includes(role) ? 'Payments' : 'Orders', params: invoiceParams };
     case 'production_override':
       return { view: ['production_manager'].includes(role) ? 'Production' : 'Orders', params: invoiceParams };
+    // A pending-approval event, not a production one — the order sheet hasn't
+    // been released to Production yet, so it belongs with the other
+    // invoice/approval events rather than sharing a destination with them.
     case 'order_sheet_created':
+      return { view: 'Invoices', params: invoiceParams };
     case 'order_sheet_released':
     case 'production_ready':
       return { view: role === 'store_manager' ? 'Orders' : 'Production' };
@@ -7381,6 +7405,11 @@ const notificationDestination = (item, role) => {
       return { view: role === 'tailor' ? 'My Tasks' : 'Production' };
     case 'order_ready':
       return { view: role === 'store_manager' ? 'Orders' : 'Production' };
+    case 'job_comment':
+      return {
+        view: role === 'tailor' ? 'My Tasks' : role === 'store_manager' ? 'Orders' : 'Production',
+        params: invoiceParams,
+      };
     case 'inventory_created':
     case 'inventory_edit_requested':
     case 'inventory_edit_approved':
@@ -7918,6 +7947,7 @@ function renderView(activeView, role, viewProps = {}) {
           onInvoiceDeleted={viewProps.onInvoiceDeleted}
           releasePercent={viewProps.releasePercent}
           onNavigate={viewProps.onNavigate}
+          onOverrideHold={viewProps.onOverrideHold}
         />
       );
     }
@@ -7945,8 +7975,8 @@ function renderView(activeView, role, viewProps = {}) {
   // can see levels for planning but not create or edit records, and an Owner
   // both adds directly and reviews the edit requests other roles submit.
   if (activeView === 'Inventory') return role === 'accounts' ? <AccountsInventoryReconciliationPage />
-    : role === 'inventory_manager' || role === 'admin' ? <InventoryListPage currentRole={viewProps.currentRole} />
-    : role === 'owner' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode />
+    : role === 'inventory_manager' ? <InventoryListPage currentRole={viewProps.currentRole} />
+    : role === 'owner' || role === 'admin' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode />
     : role === 'production_manager' ? <InventoryListPage currentRole={viewProps.currentRole} readOnly />
     : <InventoryView />;
   if (activeView === 'Reconciliations') return <InventoryView />;
