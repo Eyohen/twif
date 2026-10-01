@@ -7478,7 +7478,7 @@ const notificationDestination = (item, role) => {
       // all, which made this a dead end for them.
       return { view: ['accounts', 'owner', 'admin'].includes(role) ? 'Payments' : 'Invoices', params: invoiceParams };
     case 'production_override':
-      return { view: ['production_manager'].includes(role) ? 'Production' : 'Orders', params: invoiceParams };
+      return { view: ['production_manager', 'owner', 'admin'].includes(role) ? 'Production' : 'Orders', params: invoiceParams };
     // A pending-approval event, not a production one — the order sheet hasn't
     // been released to Production yet, so it belongs with the other
     // invoice/approval events rather than sharing a destination with them.
@@ -7496,10 +7496,14 @@ const notificationDestination = (item, role) => {
         view: role === 'tailor' ? 'My Tasks' : role === 'store_manager' ? 'Orders' : 'Production',
         params: invoiceParams,
       };
-    case 'inventory_created':
+    // Owner/Admin land straight on the approvals queue rather than the
+    // generic item list — that's the only place these three actually mean
+    // anything to them.
     case 'inventory_edit_requested':
     case 'inventory_edit_approved':
     case 'inventory_edit_rejected':
+      return { view: 'Inventory', params: ['owner', 'admin'].includes(role) ? { tab: 'approvals' } : undefined };
+    case 'inventory_created':
     case 'fabric_allocated':
     case 'low_stock':
       return { view: 'Inventory' };
@@ -8268,6 +8272,16 @@ function App() {
   }, [signedIn, role, location.pathname, navigate, visibleNav]);
 
   const recordSentInvoice = (invoice) => {
+    // The server already scopes a store manager's own list to their store;
+    // this optimistic update has to match it, or sending an invoice for a
+    // different store (a store manager can send for any store, not just
+    // their own) made it flash into — and stay in, until the next reload —
+    // a list that's supposed to be scoped away from it.
+    const staffStore = staffProfile?.store;
+    if (role === 'store_manager' && staffStore && staffStore !== 'all'
+      && invoice.storeKey && invoice.storeKey !== staffStore) {
+      return;
+    }
     setSentInvoices((current) => [
       { ...invoice, accountApprovalStatus: invoice.accountApprovalStatus || 'Pending Accounts' },
       ...current.filter((item) => item.invoiceNumber !== invoice.invoiceNumber),

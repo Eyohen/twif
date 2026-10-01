@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Box, AlertTriangle, XCircle, Layers, Search, RefreshCw, Download, PlusCircle, Boxes, Eye, Edit2, ChevronRight, ImagePlus, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money, useStores } from '../../utils/oms';
@@ -43,6 +44,15 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
   // Storage first, then every active store — a fixed location list rather
   // than free text, so filtering by location can be an exact match.
   const stores = useStores();
+
+  // A notification about an edit request should land directly on the
+  // approvals queue, not the general item list.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('tab') !== 'approvals') return;
+    setShowApprovals(true);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
   const locationOptions = ['Storage', ...stores.filter((store) => store.status === 'active').map((store) => store.name)];
 
   const loadItems = useCallback(async () => {
