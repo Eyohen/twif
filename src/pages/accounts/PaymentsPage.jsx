@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Banknote, CheckCircle, Layers, CreditCard, Building2, Search, Download, Eye } from 'lucide-react';
 import { money, amountReceived, invoicePayable } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
@@ -24,6 +25,19 @@ export default function AccountsPaymentsPage({ sentInvoices = [], onInvoiceUpdat
   const [openPayment, setOpenPayment] = useState(null);
   const [activeKpiDot, setActiveKpiDot] = useState(0);
   const kpiScrollRef = useRef(null);
+
+  // A payment_recorded notification names an invoice; without this it
+  // always landed on the generic list rather than that invoice's payment
+  // detail.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedInvoice = searchParams.get('invoice');
+  useEffect(() => {
+    if (!requestedInvoice) return;
+    const match = sentInvoices.find((invoice) => invoice.invoiceNumber === requestedInvoice);
+    if (!match) return;
+    setOpenPayment(match);
+    setSearchParams({}, { replace: true });
+  }, [requestedInvoice, sentInvoices, setSearchParams]);
 
   const payments = useMemo(() => sentInvoices.map((invoice) => {
     const when = invoice.invoiceDate || invoice.createdAt;

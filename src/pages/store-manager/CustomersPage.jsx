@@ -46,6 +46,17 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
   const showError = (text) => { setMessage(text); setMessageIsError(true); };
   const showSuccess = (text) => { setMessage(text); setMessageIsError(false); };
 
+  // A customer_updated/customer_archived notification names a customer;
+  // without this it always landed on the generic list.
+  const requestedCustomer = searchParams.get('customer');
+  useEffect(() => {
+    if (!requestedCustomer) return;
+    const match = customers.find((customer) => customer.id === requestedCustomer);
+    if (!match) return;
+    setSelectedCustomer(match);
+    setSearchParams({}, { replace: true });
+  }, [requestedCustomer, customers, setSearchParams]);
+
   const loadCustomers = () => api.get('/oms/customers')
     .then((response) => {
       const list = response.data?.data?.customers || [];

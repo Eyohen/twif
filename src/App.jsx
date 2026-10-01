@@ -7509,7 +7509,7 @@ const notificationDestination = (item, role) => {
       return { view: 'Inventory' };
     case 'customer_updated':
     case 'customer_archived':
-      return { view: 'Customers' };
+      return { view: 'Customers', params: item?.metadata?.customerId ? { customer: item.metadata.customerId } : undefined };
     default:
       return invoiceNumber ? { view: 'Invoices', params: invoiceParams } : null;
   }
@@ -8057,7 +8057,7 @@ function renderView(activeView, role, viewProps = {}) {
     );
   }
   if (activeView === 'Order Sheets') return <StoreManagerOrderSheetsPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} />;
-  if (activeView === 'Payments') return role === 'accounts' || role === 'owner'
+  if (activeView === 'Payments') return ['accounts', 'owner', 'admin'].includes(role)
     ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} onInvoiceUpdated={viewProps.onInvoiceUpdated} />
     : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} releasePercent={viewProps.releasePercent} />;
   if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} blockedJobs={viewProps.blockedProductionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} onOverrideHold={viewProps.onOverrideHold} onApproveInvoice={viewProps.onApproveInvoice} />;

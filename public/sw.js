@@ -1,6 +1,7 @@
-// Bumped so the shell is refetched: the icons it used to pre-cache were the
-// blue mark from another project, and addAll rejects if any entry 404s.
-const CACHE_NAME = 'twif-oms-v4';
+// Bumped after a round of fixes that returning testers kept reporting as
+// "still not fixed" — forces activate() to purge the old cache rather than
+// leaving a prior visit's cached shell in place indefinitely.
+const CACHE_NAME = 'twif-oms-v5';
 const APP_SHELL = [
   '/',
   '/manifest.webmanifest',
