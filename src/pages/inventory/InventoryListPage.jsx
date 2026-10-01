@@ -28,6 +28,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
   const [search, setSearch] = useState('');
   const [type, setType] = useState('All Types');
   const [status, setStatus] = useState('All Statuses');
+  const [locationFilter, setLocationFilter] = useState('All Locations');
   const [page, setPage] = useState(1);
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -89,12 +90,20 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
     [...new Set([...types, ...items.map((item) => item.type).filter(Boolean)])]
   ), [types, items]);
 
+  // Same idea for location: the fixed Storage-then-stores list items are
+  // actually assigned, plus any legacy free-text value still sitting on an
+  // item from before this was a dropdown, so nothing becomes unfilterable.
+  const filterLocations = useMemo(() => (
+    [...new Set([...locationOptions, ...items.map((item) => item.location).filter(Boolean)])]
+  ), [locationOptions, items]);
+
   const filtered = useMemo(() => items.filter((item) => {
     const haystack = `${item.name} ${item.type} ${item.sku || ''} ${item.colour || ''} ${item.location || ''}`.toLowerCase();
     return haystack.includes(search.toLowerCase())
       && (type === 'All Types' || item.type === type)
-      && (status === 'All Statuses' || stockStatus(item) === status);
-  }), [items, search, type, status]);
+      && (status === 'All Statuses' || stockStatus(item) === status)
+      && (locationFilter === 'All Locations' || item.location === locationFilter);
+  }), [items, search, type, status, locationFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -106,7 +115,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
   // the honest total across a mixed shelf.
   const stockValue = items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.cost || 0), 0);
 
-  const resetFilters = () => { setSearch(''); setType('All Types'); setStatus('All Statuses'); setPage(1); };
+  const resetFilters = () => { setSearch(''); setType('All Types'); setStatus('All Statuses'); setLocationFilter('All Locations'); setPage(1); };
 
   const readImage = (file) => {
     if (!file) return;
@@ -296,6 +305,10 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
               <option>In Stock</option>
               <option>Low Stock</option>
               <option>Out of Stock</option>
+            </select>
+            <select value={locationFilter} onChange={(event) => { setLocationFilter(event.target.value); setPage(1); }} style={selectStyle}>
+              <option>All Locations</option>
+              {filterLocations.map((option) => <option key={option}>{option}</option>)}
             </select>
             <button
               type="button"
