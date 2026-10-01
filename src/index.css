@@ -8827,6 +8827,16 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   .os-customers-mobile-list { display: flex !important; flex-direction: column; gap: 10px; }
 }
 
+/* Same pair, for the Production board: .os-desktop-table above already hides
+   the desktop table below 900px, but .prod-mobile-cards never had a rule
+   turning it on, so Production's job list disappeared entirely below 900px
+   rather than the two views overlapping or swapping cleanly. */
+.prod-mobile-cards { display: none !important; }
+
+@media (max-width: 900px) {
+  .prod-mobile-cards { display: flex !important; }
+}
+
 /* KPI stat rows: four across on desktop, a snapping carousel on mobile. */
 .os-kpi-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 

@@ -5407,7 +5407,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
             </div>
 
             {/* Mobile job cards */}
-            <div style={{ display: 'none', flexDirection: 'column', gap: 10, padding: '14px 14px' }} className="prod-mobile-cards">
+            <div style={{ flexDirection: 'column', gap: 10, padding: '14px 14px' }} className="prod-mobile-cards">
               {visibleJobs.map((order) => (
                 <div key={order.id} style={{ border: '1px solid #eee5da', borderRadius: 10, padding: '14px', background: '#fff', borderLeft: '3px solid #c97b08' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
