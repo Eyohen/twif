@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, AlertTriangle, XCircle, Layers, Search, RefreshCw, Download, PlusCircle, Boxes, Eye, Edit2, ChevronRight, ImagePlus, X } from 'lucide-react';
 import { api } from '../../lib/api';
-import { money } from '../../utils/oms';
+import { money, useStores } from '../../utils/oms';
 import { stockStatus, itemImage, colourSwatch } from './item';
 import { Status } from '../../components/oms/Common';
 import ItemDetailsPage from './ItemDetailsPage';
@@ -40,6 +40,10 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
   const [approvalRequest, setApprovalRequest] = useState(null);
   const [showApprovals, setShowApprovals] = useState(false);
   const kpiRef = useRef(null);
+  // Storage first, then every active store — a fixed location list rather
+  // than free text, so filtering by location can be an exact match.
+  const stores = useStores();
+  const locationOptions = ['Storage', ...stores.filter((store) => store.status === 'active').map((store) => store.name)];
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -584,7 +588,10 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
               <div className="os-grid-2">
                 <label className="os-field">
                   <span>Location</span>
-                  <input value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} placeholder="e.g. Ikeja store, rack 2" />
+                  <select value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })}>
+                    <option value="">Select a location</option>
+                    {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
                 </label>
                 <label className="os-field">
                   <span>Low stock at</span>

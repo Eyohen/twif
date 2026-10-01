@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Tag, Sliders, MessageSquare, Users, Bell, List, ImagePlus, X } from 'lucide-react';
 import { api } from '../../lib/api';
-import { money } from '../../utils/oms';
+import { money, useStores } from '../../utils/oms';
 import { itemPhotoUrl } from './item';
 
 const DETAIL_FIELDS = ['sku', 'name', 'type', 'colour', 'cost', 'location', 'supplier', 'lowStockThreshold'];
@@ -18,7 +18,12 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
     lowStockThreshold: item.lowStockThreshold ?? '',
   });
   const [image, setImage] = useState({ dataUrl: '', removed: false });
-  const [quantity, setQuantity] = useState(String(item.quantity ?? 0));
+  // The total is never typed directly — an Inventory Manager adds stock that
+  // came in or deducts stock that left, and the new total is computed from
+  // that, so what is being approved is a clear, auditable movement rather
+  // than an arbitrary new number.
+  const [adjustAction, setAdjustAction] = useState('add');
+  const [adjustAmount, setAdjustAmount] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -26,7 +31,19 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
   const [error, setError] = useState('');
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
-  const quantityChanged = String(quantity) !== String(item.quantity ?? 0);
+  // Storage first, then every active store. A legacy free-text location this
+  // item already carries is kept as an extra option so it stays selected and
+  // visible rather than silently disappearing.
+  const stores = useStores();
+  const locationOptions = [
+    'Storage',
+    ...stores.filter((store) => store.status === 'active').map((store) => store.name),
+    ...(item.location && !stores.some((store) => store.name === item.location) && item.location !== 'Storage' ? [item.location] : []),
+  ];
+  const currentQuantity = Number(item.quantity || 0);
+  const adjustAmountNumber = Number(adjustAmount) || 0;
+  const nextQuantity = adjustAction === 'add' ? currentQuantity + adjustAmountNumber : currentQuantity - adjustAmountNumber;
+  const quantityChanged = adjustAmountNumber > 0;
   const detailsChanged = DETAIL_FIELDS.some((field) => String(form[field] ?? '') !== String(item[field] ?? ''))
     || Boolean(image.dataUrl) || image.removed;
 
@@ -64,11 +81,18 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
   const submitQuantity = async (event) => {
     event.preventDefault();
     setError('');
+    if (adjustAction === 'deduct' && nextQuantity < 0) {
+      setError(`Only ${currentQuantity.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${item.unit} in stock — cannot deduct ${adjustAmountNumber}.`);
+      return;
+    }
     setSubmitting(true);
     try {
       const response = await api.post(`/oms/fabrics/${item.id}/edit-requests`, {
-        proposedChanges: { quantity: Number(quantity) },
-        reason,
+        proposedChanges: { quantity: nextQuantity },
+        // The server only stores the resulting total, not the movement — the
+        // action and amount are folded into the reason so the Owner reviews
+        // an "Add 20 yards" / "Deduct 5 yards" request, not a bare number.
+        reason: `${adjustAction === 'add' ? 'Add' : 'Deduct'} ${adjustAmountNumber} ${item.unit}: ${reason}`.trim(),
         requestedBy: currentRole?.name?.split(' (')[0] || 'Inventory Manager',
         requestedByRole: 'inventory_manager',
       });
@@ -156,7 +180,10 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
               </label>
               <label>
                 Location
-                <input value={form.location} onChange={(event) => update('location', event.target.value)} placeholder="e.g. Ikeja store, rack 2" />
+                <select value={form.location} onChange={(event) => update('location', event.target.value)}>
+                  <option value="">Select a location</option>
+                  {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
               </label>
               <label>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -175,11 +202,30 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
           <form onSubmit={submitQuantity}>
             <article>
               <h3><MessageSquare size={14} />Stock Count</h3>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => setAdjustAction('add')}
+                  style={{ flex: 1, padding: '9px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', border: adjustAction === 'add' ? 'none' : '1px solid #ddd5c8', background: adjustAction === 'add' ? '#1a1611' : '#fff', color: adjustAction === 'add' ? '#fff' : '#5a4e42' }}
+                >
+                  Add Inventory
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdjustAction('deduct')}
+                  style={{ flex: 1, padding: '9px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', border: adjustAction === 'deduct' ? 'none' : '1px solid #ddd5c8', background: adjustAction === 'deduct' ? '#1a1611' : '#fff', color: adjustAction === 'deduct' ? '#fff' : '#5a4e42' }}
+                >
+                  Deduct Inventory
+                </button>
+              </div>
               <div className="edit-item-grid">
                 <label>
-                  Quantity in stock
-                  <input type="number" min="0" step="0.1" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
-                  <small>Currently {Number(item.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} {item.unit}. Stock normally moves through production allocation.</small>
+                  Amount to {adjustAction === 'add' ? 'add' : 'deduct'}
+                  <input type="number" min="0" step="0.1" value={adjustAmount} onChange={(event) => setAdjustAmount(event.target.value)} />
+                  <small>
+                    Currently {currentQuantity.toLocaleString(undefined, { maximumFractionDigits: 1 })} {item.unit}.
+                    {quantityChanged ? ` New total once approved: ${nextQuantity.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${item.unit}.` : ' Stock normally moves through production allocation.'}
+                  </small>
                 </label>
               </div>
               <label style={{ display: 'block', marginTop: 12 }}>

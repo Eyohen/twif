@@ -242,7 +242,19 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                 // have nothing in `order.items`; falling back to the order
                 // itself here means this still renders exactly as before
                 // for those, with no regression.
-                const detailItems = order.items?.length ? order.items : [order];
+                const rawDetailItems = order.items?.length ? order.items : [order];
+                // A tailor assigned to one garment on a multi-item order
+                // should only see that garment's detail, not every other
+                // department's on the same order. Items with no per-item
+                // assignment at all (older sheets) are left visible rather
+                // than hidden — only a real, non-matching assignment filters
+                // an item out. If that somehow filters everything away, the
+                // order-level match that put this job on the list in the
+                // first place is trusted over an empty screen.
+                const myDetailItems = rawDetailItems.filter((item) => (
+                  !(item.tailors && item.tailors.length) || item.tailors.includes(tailorName)
+                ));
+                const detailItems = myDetailItems.length ? myDetailItems : rawDetailItems;
                 return (
                 <div style={{ padding: '16px 18px' }}>
                   {/* Orders that cover several garments list each one, so the
@@ -387,14 +399,24 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
 
                         {/* Which department(s) this garment needs — embroidery,
                             native, etc. — and the construction/style details
-                            entered for each when the order sheet was raised. */}
-                        {Array.isArray(item.departments) && item.departments.length ? (
+                            entered for each when the order sheet was raised.
+                            A tailor only needs their own department's detail;
+                            shown unfiltered if they have none set, or if the
+                            item doesn't carry their department at all. */}
+                        {(() => {
+                          const allDepartments = Array.isArray(item.departments) ? item.departments : [];
+                          const myDepartment = currentRole?.tailorDepartment;
+                          const visibleDepartments = myDepartment && allDepartments.includes(myDepartment)
+                            ? [myDepartment]
+                            : allDepartments;
+                          if (!visibleDepartments.length) return null;
+                          return (
                           <div style={{ marginTop: 12 }}>
                             <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                              Department{item.departments.length > 1 ? 's' : ''}
+                              Department{visibleDepartments.length > 1 ? 's' : ''}
                             </h4>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                              {item.departments.map((departmentKey) => {
+                              {visibleDepartments.map((departmentKey) => {
                                 const config = DEPARTMENT_FIELDS[departmentKey];
                                 const values = item.departmentFields?.[departmentKey] || {};
                                 return (
@@ -424,7 +446,8 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                               })}
                             </div>
                           </div>
-                        ) : null}
+                          );
+                        })()}
                       </div>
                     );
                   })}

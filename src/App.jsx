@@ -1736,6 +1736,52 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
     onSaved?.(updated);
   };
 
+  // Previews the pending edits exactly as the customer would see them —
+  // without saving — reusing the same html-preview endpoint and document
+  // view the invoice-creation screen already previews with.
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const openPreview = async () => {
+    setPreviewError('');
+    try {
+      const response = await api.post('/oms/invoices/html-preview', invoiceDocumentPayload({
+        ...invoiceState,
+        customer: customerName,
+        phone: customerPhone,
+        email: customerEmail,
+        dueDate,
+        storeKey: storeKey || invoiceState.storeKey,
+        items: items.map((item) => ({
+          description: item.description,
+          note: item.note,
+          quantity: toNumber(item.quantity),
+          rate: toNumber(item.rate),
+          discountPercent: toNumber(item.discountPercent),
+          amount: (toNumber(item.rate) * toNumber(item.quantity)) * (1 - toNumber(item.discountPercent) / 100),
+        })),
+        subtotal,
+        total: newTotal,
+        balanceDue,
+      }), { responseType: 'text' });
+      setPreviewHtml(response.data);
+      setPreviewing(true);
+    } catch (requestError) {
+      setPreviewError(requestError.response?.data?.message || requestError.message || 'Unable to preview invoice');
+    }
+  };
+
+  if (previewing) {
+    return (
+      <div className="store-invoice-edit">
+        <div className="store-detail-toolbar">
+          <button type="button" onClick={() => setPreviewing(false)}>← &nbsp; Back to editing</button>
+        </div>
+        <InvoiceDocumentPreview html={previewHtml} invoiceNumber={invoice.invoiceNumber} />
+      </div>
+    );
+  }
+
   const save = async () => {
     setError('');
     if (items.some((item) => !item.description.trim())) { setError('Every line needs a description.'); return; }
@@ -1952,9 +1998,11 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
         </div>
 
         {error ? <p className="edit-invoice-error">{error}</p> : null}
+        {previewError ? <p className="edit-invoice-error">{previewError}</p> : null}
 
         <div className="edit-invoice-actions">
           <button type="button" onClick={onClose}>Cancel</button>
+          <button type="button" onClick={openPreview}>Preview</button>
           <button type="button" className="primary" onClick={save} disabled={saving || belowPaid}>{saving ? 'Saving…' : 'Save invoice'}</button>
         </div>
       </div>
@@ -2068,9 +2116,23 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   useEffect(() => {
     if (!requestedInvoice) return;
     const match = sentInvoices.find((item) => item.invoiceNumber === requestedInvoice);
-    if (!match) return;
-    setSelectedInvoice(match);
-    setSearchParams({}, { replace: true });
+    if (match) {
+      setSelectedInvoice(match);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    // Not among the most recent invoices this list loaded — fetch it
+    // directly rather than treating "not on this page" as "doesn't exist".
+    let cancelled = false;
+    api.get(`/oms/invoices/sent/${requestedInvoice}`)
+      .then((response) => {
+        if (cancelled) return;
+        const invoice = response.data?.data?.invoice;
+        if (invoice) setSelectedInvoice(invoice);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setSearchParams({}, { replace: true }); });
+    return () => { cancelled = true; };
   }, [requestedInvoice, sentInvoices, setSearchParams]);
 
   // Started from a customer profile: open the create screen with that
@@ -4713,8 +4775,13 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
 // the two endpoints that enforce the rules — at most four tailors on an item,
 // and nothing scored before the work is marked ready — so the screen cannot
 // promise something the server will refuse.
-function TailorAssignmentPanel({ job, tailors, onSaved, onNotify }) {
-  const items = (job.items || []).length ? job.items : [{ item: job.item || 'Order', tailors: job.tailor && job.tailor !== 'Unassigned' ? [job.tailor] : [] }];
+// `itemIndex` renders just that one item (used from inside each item's own
+// card) rather than every item on the job; the index passed to every write
+// below is offset to match so it still patches the right item on the server.
+function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify }) {
+  const allItems = (job.items || []).length ? job.items : [{ item: job.item || 'Order', tailors: job.tailor && job.tailor !== 'Unassigned' ? [job.tailor] : [] }];
+  const items = itemIndex === undefined ? allItems : [allItems[itemIndex]];
+  const indexOffset = itemIndex === undefined ? 0 : itemIndex;
   const [saving, setSaving] = useState(false);
   const ready = ['Ready', 'Ready for Collection'].includes(job.status);
 
@@ -4755,7 +4822,9 @@ function TailorAssignmentPanel({ job, tailors, onSaved, onNotify }) {
 
   return (
     <div className="tailor-assign">
-      {items.map((item, index) => (
+      {items.map((item, localIndex) => {
+        const index = indexOffset + localIndex;
+        return (
         <div className="tailor-assign-item" key={item.key || index}>
           <header>
             <strong>{item.item || `Item ${index + 1}`}</strong>
@@ -4820,7 +4889,8 @@ function TailorAssignmentPanel({ job, tailors, onSaved, onNotify }) {
             </div>
           ) : null}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -5529,19 +5599,21 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
 
               {/* Full production detail per garment — design notes, the
                   fabric already chosen when the sheet was raised (including
-                  whether the customer is supplying it themselves), and
-                  reference images. Not the fabric-allocation picker further
-                  down, which is Production choosing stock to fulfil this —
-                  this is what was already decided before the job reached
-                  Production. Measurements are the same for every item, so
-                  they're shown once below rather than repeated per item. */}
+                  whether the customer is supplying it themselves), reference
+                  images, and who is assigned to make it. Not the
+                  fabric-allocation picker below, which is Production
+                  choosing stock to fulfil the whole order rather than a
+                  decision scoped to one garment. Measurements are the same
+                  for every item, so they're shown once below rather than
+                  repeated per item. Every item gets a card even with nothing
+                  filled in yet — that's exactly when assigning a tailor and
+                  a due date is most needed. */}
               {(jobModal.items?.length ? jobModal.items : [jobModal]).map((item, index, list) => {
                 const itemFabrics = Array.isArray(item.fabrics) && item.fabrics.length
                   ? item.fabrics
                   : (item.fabric ? [{ name: item.fabric, unit: item.fabricUnit, clientSupplied: false }] : []);
                 const itemImages = Array.isArray(item.styleImages) ? item.styleImages : [];
                 const itemDepartments = Array.isArray(item.departments) ? item.departments : [];
-                if (!item.designNotes && !itemFabrics.length && !itemImages.length && !itemDepartments.length) return null;
                 return (
                   <div key={`${item.item}-${index}`} style={{ border: '1px solid #eee5da', borderRadius: 8, padding: '12px 14px', display: 'grid', gap: 10 }}>
                     {list.length > 1 ? (
@@ -5648,9 +5720,81 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                         <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No reference images uploaded</p>
                       )}
                     </div>
+
+                    {/* Who is making this garment — scoped to this item alone,
+                        since a suit's jacket and trousers are rarely the same
+                        pair of hands. */}
+                    <TailorAssignmentPanel
+                      job={jobModal}
+                      itemIndex={jobModal.items?.length ? index : undefined}
+                      tailors={tailors}
+                      onSaved={(sheet) => {
+                        setJobModal((current) => ({ ...current, ...sheet }));
+                        onUpdateJob(jobModal.id, sheet);
+                      }}
+                      onNotify={notify}
+                    />
                   </div>
                 );
               })}
+
+              {/* Fabric allocation is Production choosing stock to fulfil the
+                  order as a whole — unlike the fabric already chosen above,
+                  which is read off each item — so it stays one list for the
+                  whole job rather than being split per item. */}
+              <div className="os-field fabric-picker">
+                <span>Fabric Allocation</span>
+                {jobFabrics.length ? (
+                  <ul className="fabric-chosen">
+                    {jobFabrics.map((entry) => {
+                      const stock = inventory.find((fabric) => fabric.id === entry.fabricId);
+                      const available = toNumber(stock?.quantity);
+                      const short = Boolean(entry.fabricId) && toNumber(entry.quantity) > available;
+                      return (
+                        <li key={entry.fabricId || 'client-supplied'}>
+                          <div>
+                            <strong>{entry.name}</strong>
+                            <small>{entry.clientSupplied ? 'The customer is bringing this' : `${available} ${stock?.unit || entry.unit} in stock`}</small>
+                          </div>
+                          {entry.clientSupplied ? <span className="fabric-supplied">Customer&apos;s own</span> : (
+                            <label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={entry.quantity ?? ''}
+                                disabled={jobModal.fabricAllocated}
+                                onChange={(event) => setJobFabricQuantity(entry.fabricId, event.target.value)}
+                                aria-label={`How much ${entry.name} this job needs`}
+                              />
+                              <span>{entry.unit || 'units'}</span>
+                            </label>
+                          )}
+                          <button
+                            type="button"
+                            disabled={jobModal.fabricAllocated}
+                            onClick={() => removeJobFabric(entry.fabricId)}
+                            aria-label={`Remove ${entry.name}`}
+                          >×</button>
+                          {short ? <p>Only {available} {stock?.unit} left.</p> : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+                <select
+                  value=""
+                  disabled={jobModal.fabricAllocated}
+                  onChange={(event) => { addJobFabric(event.target.value); event.target.value = ''; }}
+                >
+                  <option value="">{jobFabrics.length ? 'Add another fabric…' : 'Select inventory fabric'}</option>
+                  <option value="client-supplied">Client supplied</option>
+                  {inventory
+                    .filter((fabric) => !jobFabrics.some((entry) => entry.fabricId === fabric.id))
+                    .map((f) => <option key={f.id} value={f.id} disabled={toNumber(f.quantity) <= 0}>{f.name} ({toNumber(f.quantity)} {f.unit}){toNumber(f.quantity) <= 0 ? ' · Out of stock' : ''}</option>)}
+                </select>
+                {jobModal.fabricAllocated ? <span className="os-fabric-hint">Already allocated — stock has been taken for this job.</span> : null}
+              </div>
 
               {/* One set of measurements for the whole order, not per item —
                   the figures themselves, not just whether they exist. */}
@@ -5684,87 +5828,6 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                     </div>
                   );
                 })()}
-              </div>
-
-              {/* Who is making what. A suit's jacket and trousers are rarely
-                  the same pair of hands, so each item carries its own tailors —
-                  as many as four — and each of them is scored on the finished
-                  work once the order is ready. */}
-              <TailorAssignmentPanel
-                job={jobModal}
-                tailors={tailors}
-                onSaved={(sheet) => {
-                  setJobModal((current) => ({ ...current, ...sheet }));
-                  onUpdateJob(jobModal.id, sheet);
-                }}
-                onNotify={notify}
-              />
-
-              {/* Controls */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {/* One garment usually needs several — a shell, a lining, a
-                    zip — and this offered one. Production adds as many as the
-                    order needs, each with how much of it, and allocation takes
-                    the whole list. */}
-                <div className="os-field fabric-picker" style={{ gridColumn: '1 / -1' }}>
-                  <span>Fabric</span>
-                  {jobFabrics.length ? (
-                    <ul className="fabric-chosen">
-                      {jobFabrics.map((entry) => {
-                        const stock = inventory.find((fabric) => fabric.id === entry.fabricId);
-                        const available = toNumber(stock?.quantity);
-                        const short = Boolean(entry.fabricId) && toNumber(entry.quantity) > available;
-                        return (
-                          <li key={entry.fabricId || 'client-supplied'}>
-                            <div>
-                              <strong>{entry.name}</strong>
-                              <small>{entry.clientSupplied ? 'The customer is bringing this' : `${available} ${stock?.unit || entry.unit} in stock`}</small>
-                            </div>
-                            {entry.clientSupplied ? <span className="fabric-supplied">Customer&apos;s own</span> : (
-                              <label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={entry.quantity ?? ''}
-                                  disabled={jobModal.fabricAllocated}
-                                  onChange={(event) => setJobFabricQuantity(entry.fabricId, event.target.value)}
-                                  aria-label={`How much ${entry.name} this job needs`}
-                                />
-                                <span>{entry.unit || 'units'}</span>
-                              </label>
-                            )}
-                            <button
-                              type="button"
-                              disabled={jobModal.fabricAllocated}
-                              onClick={() => removeJobFabric(entry.fabricId)}
-                              aria-label={`Remove ${entry.name}`}
-                            >×</button>
-                            {short ? <p>Only {available} {stock?.unit} left.</p> : null}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : null}
-                  <select
-                    value=""
-                    disabled={jobModal.fabricAllocated}
-                    onChange={(event) => { addJobFabric(event.target.value); event.target.value = ''; }}
-                  >
-                    <option value="">{jobFabrics.length ? 'Add another fabric…' : 'Select inventory fabric'}</option>
-                    <option value="client-supplied">Client supplied</option>
-                    {inventory
-                      .filter((fabric) => !jobFabrics.some((entry) => entry.fabricId === fabric.id))
-                      .map((f) => <option key={f.id} value={f.id} disabled={toNumber(f.quantity) <= 0}>{f.name} ({toNumber(f.quantity)} {f.unit}){toNumber(f.quantity) <= 0 ? ' · Out of stock' : ''}</option>)}
-                  </select>
-                  {jobModal.fabricAllocated ? <span className="os-fabric-hint">Already allocated — stock has been taken for this job.</span> : null}
-                </div>
-                {/* Each item's tailor due date sits with the item, above. */}
-                {/* Quantity now sits against each fabric above. */}
-                {/* A single note here read to every department on every item,
-                    which meant embroidery saw instructions meant for the suit
-                    department. Instructions now live with each item's
-                    department, in the section above. */}
               </div>
 
               {/* The scope calls for a comment thread on the job sheet, so a
