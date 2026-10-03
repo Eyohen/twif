@@ -389,9 +389,15 @@ export const productionBlockReason = (job, invoices, releasePercent = DEFAULT_RE
   if (!job?.invoiceNumber) return null;
   const invoice = invoices.find((item) => item.invoiceNumber === job.invoiceNumber);
 
-  if (!isInvoiceApproved(invoice)) return 'Awaiting Accounts approval';
-  // An Owner or Admin has already sent this one through knowing it was held.
+  // An Owner or Admin has already sent this one through knowing it was
+  // held — for whatever reason it was held, not only an underpaid invoice.
+  // Checked first: lower down, an override only ever escaped the payment
+  // threshold and never "Accounts haven't approved this yet", so overriding
+  // a job held on approval left it sitting in the queue unchanged even
+  // though the button for it was shown and the override was recorded.
   if (job.productionOverride) return hasMeasurements(job) ? null : 'Measurements missing';
+
+  if (!isInvoiceApproved(invoice)) return 'Awaiting Accounts approval';
 
   if (!isFullyPaid(invoice)) {
     const percent = paidPercent(invoice);
