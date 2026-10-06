@@ -5214,6 +5214,13 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
       const items = [...jobModal.items];
       for (let index = 0; index < items.length; index += 1) {
         if (items[index].fabricAllocated) continue;
+        // Nothing chosen for this item at all — "Nil, Production will
+        // choose" is a real, supported state (same as before this session,
+        // when fabric was pooled across every item rather than required on
+        // each one), not an error. Starting the job must not be blocked by
+        // a garment nobody has picked fabric for yet.
+        const needsFabric = (items[index].fabrics || []).some((entry) => entry.fabricId || entry.clientSupplied);
+        if (!needsFabric) continue;
         const itemLabel = items[index].item || `Item ${index + 1}`;
         // Each item is allocated in turn — a shortfall partway through must
         // not be masked by allocating the rest anyway.
