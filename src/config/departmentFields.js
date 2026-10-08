@@ -116,3 +116,13 @@ export const DEPARTMENT_FIELDS = {
     ],
   },
 };
+
+// Live database configuration wins; the bundled definitions are a safe
+// first-paint fallback while the department request is loading.
+export const departmentConfig = (departments, key) => {
+  const saved = departments?.find((department) => department.key === key);
+  if (saved && Array.isArray(saved.fields)) {
+    return { label: saved.name, note: saved.note || '', fields: saved.fields };
+  }
+  return DEPARTMENT_FIELDS[key] || { label: saved?.name || key, note: '', fields: [] };
+};

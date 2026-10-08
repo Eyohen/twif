@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { ArrowLeft, CheckCircle, Package, CreditCard, Ruler, Clock, User, Scissors, Layers, Image as ImageIcon, ClipboardList } from 'lucide-react';
-import { money, formatMoment, amountReceived, invoicePayable, invoiceApprovalStatus, daysUntilDue, dueDateLabel, toNumber } from '../../utils/oms';
+import { money, formatMoment, amountReceived, invoicePayable, invoiceApprovalStatus, daysUntilDue, dueDateLabel, toNumber, useDepartments } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
-import { DEPARTMENT_FIELDS } from '../../config/departmentFields';
+import { departmentConfig } from '../../config/departmentFields';
 
 const label = { fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' };
 const outlineButton = {
@@ -16,6 +16,7 @@ const outlineButton = {
 // garment's own fabric, construction choices and style references, not just
 // its name and a price.
 export default function OrderSheetDetailsPage({ order, onBack, onEdit, backLabel = 'Back to Order Sheets' }) {
+  const departmentDirectory = useDepartments();
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   const sheet = order.orderSheet || order.job || {};
@@ -200,7 +201,7 @@ export default function OrderSheetDetailsPage({ order, onBack, onEdit, backLabel
 
                   {/* Departments and their construction/style fields */}
                   {departments.length ? departments.map((departmentKey) => {
-                    const config = DEPARTMENT_FIELDS[departmentKey];
+                    const config = departmentConfig(departmentDirectory, departmentKey);
                     const values = garment.departmentFields?.[departmentKey] || {};
                     return (
                       <div key={departmentKey}>

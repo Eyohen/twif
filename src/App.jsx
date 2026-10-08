@@ -44,7 +44,7 @@ import {
   useStores,
   useDepartments,
 } from './utils/oms';
-import { DEPARTMENT_FIELDS } from './config/departmentFields';
+import { DEPARTMENT_FIELDS, departmentConfig } from './config/departmentFields';
 import { isValidPhone, phoneDigits, PHONE_ERROR } from './utils/phone';
 
 const trackingBaseUrl = (
@@ -4580,14 +4580,15 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
                   </select>
                 </div>
 
-                {(orderItem.departments || []).map((departmentKey) => (
-                  DEPARTMENT_FIELDS[departmentKey] ? (
+                {(orderItem.departments || []).map((departmentKey) => {
+                  const config = departmentConfig(departments, departmentKey);
+                  return config ? (
                     <div className="os-department-fields" key={departmentKey}>
                       {(orderItem.departments || []).length > 1 ? (
-                        <h4 className="os-department-fields-title">{DEPARTMENT_FIELDS[departmentKey].label}</h4>
+                        <h4 className="os-department-fields-title">{config.label}</h4>
                       ) : null}
                       <div className="os-grid-3">
-                        {DEPARTMENT_FIELDS[departmentKey].fields.map((field) => (
+                        {config.fields.map((field) => (
                           <label className="os-field" key={field.key}>
                             <span>{field.label}{field.required ? <span style={{ color: '#d62828' }}> *</span> : null}</span>
                             <input
@@ -4597,12 +4598,12 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
                           </label>
                         ))}
                       </div>
-                      {DEPARTMENT_FIELDS[departmentKey].note ? (
-                        <p className="os-department-note">{DEPARTMENT_FIELDS[departmentKey].note}</p>
+                      {config.note ? (
+                        <p className="os-department-note">{config.note}</p>
                       ) : null}
                     </div>
-                  ) : null
-                ))}
+                  ) : null;
+                })}
               </div>
 
               <div className="os-card-body os-grid-2" style={{ paddingTop: 0 }}>
@@ -4921,6 +4922,7 @@ const unscoredCount = (job) => (job.items || []).reduce((total, item) => (
 ), 0);
 
 function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, currentRole, onOverrideHold, onApproveInvoice }) {
+  const departments = useDepartments();
   const canOverrideHold = ['owner', 'admin'].includes(currentRole?.id);
   const [pendingReject, setPendingReject] = useState(null);
   const [heldPage, setHeldPage] = useState(1);
@@ -5788,7 +5790,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       {itemDepartments.length ? (
                         <div style={{ display: 'grid', gap: 10 }}>
                           {itemDepartments.map((departmentKey) => {
-                            const config = DEPARTMENT_FIELDS[departmentKey];
+                            const config = departmentConfig(departments, departmentKey);
                             const values = item.departmentFields?.[departmentKey] || {};
                             return (
                               <div key={departmentKey}>

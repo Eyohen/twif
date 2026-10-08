@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CheckSquare, Clock, User, Package, ArrowRight, Play, CheckCircle, ChevronDown, ChevronUp, Calendar, Ruler, Image, Scissors, Filter } from 'lucide-react';
-import { worksOnJob } from '../../utils/oms';
-import { DEPARTMENT_FIELDS } from '../../config/departmentFields';
+import { worksOnJob, useDepartments } from '../../utils/oms';
+import { departmentConfig } from '../../config/departmentFields';
 import JobCommentThread from '../../components/oms/JobCommentThread';
 import Pagination from '../../components/oms/Pagination';
 
@@ -37,6 +37,7 @@ const imageFileName = (image, fallback) => {
 const formatDue = (value) => new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 
 export default function MyTasksPage({ compact = false, currentRole, productionJobs = [], onUpdateJob }) {
+  const departmentDirectory = useDepartments();
   const tailorName = currentRole?.name?.split(' (')[0] || '';
   const tailorDepartment = currentRole?.tailorDepartment;
   const itemBelongsToTailor = (item) => {
@@ -441,7 +442,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                             </h4>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                               {visibleDepartments.map((departmentKey) => {
-                                const config = DEPARTMENT_FIELDS[departmentKey];
+                                const config = departmentConfig(departmentDirectory, departmentKey);
                                 const values = item.departmentFields?.[departmentKey] || {};
                                 return (
                                   <section key={departmentKey}>
