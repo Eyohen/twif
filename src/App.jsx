@@ -2873,14 +2873,20 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
       .then((response) => {
         if (!live) return;
         const list = response.data?.data?.stores;
-        if (Array.isArray(list)) setStores(list.filter((store) => store.status === 'active'));
+        if (Array.isArray(list)) {
+          const active = list.filter((store) => store.status === 'active');
+          const allowed = currentRole?.id === 'store_manager' && currentRole.store !== 'all'
+            ? active.filter((store) => store.key === currentRole.store)
+            : active;
+          setStores(allowed);
+        }
         setStoresLoaded(true);
       })
       .catch(() => { if (live) setStoresLoaded(true); });
     load();
     window.addEventListener('focus', load);
     return () => { live = false; window.removeEventListener('focus', load); };
-  }, []);
+  }, [currentRole?.id, currentRole?.store]);
   const storeLabel = (key) => stores.find((store) => store.key === key)?.name || key;
   const [form, setForm] = useState({
     store: '',
@@ -4808,19 +4814,21 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify }) {
   };
 
   const toggleTailor = (index, name) => {
-    const current = items[index].tailors || [];
+    const item = allItems[index];
+    const current = item.tailors || [];
     const next = current.includes(name) ? current.filter((entry) => entry !== name) : [...current, name];
     if (next.length > 4) {
       onNotify?.('An item can be shared between at most 4 tailors.', 'error');
       return;
     }
     write('assignments', { items: [{ index, tailors: next }] },
-      next.length ? `${items[index].item || 'Item'} assigned to ${next.join(', ')}` : 'Assignment removed');
+      next.length ? `${item.item || 'Item'} assigned to ${next.join(', ')}` : 'Assignment removed');
   };
 
   const setDueDate = (index, value) => {
-    write('assignments', { items: [{ index, tailors: items[index].tailors || [], tailorDueDate: value }] },
-      value ? `Due date for ${items[index].item || 'item'} saved` : 'Due date cleared');
+    const item = allItems[index];
+    write('assignments', { items: [{ index, tailors: item.tailors || [], tailorDueDate: value }] },
+      value ? `Due date for ${item.item || 'item'} saved` : 'Due date cleared');
   };
 
   const score = (index, name, value) => {
@@ -4832,6 +4840,10 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify }) {
     <div className="tailor-assign">
       {items.map((item, localIndex) => {
         const index = indexOffset + localIndex;
+        const itemDepartments = Array.isArray(item.departments) ? item.departments : [];
+        const eligibleTailors = itemDepartments.length
+          ? tailors.filter((person) => itemDepartments.includes(person.tailorDepartment))
+          : [];
         return (
         <div className="tailor-assign-item" key={item.key || index}>
           <header>
@@ -4857,7 +4869,7 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify }) {
             </small>
           </label>
           <div className="tailor-assign-picks">
-            {tailors.map((person) => {
+            {eligibleTailors.map((person) => {
               const chosen = (item.tailors || []).includes(person.displayName);
               return (
                 <button
@@ -4869,7 +4881,7 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify }) {
                 >{person.displayName}</button>
               );
             })}
-            {tailors.length ? null : <span className="tailor-assign-empty">No tailors on the staff list yet.</span>}
+            {eligibleTailors.length ? null : <span className="tailor-assign-empty">{itemDepartments.length ? 'No active tailors belong to this item’s department.' : 'Assign a department before choosing a tailor.'}</span>}
           </div>
 
           {/* Scoring only makes sense once there is finished work to judge, so
@@ -8177,6 +8189,8 @@ function App() {
           phone: staff.phone,
           name: staff.displayName,
           store: staff.store,
+          tailorDepartment: staff.tailorDepartment,
+          tailorGrade: staff.tailorGrade,
           profileImageUrl: staff.profileImageUrl || current?.profileImageUrl,
         }));
         setRole(staff.role);
@@ -8200,11 +8214,16 @@ function App() {
     return {
       ...roleDetails,
       ...signedInAccount,
+      // `signedInAccount.id` is the staff UUID. Keep `id` as the role key;
+      // role checks throughout the app compare it with "owner", "admin", etc.
+      id: roleDetails.id,
       name: staffProfile?.displayName || signedInAccount?.name || roleDetails.name,
       profileImageUrl: staffProfile?.profileImageUrl || '',
       // Who this actually is, as the server knows them. Used where ownership
       // matters — a display name is not unique enough to decide that.
       staffId: staffProfile?.id || signedInAccount?.id || null,
+      tailorDepartment: staffProfile?.tailorDepartment || signedInAccount?.tailorDepartment || null,
+      tailorGrade: staffProfile?.tailorGrade || signedInAccount?.tailorGrade || null,
     };
   }, [role, signedInAccount, staffProfile]);
 

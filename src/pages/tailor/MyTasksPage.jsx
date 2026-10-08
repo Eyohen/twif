@@ -38,7 +38,19 @@ const formatDue = (value) => new Date(`${value}T00:00:00`).toLocaleDateString('e
 
 export default function MyTasksPage({ compact = false, currentRole, productionJobs = [], onUpdateJob }) {
   const tailorName = currentRole?.name?.split(' (')[0] || '';
-  const allAssigned = productionJobs.filter((order) => worksOnJob(order, tailorName));
+  const tailorDepartment = currentRole?.tailorDepartment;
+  const itemBelongsToTailor = (item) => {
+    const departments = Array.isArray(item?.departments) ? item.departments : [];
+    // A real multi-item sheet carries an array even when nobody is assigned;
+    // an absent array is the legacy, single-item shape whose top-level tailor
+    // was already checked by worksOnJob above.
+    const assigned = Array.isArray(item?.tailors) ? item.tailors.includes(tailorName) : true;
+    return assigned && (!departments.length || departments.includes(tailorDepartment));
+  };
+  const allAssigned = productionJobs.filter((order) => (
+    worksOnJob(order, tailorName)
+    && (order.items?.length ? order.items.some(itemBelongsToTailor) : itemBelongsToTailor(order))
+  ));
   const [expandedId, setExpandedId] = useState(null);
   const [filter, setFilter] = useState('All tasks');
   const [viewingImage, setViewingImage] = useState(null);
@@ -156,7 +168,9 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
           const { label, bg, color, border } = statusConfig[status];
           const initials = order.customer.split(' ').map(p => p[0]).join('').slice(0, 2);
           const styleImages = Array.isArray(order.styleImages) ? order.styleImages : [];
-          const itemsLabel = itemsLabelFor(order);
+          const scopedItems = order.items?.length ? order.items.filter(itemBelongsToTailor) : [];
+          const itemsLabel = scopedItems.length ? itemsLabelFor({ ...order, items: scopedItems }) : itemsLabelFor(order);
+          const scopedDueDate = scopedItems.map((item) => item.tailorDueDate).filter(Boolean).sort()[0] || order.tailorDueDate;
           const orderFabricLabel = orderFabricLabelFor(order);
           const fabricLabelFor = (item) => itemFabricLabelFor(item, order);
 
@@ -195,8 +209,8 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                     {/* The customer's delivery date is not a tailor's to see;
                         Production sets the date they work to. */}
                     <span style={{ fontSize: 12, color: '#8a7a6a' }}>
-                      Due: {order.tailorDueDate
-                        ? new Date(`${order.tailorDueDate}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+                      Due: {scopedDueDate
+                        ? new Date(`${scopedDueDate}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
                         : 'Ask your production manager'}
                     </span>
                   </div>
@@ -264,18 +278,15 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                 // an item out. If that somehow filters everything away, the
                 // order-level match that put this job on the list in the
                 // first place is trusted over an empty screen.
-                const myDetailItems = rawDetailItems.filter((item) => (
-                  !(item.tailors && item.tailors.length) || item.tailors.includes(tailorName)
-                ));
-                const detailItems = myDetailItems.length ? myDetailItems : rawDetailItems;
+                const detailItems = rawDetailItems.filter(itemBelongsToTailor);
                 return (
                 <div style={{ padding: '16px 18px' }}>
                   {/* Orders that cover several garments list each one, so the
                       tailor sees the whole job rather than only the first item. */}
-                  {order.items?.length > 1 ? (
+                  {detailItems.length > 1 ? (
                     <div className="job-item-list" style={{ marginBottom: 16 }}>
-                      <div className="job-item-list-label">{order.items.length} items on this order</div>
-                      {order.items.map((line, lineIndex) => (
+                      <div className="job-item-list-label">{detailItems.length} items assigned to your department</div>
+                      {detailItems.map((line, lineIndex) => (
                         <div key={`${line.item}-${lineIndex}`} className="job-item-row">
                           <span className="job-item-index">{lineIndex + 1}</span>
                           <div>

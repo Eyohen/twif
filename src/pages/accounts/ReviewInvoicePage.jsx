@@ -58,6 +58,8 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
   const completeBlocked = settled ? null : 'Only available once the invoice is fully paid';
   const partialBlocked = settled
     ? 'This invoice is fully paid — use Approve Completed Payment'
+    : status === 'Approved'
+      ? 'This partial payment has already been approved'
     : belowThreshold && !mayApproveShortfall
       ? `Only ${Math.floor(percentPaid)}% paid — under ${releasePercent}%, so only an Admin or Owner can approve it`
       : null;
@@ -397,7 +399,7 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
             <div className="os-card-body" style={{ gap: 8, padding: '12px' }}>
               {[
                 [<CheckCircle size={15} />, 'Approve Completed Payment', 'Payment received in full — release to production', 'Approved', '#2a7d4f', '#f0faf4', '#b8e4cb', completeBlocked],
-                [<Flag size={15} />, 'Approve Partial Payment', belowThreshold ? `Under ${releasePercent}% — Admin or Owner only` : `At least ${releasePercent}% received — release to production`, 'Approved', '#7a6030', '#fffbf0', '#f0ddb0', partialBlocked],
+                [<Flag size={15} />, 'Approve Partial Payment', status === 'Approved' ? 'Partial payment already approved' : belowThreshold ? `Under ${releasePercent}% — Admin or Owner only` : `At least ${releasePercent}% received — release to production`, 'Approved', '#7a6030', '#fffbf0', '#f0ddb0', partialBlocked],
                 [<XCircle size={15} />, 'Reject Invoice', 'Reject and send back to store', 'Rejected', '#8a3520', '#fff5f0', '#f0c8b8'],
                 [<HelpCircle size={15} />, 'Flag for Clarification', 'Request more info from store', 'Flagged', '#5a4e42', '#f5f0e8', '#ddd5c8'],
               ].map(([icon, title, detail, action, color, bg, border, blocked]) => (
