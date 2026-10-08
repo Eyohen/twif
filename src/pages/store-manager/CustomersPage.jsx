@@ -10,6 +10,7 @@ import CustomerOrdersPage from './CustomerOrdersPage';
 import OrderDetailsPage from './OrderDetailsPage';
 import Pagination from '../../components/oms/Pagination';
 import { Status } from '../../components/oms/Common';
+import { phoneDigits, PHONE_ERROR } from '../../utils/phone';
 
 const KPI_COUNT = 4;
 
@@ -532,7 +533,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
               </label>
               <label className="os-field">
                 <span>Phone Number <span style={{ color: '#e05252' }}>*</span></span>
-                <input value={createForm.phone} onChange={(event) => setCreateForm({ ...createForm, phone: event.target.value })} required placeholder="08012345678" />
+                <input type="tel" inputMode="numeric" pattern="[0-9]{11}" maxLength={11} value={createForm.phone} onChange={(event) => setCreateForm({ ...createForm, phone: phoneDigits(event.target.value) })} required placeholder="08012345678" title={PHONE_ERROR} />
               </label>
               <label className="os-field">
                 <span>Email Address <em style={{ fontWeight: 400, fontSize: 10, textTransform: 'none' }}>(optional)</em></span>

@@ -153,7 +153,7 @@ When('the Owner adds a member of staff to every store in turn', async function (
   this.results = [];
 
   for (const store of STORES) {
-    const tag = `${Date.now()}${STORES.indexOf(store)}`.slice(-8);
+    const tag = `${Date.now()}${STORES.indexOf(store)}`.slice(-7);
     const response = await client.post(`${API_URL}/oms/staff`, {
       data: {
         displayName: `Store Probe ${tag}`,

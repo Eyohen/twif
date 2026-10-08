@@ -45,6 +45,7 @@ import {
   useDepartments,
 } from './utils/oms';
 import { DEPARTMENT_FIELDS } from './config/departmentFields';
+import { isValidPhone, phoneDigits, PHONE_ERROR } from './utils/phone';
 
 const trackingBaseUrl = (
   import.meta.env.VITE_TRACKING_BASE_URL ||
@@ -1784,6 +1785,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
 
   const save = async () => {
     setError('');
+    if (!isValidPhone(customerPhone)) { setError(PHONE_ERROR); return; }
     if (items.some((item) => !item.description.trim())) { setError('Every line needs a description.'); return; }
     if (belowPaid) { setError(`This invoice cannot be reduced below the ${money.format(alreadyPaid)} already recorded as paid against it.`); return; }
     setSaving(true);
@@ -1831,7 +1833,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
           </label>
           <label className="os-field">
             <span>Phone</span>
-            <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} />
+            <input type="tel" inputMode="numeric" pattern="[0-9]{11}" maxLength={11} value={customerPhone} onChange={(event) => setCustomerPhone(phoneDigits(event.target.value))} title={PHONE_ERROR} />
           </label>
           <label className="os-field">
             <span>Email</span>
@@ -3106,7 +3108,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   const validateInvoice = () => {
     if (!form.store) return 'Choose a sending store. An Admin or Owner needs to add one if the list is empty.';
     if (!form.customerName.trim()) return 'Select a customer.';
-    if (!form.customerPhone.trim()) return 'Enter the customer\'s phone number.';
+    if (!isValidPhone(form.customerPhone)) return PHONE_ERROR;
     if (!items.some((item) => item.description.trim())) return 'Add at least one invoice item.';
     if (evidenceRequired && !paymentEvidence) return 'Upload payment evidence for a partially or fully paid invoice.';
     // A part paid invoice with no figure is what left Accounts unable to
@@ -3264,7 +3266,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
               </label>
               <label className="os-field">
                 <span>Customer Phone *</span>
-                <input value={form.customerPhone} onChange={(event) => updateForm('customerPhone', event.target.value)} placeholder="e.g. 08012345678" required />
+                <input type="tel" inputMode="numeric" pattern="[0-9]{11}" maxLength={11} value={form.customerPhone} onChange={(event) => updateForm('customerPhone', phoneDigits(event.target.value))} placeholder="e.g. 08012345678" title={PHONE_ERROR} required />
               </label>
               <label className="os-field os-field-full">
                 <span>Customer Email</span>
@@ -6308,6 +6310,7 @@ function InventoryView() {
 
 function StaffView({ role, currentRole }) {
   const stores = useStores();
+  const departments = useDepartments();
   const emptyForm = { displayName: '', phone: '', pin: '', role: 'store_manager', store: 'all', status: 'active', dateOfBirth: '', tailorDepartment: '', tailorGrade: '' };
   const [staffUsers, setStaffUsers] = useState([]);
   const [message, setMessage] = useState('');
@@ -6356,6 +6359,10 @@ function StaffView({ role, currentRole }) {
 
   const saveStaff = async (event) => {
     event.preventDefault();
+    if (!isValidPhone(form.phone)) {
+      setMessage(PHONE_ERROR);
+      return;
+    }
     if (form.role === 'tailor' && !form.tailorDepartment) {
       setMessage('Select a department for the tailor.');
       return;
@@ -6485,7 +6492,7 @@ function StaffView({ role, currentRole }) {
             </label>
             <label className="os-field">
               <span>Phone Number</span>
-              <input value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} placeholder="08012345678" required />
+              <input type="tel" inputMode="numeric" pattern="[0-9]{11}" maxLength={11} value={form.phone} onChange={(event) => updateForm('phone', phoneDigits(event.target.value))} placeholder="08012345678" title={PHONE_ERROR} required />
             </label>
             <label className="os-field">
               <span>{editingId ? 'New PIN (optional)' : 'Login PIN'}</span>
@@ -6523,10 +6530,9 @@ function StaffView({ role, currentRole }) {
                   <span>Tailor Department</span>
                   <select value={form.tailorDepartment} onChange={(event) => updateForm('tailorDepartment', event.target.value)} required>
                     <option value="">Select department</option>
-                    <option value="native">Native</option>
-                    <option value="suit">Suits</option>
-                    <option value="trouser">Trouser</option>
-                    <option value="finishing">Finishing</option>
+                    {departments.filter((department) => department.status === 'active' || department.key === form.tailorDepartment).map((department) => (
+                      <option key={department.id || department.key} value={department.key}>{department.name}</option>
+                    ))}
                   </select>
                 </label>
                 <label className="os-field">
@@ -8166,6 +8172,7 @@ function App() {
         if (!live || !staff) return;
         setSignedInAccount((current) => ({
           ...current,
+          id: staff.id,
           role: staff.role,
           phone: staff.phone,
           name: staff.displayName,
@@ -8193,11 +8200,11 @@ function App() {
     return {
       ...roleDetails,
       ...signedInAccount,
-      name: staffProfile?.displayName || roleDetails.name,
+      name: staffProfile?.displayName || signedInAccount?.name || roleDetails.name,
       profileImageUrl: staffProfile?.profileImageUrl || '',
       // Who this actually is, as the server knows them. Used where ownership
       // matters — a display name is not unique enough to decide that.
-      staffId: staffProfile?.id || null,
+      staffId: staffProfile?.id || signedInAccount?.id || null,
     };
   }, [role, signedInAccount, staffProfile]);
 

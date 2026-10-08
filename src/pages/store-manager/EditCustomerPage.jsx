@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { ArrowLeft, Save, X, User, Settings, Star, Ruler, StickyNote, Edit2, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react';
 import { money, CUSTOMER_STATUSES, useStores } from '../../utils/oms';
 import { api } from '../../lib/api';
+import { phoneDigits, PHONE_ERROR } from '../../utils/phone';
 
 export default function EditCustomerPage({ customer, onCancel, onSave, onViewMeasurements, currentRole }) {
   const notesFieldRef = useRef(null);
@@ -204,7 +205,15 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
                       onChange={(event) => update(field, event.target.value)}
                     />
                   ) : (
-                    <input type={type} value={form[field]} onChange={(event) => update(field, event.target.value)} />
+                    <input
+                      type={field === 'phone' ? 'tel' : type}
+                      inputMode={field === 'phone' ? 'numeric' : undefined}
+                      pattern={field === 'phone' ? '[0-9]{11}' : undefined}
+                      maxLength={field === 'phone' ? 11 : undefined}
+                      title={field === 'phone' ? PHONE_ERROR : undefined}
+                      value={form[field]}
+                      onChange={(event) => update(field, field === 'phone' ? phoneDigits(event.target.value) : event.target.value)}
+                    />
                   )}
                 </label>
               ))}

@@ -34,6 +34,7 @@ export const VIEW_PATHS = {
   'Tailor List': 'tailor-list',
   'Tailor Performance': 'tailor-performance',
   'Order Sheet': 'order-sheet',
+  'Order Sheets': 'order-sheets',
   'User Management': 'user-management',
   Stores: 'stores',
   Departments: 'departments',

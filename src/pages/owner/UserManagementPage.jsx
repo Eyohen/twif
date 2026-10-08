@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { downloadCsv, csvStamp } from '../../utils/csv';
-import { formatMoment, useStores } from '../../utils/oms';
+import { formatMoment, useDepartments, useStores } from '../../utils/oms';
+import { isValidPhone, phoneDigits, PHONE_ERROR } from '../../utils/phone';
 import { Status } from '../../components/oms/Common';
 import { roles as staffRoles } from '../../config/oms';
 
@@ -138,6 +139,7 @@ export default function UserManagementPage() {
       if (form.pin.trim().length < 4) { setMessage('A PIN must be at least 4 characters.'); return; }
       if (form.pin !== form.confirmPin) { setMessage('The two PINs do not match.'); return; }
     }
+    if (!isValidPhone(form.phone)) { setMessage(PHONE_ERROR); return; }
 
     const payload = { ...form, displayName: form.displayName || form.fullName };
     try {
@@ -477,6 +479,10 @@ export default function UserManagementPage() {
 
 function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
   const assignableStores = useStores();
+  const departments = useDepartments();
+  const activeDepartments = departments.filter((department) => (
+    department.status === 'active' || department.key === form.tailorDepartment
+  ));
   return (
     <div className="os-page">
       {/* Breadcrumb */}
@@ -536,7 +542,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
                 </label>
                 <label className="os-field">
                   <span>Phone Number <span style={{ color: '#e05252' }}>*</span></span>
-                  <input value={form.phone} onChange={(e) => update('phone', e.target.value)} required placeholder="080 0000 0000" />
+                  <input type="tel" inputMode="numeric" pattern="[0-9]{11}" maxLength={11} value={form.phone} onChange={(e) => update('phone', phoneDigits(e.target.value))} required placeholder="08012345678" title={PHONE_ERROR} />
                 </label>
                 <label className="os-field">
                   <span>Date of Birth</span>
@@ -571,10 +577,9 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
                     <label className="os-field">
                       <span>Department <span style={{ color: '#e05252' }}>*</span></span>
                       <select value={form.tailorDepartment} onChange={(e) => update('tailorDepartment', e.target.value)}>
-                        <option value="native">Native</option>
-                        <option value="suit">Suits</option>
-                        <option value="trouser">Trouser</option>
-                        <option value="finishing">Finishing</option>
+                        {activeDepartments.map((department) => (
+                          <option key={department.id || department.key} value={department.key}>{department.name}</option>
+                        ))}
                       </select>
                     </label>
                     <label className="os-field">
