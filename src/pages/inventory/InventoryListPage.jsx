@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Box, AlertTriangle, XCircle, Layers, Search, RefreshCw, Download, PlusCircle, Boxes, Eye, Edit2, ChevronRight, ImagePlus, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money, useStores } from '../../utils/oms';
-import { stockStatus, itemImage, colourSwatch } from './item';
+import { stockStatus, itemImage, colourSwatch, formatInventoryNumber } from './item';
 import { Status } from '../../components/oms/Common';
 import ItemDetailsPage from './ItemDetailsPage';
 import EditItemPage from './EditItemPage';
@@ -379,7 +379,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
                   </td>
                   <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5', whiteSpace: 'nowrap' }}>
                     <strong style={{ fontSize: 14, color: itemStatus === 'Out of Stock' ? '#8a3520' : itemStatus === 'Low Stock' ? '#7a6030' : '#1a1611' }}>
-                      {Number(item.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                      {formatInventoryNumber(item.quantity)}
                     </strong>
                     <span style={{ color: '#8a7a6a', marginLeft: 4 }}>{item.unit}</span>
                   </td>
@@ -477,7 +477,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>In Stock</div>
                     <div style={{ fontSize: 15, fontWeight: 800, color: itemStatus === 'Out of Stock' ? '#8a3520' : itemStatus === 'Low Stock' ? '#7a6030' : '#1a1611', marginTop: 3 }}>
-                      {Number(item.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} {item.unit}
+                      {formatInventoryNumber(item.quantity)} {item.unit}
                     </div>
                   </div>
                   <div>
@@ -594,7 +594,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
               <div className="os-grid-3">
                 <label className="os-field">
                   <span>Quantity</span>
-                  <input type="number" step="0.1" min="0" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} required placeholder="0" />
+                  <input type="number" step="0.01" min="0" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} required placeholder="0.00" />
                 </label>
                 <label className="os-field">
                   <span>Unit</span>
@@ -604,7 +604,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
                 </label>
                 <label className="os-field">
                   <span>Cost per {form.unit === 'yards' ? 'yard' : 'unit'}</span>
-                  <input type="number" step="1" min="0" value={form.cost} onChange={(event) => setForm({ ...form, cost: event.target.value })} placeholder="₦" />
+                  <input type="number" step="0.01" min="0" value={form.cost} onChange={(event) => setForm({ ...form, cost: event.target.value })} placeholder="₦0.00" />
                 </label>
               </div>
 
@@ -618,7 +618,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
                 </label>
                 <label className="os-field">
                   <span>Low stock at</span>
-                  <input type="number" step="0.1" min="0" value={form.lowStockThreshold} onChange={(event) => setForm({ ...form, lowStockThreshold: event.target.value })} placeholder="0" />
+                  <input type="number" step="0.01" min="0" value={form.lowStockThreshold} onChange={(event) => setForm({ ...form, lowStockThreshold: event.target.value })} placeholder="0.00" />
                 </label>
               </div>
 

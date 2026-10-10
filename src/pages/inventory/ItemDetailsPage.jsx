@@ -3,7 +3,7 @@ import { ArrowLeft, Edit3, Box, Tag, Sliders, TrendingUp, Building2, Activity, A
 import { api } from '../../lib/api';
 import { money, formatMoment } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
-import { stockStatus, itemImage, colourSwatch } from './item';
+import { stockStatus, itemImage, colourSwatch, formatInventoryNumber } from './item';
 
 export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, approvalRequest, readOnly = false }) {
   // The list row is shown immediately so the page never opens blank, then the
@@ -118,7 +118,7 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
             <i><Box size={20} /></i>
             <span>
               <small>Current Stock</small>
-              <strong>{quantity.toLocaleString(undefined, { maximumFractionDigits: 1 })} <em>{unit}</em></strong>
+              <strong>{formatInventoryNumber(quantity)} <em>{unit}</em></strong>
               <b>{status}</b>
             </span>
           </article>
@@ -126,7 +126,7 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
             <i><Sliders size={20} /></i>
             <span>
               <small>Low-stock Threshold</small>
-              <strong>{threshold.toLocaleString(undefined, { maximumFractionDigits: 1 })} <em>{unit}</em></strong>
+              <strong>{formatInventoryNumber(threshold)} <em>{unit}</em></strong>
             </span>
           </article>
           <article>
@@ -170,7 +170,7 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
                       <td>{formatMoment(row.createdAt)}</td>
                       <td><code style={{ fontSize: 10, color: '#596273' }}>{row.jobId || row.invoiceNumber || '—'}</code></td>
                       <td>{row.allocatedBy || row.requestedBy || 'Production'}</td>
-                      <td><strong>{Number(row.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} {unit}</strong></td>
+                      <td><strong>{formatInventoryNumber(row.quantity)} {unit}</strong></td>
                     </tr>
                   ))}
                 </tbody>
@@ -181,7 +181,7 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
               </p>
             )}
             {allocations.length ? (
-              <footer>Total allocated <b>{totalAllocated.toLocaleString(undefined, { maximumFractionDigits: 1 })} {unit}</b></footer>
+              <footer>Total allocated <b>{formatInventoryNumber(totalAllocated)} {unit}</b></footer>
             ) : null}
           </article>
         </main>

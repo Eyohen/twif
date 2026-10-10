@@ -6,6 +6,11 @@ export const stockStatus = (item) => {
   return quantity <= Number(item?.lowStockThreshold || 0) ? 'Low Stock' : 'In Stock';
 };
 
+export const formatInventoryNumber = (value) => Number(value || 0).toLocaleString(undefined, {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
 // The photo lives behind its own endpoint rather than in the list payload, so
 // opening inventory does not download every picture in the shop at once.
 export const itemPhotoUrl = (item) => (item?.hasImage ? `${API_BASE_URL}/oms/fabrics/${item.id}/image` : '');

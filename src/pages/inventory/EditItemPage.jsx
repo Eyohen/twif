@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Tag, Sliders, MessageSquare, Users, Bell, List, ImagePlus, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money, useStores } from '../../utils/oms';
-import { itemPhotoUrl } from './item';
+import { itemPhotoUrl, formatInventoryNumber } from './item';
 
 const DETAIL_FIELDS = ['sku', 'name', 'type', 'colour', 'cost', 'location', 'supplier', 'lowStockThreshold'];
 
@@ -42,7 +42,8 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
   ];
   const currentQuantity = Number(item.quantity || 0);
   const adjustAmountNumber = Number(adjustAmount) || 0;
-  const nextQuantity = adjustAction === 'add' ? currentQuantity + adjustAmountNumber : currentQuantity - adjustAmountNumber;
+  const rawNextQuantity = adjustAction === 'add' ? currentQuantity + adjustAmountNumber : currentQuantity - adjustAmountNumber;
+  const nextQuantity = Math.round((rawNextQuantity + Number.EPSILON) * 100) / 100;
   const quantityChanged = adjustAmountNumber > 0;
   const detailsChanged = DETAIL_FIELDS.some((field) => String(form[field] ?? '') !== String(item[field] ?? ''))
     || Boolean(image.dataUrl) || image.removed;
@@ -82,7 +83,7 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
     event.preventDefault();
     setError('');
     if (adjustAction === 'deduct' && nextQuantity < 0) {
-      setError(`Only ${currentQuantity.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${item.unit} in stock — cannot deduct ${adjustAmountNumber}.`);
+      setError(`Only ${formatInventoryNumber(currentQuantity)} ${item.unit} in stock — cannot deduct ${formatInventoryNumber(adjustAmountNumber)}.`);
       return;
     }
     setSubmitting(true);
@@ -176,7 +177,7 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
               </label>
               <label>
                 Cost per {item.unit === 'yards' ? 'yard' : 'unit'}
-                <input type="number" min="0" step="1" value={form.cost} onChange={(event) => update('cost', event.target.value)} placeholder="₦" />
+                <input type="number" min="0" step="0.01" value={form.cost} onChange={(event) => update('cost', event.target.value)} placeholder="₦0.00" />
               </label>
               <label>
                 Location
@@ -189,7 +190,7 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <Sliders size={11} />Low-stock Threshold
                 </span>
-                <input type="number" min="0" step="0.1" value={form.lowStockThreshold} onChange={(event) => update('lowStockThreshold', event.target.value)} />
+                <input type="number" min="0" step="0.01" value={form.lowStockThreshold} onChange={(event) => update('lowStockThreshold', event.target.value)} />
                 <small>An alert is raised when quantity reaches or falls below this value.</small>
               </label>
               <label>
@@ -221,10 +222,10 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
               <div className="edit-item-grid">
                 <label>
                   Amount to {adjustAction === 'add' ? 'add' : 'deduct'}
-                  <input type="number" min="0" step="0.1" value={adjustAmount} onChange={(event) => setAdjustAmount(event.target.value)} />
+                  <input type="number" min="0" step="0.01" value={adjustAmount} onChange={(event) => setAdjustAmount(event.target.value)} />
                   <small>
-                    Currently {currentQuantity.toLocaleString(undefined, { maximumFractionDigits: 1 })} {item.unit}.
-                    {quantityChanged ? ` New total once approved: ${nextQuantity.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${item.unit}.` : ' Stock normally moves through production allocation.'}
+                    Currently {formatInventoryNumber(currentQuantity)} {item.unit}.
+                    {quantityChanged ? ` New total once approved: ${formatInventoryNumber(nextQuantity)} ${item.unit}.` : ' Stock normally moves through production allocation.'}
                   </small>
                 </label>
               </div>
@@ -290,7 +291,7 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
               <dt>Name</dt><dd>{item.name}</dd>
               <dt>Type</dt><dd>{item.type}</dd>
               <dt>Colour</dt><dd>{item.colour || '—'}</dd>
-              <dt>Quantity</dt><dd>{Number(item.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} {item.unit}</dd>
+              <dt>Quantity</dt><dd>{formatInventoryNumber(item.quantity)} {item.unit}</dd>
               <dt>Unit cost</dt><dd>{item.cost ? money.format(Number(item.cost)) : '—'}</dd>
               <dt>Location</dt><dd>{item.location || '—'}</dd>
               <dt>Low-stock Threshold</dt><dd>{Number(item.lowStockThreshold || 0)} {item.unit}</dd>

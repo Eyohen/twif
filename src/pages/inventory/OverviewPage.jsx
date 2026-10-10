@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, AlertTriangle, XCircle, Package, LayoutGrid, PlusCircle, List, Boxes, TrendingUp, ChevronRight, Eye } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money, formatMoment, isInvoiceApproved } from '../../utils/oms';
-import { stockStatus, itemImage } from './item';
+import { stockStatus, itemImage, formatInventoryNumber } from './item';
 import ItemDetailsPage from './ItemDetailsPage';
 
 const TONE_COLORS = {
@@ -149,7 +149,7 @@ export default function InventoryOverviewPage({ onNavigate }) {
                         </td>
                         <td style={{ ...td, fontSize: 12, color: '#5a4e42' }}>{item.type}</td>
                         <td style={{ ...td, fontWeight: 700, color: status === 'Out of Stock' ? '#8a3520' : '#7a6030' }}>
-                          {Number(item.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} {item.unit}
+                          {formatInventoryNumber(item.quantity)} {item.unit}
                         </td>
                         <td style={td}>
                           <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700, ...(status === 'Out of Stock' ? { background: '#fff5f0', color: '#8a3520' } : { background: '#fffbf0', color: '#7a6030' }) }}>
