@@ -122,7 +122,12 @@ export const DEPARTMENT_FIELDS = {
 export const departmentConfig = (departments, key) => {
   const saved = departments?.find((department) => department.key === key);
   if (saved && Array.isArray(saved.fields)) {
-    return { label: saved.name, note: saved.note || '', fields: saved.fields };
+    const fields = [...saved.fields].sort((left, right) => {
+      if (left.key === 'additionalInformation') return 1;
+      if (right.key === 'additionalInformation') return -1;
+      return 0;
+    });
+    return { label: saved.name, note: saved.note || '', fields };
   }
   return DEPARTMENT_FIELDS[key] || { label: saved?.name || key, note: '', fields: [] };
 };

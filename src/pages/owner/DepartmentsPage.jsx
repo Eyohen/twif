@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Layers, Plus, Settings2, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 
 export default function DepartmentsPage() {
+  const parameterEditorRef = useRef(null);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [editing, setEditing] = useState(null);
+  const editingId = editing?.id;
 
   const reload = () => {
     setLoading(true);
@@ -19,6 +21,11 @@ export default function DepartmentsPage() {
   };
 
   useEffect(reload, []);
+
+  useEffect(() => {
+    if (!editingId) return;
+    requestAnimationFrame(() => parameterEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }, [editingId]);
 
   const addDepartment = async (event) => {
     event.preventDefault();
@@ -51,14 +58,24 @@ export default function DepartmentsPage() {
   };
 
   const openParameters = (department) => {
-    setEditing({ ...department, fields: (department.fields || []).map((field) => ({ ...field })), newLabel: '' });
+    const fields = (department.fields || []).map((field) => ({ ...field })).sort((left, right) => {
+      if (left.key === 'additionalInformation') return 1;
+      if (right.key === 'additionalInformation') return -1;
+      return 0;
+    });
+    setEditing({ ...department, fields, newLabel: '' });
     setMessage('');
   };
 
   const addParameter = () => {
     const label = editing.newLabel.trim();
     if (!label) { setMessage('Type a parameter name first.'); return; }
-    setEditing((current) => ({ ...current, newLabel: '', fields: [...current.fields, { label, required: true }] }));
+    setEditing((current) => {
+      const additionalIndex = current.fields.findIndex((field) => field.key === 'additionalInformation');
+      const fields = [...current.fields];
+      fields.splice(additionalIndex < 0 ? fields.length : additionalIndex, 0, { label, required: true });
+      return { ...current, newLabel: '', fields };
+    });
   };
 
   const saveParameters = async () => {
@@ -136,7 +153,7 @@ export default function DepartmentsPage() {
       )}
 
       {editing ? (
-        <div className="os-card" style={{ marginTop: 18 }}>
+        <div ref={parameterEditorRef} className="os-card" style={{ marginTop: 18, scrollMarginTop: 18 }}>
           <div className="os-card-header"><div><h3>{editing.name} parameters</h3><p>These fields appear on order sheets and are checked before production starts.</p></div></div>
           <div className="os-card-body" style={{ display: 'grid', gap: 14 }}>
             {editing.fields.length ? editing.fields.map((field, index) => (
