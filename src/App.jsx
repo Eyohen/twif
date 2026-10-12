@@ -4843,7 +4843,31 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
 // card) rather than every item on the job; the index passed to every write
 // below is offset to match so it still patches the right item on the server.
 function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify, relatedSavePending = false }) {
-  const allItems = (job.items || []).length ? job.items : [{ item: job.item || 'Order', tailors: job.tailor && job.tailor !== 'Unassigned' ? [job.tailor] : [] }];
+  // Older sheets kept fabric on the order itself. When the first assignment
+  // creates item 0, carry that fabric into the item instead of replacing it
+  // with an assignment-only object and making the selection disappear.
+  const legacyFabrics = job.fabrics?.length
+    ? job.fabrics
+    : job.fabricId || job.fabric === 'Client supplied'
+      ? [{
+        fabricId: job.fabricId || '',
+        name: job.fabric || '',
+        unit: job.fabricUnit || '',
+        quantity: job.fabricUsage || '',
+        clientSupplied: job.fabric === 'Client supplied',
+      }]
+      : [];
+  const allItems = (job.items || []).length ? job.items : [{
+    item: job.item || 'Order',
+    tailors: job.tailor && job.tailor !== 'Unassigned' ? [job.tailor] : [],
+    tailorDueDate: job.tailorDueDate || '',
+    delivery: job.delivery || '',
+    fabrics: legacyFabrics,
+    fabric: job.fabric || '',
+    fabricId: job.fabricId || '',
+    fabricUnit: job.fabricUnit || '',
+    fabricUsage: job.fabricUsage || '',
+  }];
   const items = itemIndex === undefined ? allItems : [allItems[itemIndex]];
   const indexOffset = itemIndex === undefined ? 0 : itemIndex;
   const [saving, setSaving] = useState(false);
@@ -4871,13 +4895,13 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify, rel
       onNotify?.('An item can be shared between at most 4 tailors.', 'error');
       return;
     }
-    write('assignments', { items: [{ index, tailors: next }] },
+    write('assignments', { items: [{ index, tailors: next, fabrics: item.fabrics || [] }] },
       next.length ? `${item.item || 'Item'} assigned to ${next.join(', ')}` : 'Assignment removed');
   };
 
   const setDueDate = (index, value) => {
     const item = allItems[index];
-    write('assignments', { items: [{ index, tailors: item.tailors || [], tailorDueDate: value }] },
+    write('assignments', { items: [{ index, tailors: item.tailors || [], tailorDueDate: value, fabrics: item.fabrics || [] }] },
       value ? `Due date for ${item.item || 'item'} saved` : 'Due date cleared');
   };
 
@@ -5219,7 +5243,18 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
     if (!current || !sheet) return current || sheet;
     const currentItems = Array.isArray(current.items) ? current.items : [];
     const returnedItems = Array.isArray(sheet.items) ? sheet.items : [];
-    if (!currentItems.length || !returnedItems.length) return { ...current, ...sheet };
+    if (!returnedItems.length) return { ...current, ...sheet };
+    if (!currentItems.length) {
+      const legacy = itemFabricsFor(undefined);
+      return {
+        ...current,
+        ...sheet,
+        items: returnedItems.map((item, index) => ({
+          ...item,
+          fabrics: index === 0 && legacy.length ? legacy : item.fabrics || [],
+        })),
+      };
+    }
     return {
       ...current,
       ...sheet,
