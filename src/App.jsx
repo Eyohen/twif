@@ -2210,10 +2210,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   if (creating) {
     return (
       <div className="store-invoice-create">
-        <div className="store-detail-toolbar">
-          <button type="button" onClick={() => setCreating(false)}>← &nbsp; Back to Invoices</button>
-        </div>
-        <NewInvoiceView currentRole={currentRole} prefillCustomer={prefillCustomer} onInvoiceSent={(invoice) => {
+        <NewInvoiceView currentRole={currentRole} prefillCustomer={prefillCustomer} onCancel={() => setCreating(false)} onInvoiceSent={(invoice) => {
           onInvoiceSent?.(invoice);
           setCreating(false);
           setPrefillCustomer(null);
@@ -2822,6 +2819,8 @@ function InvoiceDocumentPreview({ html, invoiceNumber }) {
   const scale = zoom ?? fitScale;
   const percentage = Math.round(scale * 100);
 
+  if (!html) return <section className="invoice-preview-empty" aria-live="polite">Preparing invoice preview…</section>;
+
   return (
     <section className="invoice-document-preview">
       <div className="invoice-preview-tools">
@@ -2860,7 +2859,7 @@ function InvoiceDocumentPreview({ html, invoiceNumber }) {
 // initialism store staff actually use.
 const paymentMethodLabel = (method) => (method === 'pos' ? 'POS' : `${method.charAt(0).toUpperCase()}${method.slice(1)}`);
 
-function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
+function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel }) {
   // Only the stores an Owner or Admin has created and left active — read from
   // the server each time this opens and whenever the tab regains focus, so a
   // store added in another tab shows up here without a reload. There is no
@@ -2961,6 +2960,8 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
   const [previewHtml, setPreviewHtml] = useState('');
   const [previewMode, setPreviewMode] = useState(false);
   const [previewTab, setPreviewTab] = useState('invoice');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewKey, setPreviewKey] = useState('');
   const [paymentEvidence, setPaymentEvidence] = useState(null);
   // Kept separate from the evidence file itself so typing a clarification
   // note doesn't get wiped if the store manager swaps the photo afterward.
@@ -3133,14 +3134,26 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
     setMessage('');
     const validationMessage = validateInvoice();
     if (validationMessage) { setMessage(validationMessage); return; }
+    const payload = invoicePayload();
+    // Payment evidence can be several megabytes and is not shown in the
+    // invoice document, so it should not delay a preview request.
+    const previewPayload = { ...payload, paymentEvidence: null };
+    const nextPreviewKey = JSON.stringify(previewPayload);
+    setPreviewMode(true);
+    setPreviewTab('invoice');
+    if (previewHtml && previewKey === nextPreviewKey) return;
+    setPreviewHtml('');
+    setPreviewLoading(true);
     try {
-      const response = await api.post('/oms/invoices/html-preview', invoicePayload(), {
+      const response = await api.post('/oms/invoices/html-preview', previewPayload, {
         responseType: 'text',
       });
       setPreviewHtml(response.data);
-      setPreviewMode(true);
+      setPreviewKey(nextPreviewKey);
     } catch (error) {
       setMessage(error.response?.data?.message || error.message || 'Unable to preview invoice');
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -3210,16 +3223,19 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer }) {
 
   if (previewMode) {
     return <div className="invoice-preview-page-v2">
-      <header><button type="button" onClick={() => setPreviewMode(false)}>← &nbsp; Back to Invoice</button><div><small>INVOICE</small><strong>{form.invoiceNumber}</strong><Status>Not Sent Yet</Status></div></header>
+      <header><button type="button" onClick={() => setPreviewMode(false)}>← &nbsp; Back to Invoice</button><div><small>INVOICE</small><strong>{form.invoiceNumber}</strong><Status>{previewLoading ? 'Preparing…' : 'Not Sent Yet'}</Status></div></header>
       <section className="invoice-preview-title"><div><h2>{previewTab === 'invoice' ? 'Invoice Preview' : 'Email Preview'}</h2><p>This is how your {previewTab === 'invoice' ? 'invoice' : 'email'} will appear to the customer.</p></div><nav><button className={previewTab === 'invoice' ? 'active' : ''} onClick={() => setPreviewTab('invoice')}>Invoice Preview</button><button className={previewTab === 'email' ? 'active' : ''} onClick={() => setPreviewTab('email')}>Email Preview</button></nav></section>
       {previewTab === 'invoice' ? <InvoiceDocumentPreview html={previewHtml} invoiceNumber={form.invoiceNumber} /> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your twif Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], [outstanding > 0 ? 'Amount Due' : 'Paid In Full', money.format(outstanding > 0 ? outstanding : balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div>{/* These two are part of the picture of the email, not controls on this screen — clicking them here did nothing. */}<span>Download Invoice PDF</span><span>Track Your Order</span></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>{outstanding > 0 ? 'Balance Due' : 'Paid In Full'}</span><strong>{money.format(outstanding > 0 ? outstanding : balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your twif Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
       {message ? <div className="invoice-message">{message}</div> : null}
-      <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button onClick={() => saveInvoicePdf(previewHtml, form.invoiceNumber)}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={() => sendInvoice(false)} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
+      <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button disabled={previewLoading || !previewHtml} onClick={() => saveInvoicePdf(previewHtml, form.invoiceNumber)}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={() => sendInvoice(false)} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
     </div>;
   }
 
   return (
     <div className="os-page">
+      <div className="store-detail-toolbar">
+        <button type="button" onClick={onCancel}>← &nbsp; Back to Invoices</button>
+      </div>
       <div className="os-page-header">
         <div className="os-page-title">
           <FileText size={22} strokeWidth={1.5} style={{ color: '#c97b08', flexShrink: 0 }} />
