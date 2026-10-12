@@ -97,7 +97,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
     setSearchParams(next, { replace: true });
   };
 
-  const review = (invoice, status) => onApproveInvoice?.(invoice.invoiceNumber, status);
+  const review = (invoice, status, note = '') => onApproveInvoice?.(invoice.invoiceNumber, status, note);
 
   if (reviewInvoice) {
     return <ReviewInvoicePage
@@ -105,12 +105,16 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
       roleId={currentRole?.id}
       releasePercent={releasePercent}
       onBack={closeReview}
-      onReview={async (invoice, status) => {
+      onReview={async (invoice, status, note) => {
         // Only reflected locally once the server has actually accepted the
         // decision — an Approve rejected for being under the payment
         // threshold must not still read as Approved on this screen.
-        await review(invoice, status);
-        setReviewInvoice((current) => (current ? { ...current, accountApprovalStatus: status } : current));
+        await review(invoice, status, note);
+        setReviewInvoice((current) => (current ? {
+          ...current,
+          accountApprovalStatus: status,
+          ...(note ? { accountApprovalNote: note } : {}),
+        } : current));
       }}
       onPaymentRecorded={(updated) => {
         setReviewInvoice(updated);
@@ -276,8 +280,8 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
         invoice={pendingAction.invoice}
         status={pendingAction.status}
         onCancel={() => setPendingAction(null)}
-        onConfirm={() => {
-          review(pendingAction.invoice, pendingAction.status);
+        onConfirm={(note) => {
+          review(pendingAction.invoice, pendingAction.status, note);
           setPendingAction(null);
         }}
       />

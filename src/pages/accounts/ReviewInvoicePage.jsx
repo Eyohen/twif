@@ -150,6 +150,16 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
       </div>
       )}
 
+      {invoice.storeManagerClarification ? (
+        <div style={{ padding: '12px 14px', background: '#f0faf4', border: '1px solid #b8e4cb', borderRadius: 8, color: '#245f40' }}>
+          <strong style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Store Manager clarification</strong>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55 }}>{invoice.storeManagerClarification}</p>
+          <small style={{ display: 'block', marginTop: 6, color: '#568069' }}>
+            {invoice.clarifiedBy || 'Store Manager'}{invoice.clarifiedAt ? ` · ${formatMoment(invoice.clarifiedAt)}` : ''}
+          </small>
+        </div>
+      ) : null}
+
       {actionError ? (
         <p style={{ margin: 0, fontSize: 13, color: '#8a3520', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, padding: '10px 14px' }}>
           {actionError}
@@ -498,9 +508,9 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
           invoice={invoice}
           status={pendingAction === 'Approved' && pendingTitle === 'Approve Partial Payment' ? 'ApprovedPartial' : pendingAction === 'Approved' ? 'ApprovedComplete' : pendingAction}
           onCancel={() => setPendingAction(null)}
-          onConfirm={async () => {
+          onConfirm={async (note) => {
                         try {
-              await onReview(invoice, pendingAction);
+              await onReview(invoice, pendingAction, note);
               setPendingAction(null);
             } catch (requestError) {
               // The decision never landed — most often an Approve rejected for

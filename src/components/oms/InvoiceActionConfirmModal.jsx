@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 const actionDetails = {
@@ -48,6 +48,7 @@ const actionDetails = {
 
 export default function InvoiceActionConfirmModal({ invoice, status, onCancel, onConfirm }) {
   const details = actionDetails[status];
+  const [note, setNote] = useState('');
   useEffect(() => {
     const closeOnEscape = (event) => event.key === 'Escape' && onCancel();
     document.addEventListener('keydown', closeOnEscape);
@@ -72,9 +73,15 @@ export default function InvoiceActionConfirmModal({ invoice, status, onCancel, o
         <dt>Invoice</dt><dd>{invoice.invoiceNumber}</dd>
         <dt>Customer</dt><dd>{invoice.customer}</dd>
       </dl>
+      {status === 'Flagged' ? (
+        <label style={{ display: 'grid', gap: 6, textAlign: 'left', marginTop: 12, fontSize: 12, fontWeight: 700, color: '#5a4e42' }}>
+          What needs clarification? *
+          <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={2000} placeholder="Tell the Store Manager exactly what Accounts needs checked or explained…" style={{ resize: 'vertical', padding: 10, border: '1px solid #ddd5c8', borderRadius: 8, font: 'inherit' }} />
+        </label>
+      ) : null}
       <footer>
         <button type="button" className="invoice-action-cancel" onClick={onCancel}>Cancel</button>
-        <button type="button" className="invoice-action-submit" onClick={onConfirm}>{details.confirmLabel}</button>
+        <button type="button" className="invoice-action-submit" disabled={status === 'Flagged' && !note.trim()} onClick={() => onConfirm(note.trim())}>{details.confirmLabel}</button>
       </footer>
     </section>
   </div>, document.body);

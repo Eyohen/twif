@@ -384,10 +384,10 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate, rel
         invoice={pendingInvoiceAction.invoice}
         status={pendingInvoiceAction.status}
         onCancel={() => setPendingInvoiceAction(null)}
-        onConfirm={async () => {
+        onConfirm={async (note) => {
           setActionError('');
           try {
-            await onApproveInvoice?.(pendingInvoiceAction.invoice.invoiceNumber, pendingInvoiceAction.status);
+            await onApproveInvoice?.(pendingInvoiceAction.invoice.invoiceNumber, pendingInvoiceAction.status, note);
           } catch (error) {
             setActionError(error.response?.data?.message || 'That decision could not be saved.');
           }
@@ -1641,6 +1641,7 @@ function OrdersView({ sentInvoices }) {
 // what is submitted here, so an edited invoice cannot disagree with the sum
 // of its own items, and refuses to be cut below what has already been paid.
 function EditInvoicePage({ invoice, onClose, onSaved }) {
+  const flaggedForClarification = invoiceApprovalStatus(invoice) === 'Flagged';
   const [items, setItems] = useState(() => (invoice.items?.length ? invoice.items : [{}]).map((item, index) => ({
     key: `line-${index}`,
     description: item.description || '',
@@ -1655,6 +1656,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   const [dueDate, setDueDate] = useState(invoice.dueDate ? String(invoice.dueDate).slice(0, 10) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [clarification, setClarification] = useState('');
   // Recording a payment here updates this invoice's paid amount and evidence
   // immediately, without closing the modal — a store manager topping up a
   // partial payment may want to keep going, e.g. correcting a line item next.
@@ -1785,6 +1787,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
 
   const save = async () => {
     setError('');
+    if (flaggedForClarification && !clarification.trim()) { setError('Explain the clarification before returning this invoice to Accounts.'); return; }
     if (!isValidPhone(customerPhone)) { setError(PHONE_ERROR); return; }
     if (items.some((item) => !item.description.trim())) { setError('Every line needs a description.'); return; }
     if (belowPaid) { setError(`This invoice cannot be reduced below the ${money.format(alreadyPaid)} already recorded as paid against it.`); return; }
@@ -1802,6 +1805,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
         customerPhone,
         customerEmail,
         dueDate,
+        ...(flaggedForClarification ? { clarification: clarification.trim() } : {}),
         ...(!isApproved && storeKey ? { store: storeKey } : {}),
         ...(!isApproved && removedEvidenceIndexes.length ? { removePaymentEvidenceAt: removedEvidenceIndexes } : {}),
         ...(!isApproved && newEvidence.length ? { addPaymentEvidence: newEvidence } : {}),
@@ -1825,6 +1829,17 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
         <p className="edit-invoice-note">
           Correct the customer's details, due date, and the items on this invoice.
         </p>
+
+        {flaggedForClarification ? (
+          <div style={{ padding: '14px 16px', marginBottom: 16, border: '1px solid #f0ddb0', borderRadius: 10, background: '#fffbf0' }}>
+            <strong style={{ display: 'block', color: '#7a6030', marginBottom: 5 }}>Accounts requested clarification</strong>
+            <p style={{ margin: '0 0 12px', color: '#5a4e42', fontSize: 13 }}>{invoice.accountApprovalNote || 'Review the invoice and payment details, then explain the correction below.'}</p>
+            <label className="os-field">
+              <span>Your clarification *</span>
+              <textarea rows={4} maxLength={2000} value={clarification} onChange={(event) => setClarification(event.target.value)} placeholder="Explain what was checked or corrected for Accounts…" />
+            </label>
+          </div>
+        ) : null}
 
         <div className="edit-invoice-grid">
           <label className="os-field">
@@ -2006,7 +2021,9 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
         <div className="edit-invoice-actions">
           <button type="button" onClick={onClose}>Cancel</button>
           <button type="button" onClick={openPreview}>Preview</button>
-          <button type="button" className="primary" onClick={save} disabled={saving || belowPaid}>{saving ? 'Saving…' : 'Save invoice'}</button>
+          <button type="button" className="primary" onClick={save} disabled={saving || belowPaid}>
+            {saving ? 'Saving…' : flaggedForClarification ? 'Submit clarification' : 'Save invoice'}
+          </button>
         </div>
       </div>
     </div>
@@ -2039,7 +2056,9 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
     ['View Invoice', <Eye size={12} strokeWidth={2} />, () => { window.scrollTo(0, 0); setSelectedInvoice(invoice); }],
     ['Download PDF', <Download size={12} strokeWidth={2} />, () => downloadInvoicePdf(invoice)],
     ['Resend Email', <RefreshCw size={12} strokeWidth={2} />, () => resendInvoiceEmail(invoice)],
-    ...(mayEdit(invoice) ? [['Edit Invoice', <Edit2 size={12} strokeWidth={2} />, () => setEditingInvoice(invoice)]] : []),
+    ...(currentRole?.id === 'store_manager' && invoiceApprovalStatus(invoice) === 'Flagged'
+      ? [['Review Flag', <AlertCircle size={12} strokeWidth={2} />, () => setEditingInvoice(invoice)]]
+      : mayEdit(invoice) ? [['Edit Invoice', <Edit2 size={12} strokeWidth={2} />, () => setEditingInvoice(invoice)]] : []),
     // Approving normally needs the same payment threshold Production checks —
     // but an Owner or Admin may override that threshold (the server already
     // allows it, see the account-approval route, and ReviewInvoicePage grants
@@ -2185,6 +2204,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
     const matchesSearch = `${invoice.invoiceNumber} ${invoice.customer} ${invoice.store} ${invoice.paymentStatus}`.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'All'
       || (statusFilter === 'Pending' && invoiceApprovalStatus(invoice) === 'Pending Accounts')
+      || (statusFilter === 'Flagged' && invoiceApprovalStatus(invoice) === 'Flagged')
       || (statusFilter === 'FullyPaid' && invoice.paymentStatus === 'Fully Paid')
       || (statusFilter === 'Partial' && invoice.paymentStatus === 'Partial Paid')
       || (statusFilter === 'AwaitingPayment' && isAwaitingPayment(invoice));
@@ -2192,6 +2212,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   });
   const total = sentInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
   const pending = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts');
+  const flagged = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Flagged');
   const partial = sentInvoices.filter((invoice) => invoice.paymentStatus === 'Partial Paid');
 
   if (editingInvoice) {
@@ -2302,6 +2323,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   const tabs = [
     { key: 'All', label: 'All', count: sentInvoices.length },
     { key: 'Pending', label: 'Awaiting Approval', count: pending.length },
+    { key: 'Flagged', label: 'Needs Clarification', count: flagged.length },
     { key: 'AwaitingPayment', label: 'Awaiting Payment', count: awaitingPayment.length },
     { key: 'Partial', label: 'Partial Paid', count: partial.length },
     { key: 'FullyPaid', label: 'Fully Paid', count: fullyPaid.length },
@@ -8402,12 +8424,12 @@ function App() {
   // A server that refuses the change — an under-threshold approval, most
   // often — used to be indistinguishable from one that accepted it, because
   // the optimistic update stood and the failure was swallowed silently.
-  const updateInvoiceApproval = (invoiceNumber, status) => {
+  const updateInvoiceApproval = (invoiceNumber, status, note = '') => {
     setSentInvoices((current) => current.map((invoice) => (
       invoice.invoiceNumber === invoiceNumber ? { ...invoice, accountApprovalStatus: status } : invoice
     )));
 
-    return api.patch(`/oms/invoices/${invoiceNumber}/account-approval`, { status }).then((response) => {
+    return api.patch(`/oms/invoices/${invoiceNumber}/account-approval`, { status, note }).then((response) => {
       const invoice = response.data?.data?.invoice;
       if (!invoice) return;
       setSentInvoices((current) => current.map((item) => (
