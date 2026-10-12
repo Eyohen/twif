@@ -4842,7 +4842,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
 // `itemIndex` renders just that one item (used from inside each item's own
 // card) rather than every item on the job; the index passed to every write
 // below is offset to match so it still patches the right item on the server.
-function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify }) {
+function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify, relatedSavePending = false }) {
   const allItems = (job.items || []).length ? job.items : [{ item: job.item || 'Order', tailors: job.tailor && job.tailor !== 'Unassigned' ? [job.tailor] : [] }];
   const items = itemIndex === undefined ? allItems : [allItems[itemIndex]];
   const indexOffset = itemIndex === undefined ? 0 : itemIndex;
@@ -4909,7 +4909,7 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify }) {
               type="date"
               value={item.tailorDueDate || ''}
               max={item.delivery || job.delivery || undefined}
-              disabled={saving}
+              disabled={saving || relatedSavePending}
               onChange={(event) => setDueDate(index, event.target.value)}
             />
             <small>
@@ -4926,7 +4926,7 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify }) {
                   type="button"
                   key={person.id}
                   className={chosen ? 'is-chosen' : ''}
-                  disabled={saving}
+                  disabled={saving || relatedSavePending}
                   onClick={() => toggleTailor(index, person.displayName)}
                 >{person.displayName}</button>
               );
@@ -4982,6 +4982,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   const [toast, setToast] = useState(null);
   const [inventory, setInventory] = useState([]);
   const [tailors, setTailors] = useState([]);
+  const [pendingFabricSaves, setPendingFabricSaves] = useState(0);
   const [allocatingJobId, setAllocatingJobId] = useState(null);
   const [settingInProgress, setSettingInProgress] = useState(false);
   const [confirmReady, setConfirmReady] = useState(null);
@@ -5167,7 +5168,10 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
         index === itemIndex ? { ...item, fabrics } : item
       ));
       setJobModal((current) => ({ ...current, items: nextItems }));
-      onUpdateJob(jobModal.id, { items: nextItems });
+      setPendingFabricSaves((count) => count + 1);
+      Promise.resolve(onUpdateJob(jobModal.id, { items: nextItems }))
+        .catch((error) => notify(error.response?.data?.message || 'Unable to save the fabric selection', 'error'))
+        .finally(() => setPendingFabricSaves((count) => Math.max(0, count - 1)));
       return;
     }
     const [first] = fabrics;
@@ -5180,7 +5184,10 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
       fabricConfirmed: false,
     };
     setJobModal((current) => ({ ...current, ...changes }));
-    onUpdateJob(jobModal.id, changes);
+    setPendingFabricSaves((count) => count + 1);
+    Promise.resolve(onUpdateJob(jobModal.id, changes))
+      .catch((error) => notify(error.response?.data?.message || 'Unable to save the fabric selection', 'error'))
+      .finally(() => setPendingFabricSaves((count) => Math.max(0, count - 1)));
   };
 
   const addItemFabric = (itemIndex, fabricId) => {
@@ -5202,6 +5209,27 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   const removeItemFabric = (itemIndex, fabricId) => saveItemFabrics(
     itemIndex, itemFabricsFor(itemIndex).filter((entry) => entry.fabricId !== fabricId)
   );
+
+  // Fabric edits and tailor assignments are saved through different routes.
+  // If a due-date request returns while the fabric save is still in flight,
+  // its order-sheet snapshot can be older and must not replace the fabric the
+  // manager just selected. Merge the assignment-owned fields into the live
+  // modal items while retaining each item's latest fabric selection.
+  const mergeAssignmentSheet = (current, sheet) => {
+    if (!current || !sheet) return current || sheet;
+    const currentItems = Array.isArray(current.items) ? current.items : [];
+    const returnedItems = Array.isArray(sheet.items) ? sheet.items : [];
+    if (!currentItems.length || !returnedItems.length) return { ...current, ...sheet };
+    return {
+      ...current,
+      ...sheet,
+      items: returnedItems.map((item, index) => ({
+        ...currentItems[index],
+        ...item,
+        fabrics: currentItems[index]?.fabrics ?? item.fabrics ?? [],
+      })),
+    };
+  };
 
   // A single note for the whole order left one department reading
   // instructions meant for another — this keeps the note with the garment and
@@ -5916,9 +5944,11 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       job={jobModal}
                       itemIndex={itemIndex}
                       tailors={tailors}
+                      relatedSavePending={pendingFabricSaves > 0}
                       onSaved={(sheet) => {
-                        setJobModal((current) => ({ ...current, ...sheet }));
-                        onUpdateJob(jobModal.id, sheet);
+                        const mergedSheet = mergeAssignmentSheet(jobModal, sheet);
+                        setJobModal(mergedSheet);
+                        onUpdateJob(jobModal.id, mergedSheet);
                       }}
                       onNotify={notify}
                     />
