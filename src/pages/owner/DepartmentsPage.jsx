@@ -160,11 +160,16 @@ export default function DepartmentsPage() {
               <div key={field.key || `${field.label}-${index}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'center' }}>
                 <input
                   value={field.label}
+                  disabled={field.key === 'additionalInformation'}
                   aria-label={`Parameter ${index + 1} name`}
                   onChange={(event) => setEditing((current) => ({ ...current, fields: current.fields.map((entry, fieldIndex) => fieldIndex === index ? { ...entry, label: event.target.value } : entry) }))}
                 />
-                <label style={{ fontSize: 13 }}><input type="checkbox" checked={field.required !== false} onChange={(event) => setEditing((current) => ({ ...current, fields: current.fields.map((entry, fieldIndex) => fieldIndex === index ? { ...entry, required: event.target.checked } : entry) }))} /> Required</label>
-                <button type="button" aria-label={`Remove ${field.label}`} onClick={() => setEditing((current) => ({ ...current, fields: current.fields.filter((_, fieldIndex) => fieldIndex !== index) }))}><Trash2 size={14} /></button>
+                <label style={{ fontSize: 13 }}><input type="checkbox" disabled={field.key === 'additionalInformation'} checked={field.required !== false} onChange={(event) => setEditing((current) => ({ ...current, fields: current.fields.map((entry, fieldIndex) => fieldIndex === index ? { ...entry, required: event.target.checked } : entry) }))} /> Required</label>
+                {field.key === 'additionalInformation' ? (
+                  <span style={{ width: 34, fontSize: 11, color: '#8a7a6a', textAlign: 'center' }} title="Additional Information is included for every department">Default</span>
+                ) : (
+                  <button type="button" aria-label={`Remove ${field.label}`} onClick={() => setEditing((current) => ({ ...current, fields: current.fields.filter((_, fieldIndex) => fieldIndex !== index) }))}><Trash2 size={14} /></button>
+                )}
               </div>
             )) : <p style={{ color: '#8a7a6a', fontSize: 13 }}>No parameters yet.</p>}
 
