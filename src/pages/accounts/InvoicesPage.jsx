@@ -280,8 +280,8 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
         invoice={pendingAction.invoice}
         status={pendingAction.status}
         onCancel={() => setPendingAction(null)}
-        onConfirm={(note) => {
-          review(pendingAction.invoice, pendingAction.status, note);
+        onConfirm={async (note) => {
+          await review(pendingAction.invoice, pendingAction.status, note);
           setPendingAction(null);
         }}
       />

@@ -49,6 +49,8 @@ const actionDetails = {
 export default function InvoiceActionConfirmModal({ invoice, status, onCancel, onConfirm }) {
   const details = actionDetails[status];
   const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   useEffect(() => {
     const closeOnEscape = (event) => event.key === 'Escape' && onCancel();
     document.addEventListener('keydown', closeOnEscape);
@@ -56,6 +58,17 @@ export default function InvoiceActionConfirmModal({ invoice, status, onCancel, o
   }, [onCancel]);
 
   if (!invoice || !details || typeof document === 'undefined') return null;
+
+  const submit = async () => {
+    setError('');
+    setSubmitting(true);
+    try {
+      await onConfirm(note.trim());
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'That action could not be saved. Please try again.');
+      setSubmitting(false);
+    }
+  };
 
   return createPortal(<div className="invoice-action-confirm-backdrop" role="presentation" onMouseDown={onCancel}>
     <section
@@ -75,13 +88,16 @@ export default function InvoiceActionConfirmModal({ invoice, status, onCancel, o
       </dl>
       {status === 'Flagged' ? (
         <label style={{ display: 'grid', gap: 6, textAlign: 'left', marginTop: 12, fontSize: 12, fontWeight: 700, color: '#5a4e42' }}>
-          What needs clarification? *
+          What needs clarification? <span style={{ fontWeight: 400 }}>(optional)</span>
           <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={2000} placeholder="Tell the Store Manager exactly what Accounts needs checked or explained…" style={{ resize: 'vertical', padding: 10, border: '1px solid #ddd5c8', borderRadius: 8, font: 'inherit' }} />
         </label>
       ) : null}
+      {error ? <p style={{ color: '#8a3520', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, padding: '8px 10px', marginTop: 10 }}>{error}</p> : null}
       <footer>
-        <button type="button" className="invoice-action-cancel" onClick={onCancel}>Cancel</button>
-        <button type="button" className="invoice-action-submit" disabled={status === 'Flagged' && !note.trim()} onClick={() => onConfirm(note.trim())}>{details.confirmLabel}</button>
+        <button type="button" className="invoice-action-cancel" disabled={submitting} onClick={onCancel}>Cancel</button>
+        <button type="button" className="invoice-action-submit" disabled={submitting} onClick={submit}>
+          {submitting ? (status === 'Flagged' ? 'Flagging…' : 'Saving…') : details.confirmLabel}
+        </button>
       </footer>
     </section>
   </div>, document.body);
