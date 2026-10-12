@@ -1650,8 +1650,8 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
     note: item.note || '',
   })));
   const [customerName, setCustomerName] = useState(invoice.customer || '');
-  const [customerPhone, setCustomerPhone] = useState(invoice.customerPhone || '');
-  const [customerEmail, setCustomerEmail] = useState(invoice.email || '');
+  const [customerPhone, setCustomerPhone] = useState(() => phoneDigits(invoice.customerPhone || invoice.phone || ''));
+  const [customerEmail, setCustomerEmail] = useState(invoice.customerEmail || invoice.email || '');
   const [dueDate, setDueDate] = useState(invoice.dueDate ? String(invoice.dueDate).slice(0, 10) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
