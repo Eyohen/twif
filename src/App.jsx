@@ -3881,7 +3881,7 @@ const emptySheetForm = () => ({
   items: [emptyOrderItem()],
 });
 
-function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, onNavigate }) {
+function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, onNavigate, currentRole }) {
   // Arriving from an invoice — "raise an order sheet for this one" — rather
   // than from the menu, so the picker does not have to be searched again.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -3889,10 +3889,13 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
   // Arriving from the Order Sheets table to correct one that has not been
   // picked up by Production yet — see the effect below.
   const editingInvoiceNumber = searchParams.get('edit');
+  const assignedStoreFallback = currentRole?.id === 'store_manager' && currentRole.store && currentRole.store !== 'all'
+    ? String(currentRole.store).split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+    : '';
   const departments = useDepartments();
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
-  const [sheetForm, setSheetForm] = useState(emptySheetForm);
+  const [sheetForm, setSheetForm] = useState(() => ({ ...emptySheetForm(), ...(assignedStoreFallback ? { store: assignedStoreFallback } : {}) }));
   const [customers, setCustomers] = useState([]);
   const [message, setMessage] = useState('');
   // Set once the order sheet named in `?edit=` has been loaded into the form.
@@ -3925,20 +3928,28 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
   // and strip " Store" the way the rest of this screen already names stores
   // ("Lekki", not "Lekki Store"), so a new store fits the existing values
   // rather than introducing a second naming convention for `store`.
-  const [storeOptions, setStoreOptions] = useState(['Lekki', 'Ikeja']);
+  const [storeOptions, setStoreOptions] = useState(() => (assignedStoreFallback ? [assignedStoreFallback] : ['Lekki', 'Ikeja']));
   useEffect(() => {
     api.get('/oms/stores')
       .then((response) => {
         const list = response.data?.data?.stores;
         if (!Array.isArray(list) || !list.length) return;
-        const names = list
-          .filter((store) => store.status === 'active')
+        const activeStores = list.filter((store) => store.status === 'active');
+        const allowedStores = currentRole?.id === 'store_manager' && currentRole.store && currentRole.store !== 'all'
+          ? activeStores.filter((store) => store.key === currentRole.store)
+          : activeStores;
+        const names = allowedStores
           .map((store) => store.name.replace(/\s+Store$/i, '').trim())
           .filter(Boolean);
-        if (names.length) setStoreOptions(names);
+        if (names.length) {
+          setStoreOptions(names);
+          if (currentRole?.id === 'store_manager') {
+            setSheetForm((current) => ({ ...current, store: names[0] }));
+          }
+        }
       })
       .catch(() => {});
-  }, []);
+  }, [currentRole?.id, currentRole?.store]);
 
   useEffect(() => {
     let active = true;
@@ -4356,7 +4367,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
 
     onCreateJob(orderSheet);
     setMessage(`Order sheet saved with ${items.length} item${items.length === 1 ? '' : 's'}. It will become visible to Production after Accounts approves the invoice.`);
-    setSheetForm(emptySheetForm());
+    setSheetForm({ ...emptySheetForm(), ...(assignedStoreFallback ? { store: assignedStoreFallback } : {}) });
     setSubmitting(false);
     setSavedAndClean(true);
   };
@@ -4454,7 +4465,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
               </label>
               <label className="os-field">
                 <span>Store</span>
-                <select value={sheetForm.store} onChange={(event) => updateSheetForm('store', event.target.value)} disabled={Boolean(editingSheet)}>
+                <select value={sheetForm.store} onChange={(event) => updateSheetForm('store', event.target.value)} disabled={Boolean(editingSheet) || currentRole?.id === 'store_manager'}>
                   {storeOptions.map((name) => <option key={name}>{name}</option>)}
                 </select>
               </label>
@@ -8133,6 +8144,7 @@ function renderView(activeView, role, viewProps = {}) {
         onCreateJob={viewProps.onCreateJob}
         onOrderSheetUpdated={viewProps.onOrderSheetUpdated}
         onNavigate={viewProps.onNavigate}
+        currentRole={viewProps.currentRole}
       />
     );
   }
