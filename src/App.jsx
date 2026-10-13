@@ -303,6 +303,13 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate, rel
   const outOfStock = inventory.filter((item) => toNumber(item.quantity) <= 0);
   const healthyStock = inventory.filter((item) => toNumber(item.quantity) > toNumber(item.lowStockThreshold || 5));
   const queue = (pending.length ? pending : sentInvoices).slice(0, 5);
+  // Keep the Overview queue aligned with the full Accounts invoice page.
+  // `orderStatus` describes production/payment-derived order progress and can
+  // read "Fully Paid"; it is not the Accounts review decision.
+  const reviewStatus = (invoice) => {
+    const status = invoiceApprovalStatus(invoice);
+    return status === 'Pending Accounts' ? 'Awaiting Review' : status;
+  };
 
   return (
     <div className="accounts-dashboard">
@@ -327,10 +334,10 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate, rel
         <section className="accounts-panel invoice-review">
           <header><div><h2>Invoice Review Queue</h2><p>Invoices awaiting your action.</p></div><button onClick={() => onNavigate?.('Invoices')}>View all invoices →</button></header>
           <div className="accounts-table-wrap">
-            <table><thead><tr><th>Invoice</th><th>Customer</th><th>Store</th><th>Total</th><th>Status</th><th>Payment</th><th>Action</th></tr></thead>
+            <table><thead><tr><th>Invoice</th><th>Customer</th><th>Store</th><th>Total</th><th>Review Status</th><th>Payment</th><th>Action</th></tr></thead>
             <tbody>{queue.map((invoice) => <tr key={invoice.invoiceNumber} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>
               <td><strong>{invoice.invoiceNumber}</strong></td><td>{invoice.customer}</td><td>{invoice.store}</td><td><strong>{money.format(invoice.total)}</strong></td>
-              <td><Status>{invoice.orderStatus || 'Unpaid'}</Status></td><td><Status>{invoice.paymentStatus}</Status></td>
+              <td><Status>{reviewStatus(invoice)}</Status></td><td><Status>{invoice.paymentStatus}</Status></td>
               <td><div className="accounts-row-actions" onClick={(event) => event.stopPropagation()}>
                 {/* Unpaid invoices have nothing to approve, reject, or flag yet —
                     they sit in the queue as a record until a payment comes in.
