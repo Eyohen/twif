@@ -2980,6 +2980,9 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
       customerName: customer.fullName || '',
       customerPhone: customer.phone || '',
       customerEmail: customer.email || '',
+      // Credit belongs to the selected customer, so a value entered for a
+      // previous customer must never carry across to the next one.
+      storeCreditApplied: 0,
     }));
     setCustomerSearch('');
   };
@@ -3007,6 +3010,8 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
   // The elite discount follows the customer's membership rather than being
   // typed in — see the tier the customer is on, resolved below.
   const eliteDiscountAmount = Math.round(((subtotal - itemDiscountTotal) * elitePercent) / 100);
+  const availableStoreCredit = Math.max(0, toNumber(chosenCustomer?.storeCreditBalance));
+  const maximumStoreCredit = Math.min(availableStoreCredit, Math.max(0, subtotal - itemDiscountTotal - eliteDiscountAmount));
   const balanceDue = Math.max(subtotal - itemDiscountTotal - eliteDiscountAmount - toNumber(form.storeCreditApplied), 0);
   // `balanceDue` is what the invoice comes to — the server stores it as the
   // invoice total. What is still owed is that less whatever the customer has
@@ -3146,6 +3151,9 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
     if (!form.customerName.trim()) return 'Select a customer.';
     if (!isValidPhone(form.customerPhone)) return PHONE_ERROR;
     if (!items.some((item) => item.description.trim())) return 'Add at least one invoice item.';
+    const requestedCredit = toNumber(form.storeCreditApplied);
+    if (requestedCredit > 0 && !chosenCustomer?.id) return 'Select a registered customer before applying store credit.';
+    if (requestedCredit > availableStoreCredit) return `This customer only has ${money.format(availableStoreCredit)} in store credit.`;
     if (evidenceRequired && !paymentEvidence) return 'Upload payment evidence for a partially or fully paid invoice.';
     // A part paid invoice with no figure is what left Accounts unable to
     // reconcile and production unable to tell whether it may start.
@@ -3298,7 +3306,14 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
                   <input
                     style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd5c8', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
                     value={form.customerName}
-                    onChange={(event) => { updateForm('customerName', event.target.value); setCustomerSearch(event.target.value); }}
+                    onChange={(event) => {
+                      updateForm('customerName', event.target.value);
+                      setCustomerSearch(event.target.value);
+                      if (chosenCustomer && event.target.value !== chosenCustomer.fullName) {
+                        setChosenCustomer(null);
+                        updateForm('storeCreditApplied', 0);
+                      }
+                    }}
                     onFocus={(event) => setCustomerSearch(event.target.value)}
                     placeholder="Search or type customer name…"
                     autoComplete="off"
@@ -3478,7 +3493,21 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
               ) : null}
               <label className="os-field">
                 <span>Store Credit Applied (₦)</span>
-                <input type="number" min="0" value={form.storeCreditApplied} onChange={(event) => updateForm('storeCreditApplied', event.target.value)} />
+                <input
+                  type="number"
+                  min="0"
+                  max={maximumStoreCredit}
+                  value={form.storeCreditApplied}
+                  disabled={!chosenCustomer || availableStoreCredit <= 0}
+                  onChange={(event) => updateForm('storeCreditApplied', Math.min(Math.max(toNumber(event.target.value), 0), maximumStoreCredit))}
+                />
+                <small style={{ fontSize: 11, fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#8a7a6a' }}>
+                  {!chosenCustomer
+                    ? 'Select a registered customer first.'
+                    : availableStoreCredit > 0
+                      ? `${money.format(availableStoreCredit)} available`
+                      : 'This customer has no store credit.'}
+                </small>
               </label>
               <label className="os-field">
                 <span>Invoice Date</span>
