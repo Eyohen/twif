@@ -4878,7 +4878,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
 // `itemIndex` renders just that one item (used from inside each item's own
 // card) rather than every item on the job; the index passed to every write
 // below is offset to match so it still patches the right item on the server.
-function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify, relatedSavePending = false }) {
+function TailorAssignmentPanel({ job, itemIndex, tailors, departments, onSaved, onNotify, relatedSavePending = false }) {
   // Older sheets kept fabric on the order itself. When the first assignment
   // creates item 0, carry that fabric into the item instead of replacing it
   // with an assignment-only object and making the selection disappear.
@@ -4923,10 +4923,19 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify, rel
     }
   };
 
-  const toggleTailor = (index, name) => {
+  const setDepartmentTailor = (index, departmentKey, name) => {
     const item = allItems[index];
     const current = item.tailors || [];
-    const next = current.includes(name) ? current.filter((entry) => entry !== name) : [...current, name];
+    const departmentTailorNames = new Set(tailors
+      .filter((person) => person.tailorDepartment === departmentKey)
+      .map((person) => person.displayName));
+    // An item keeps one clear owner per selected department. Assignments from
+    // the other departments (and legacy names no longer on the staff list)
+    // are carried forward unchanged.
+    const next = [
+      ...current.filter((entry) => !departmentTailorNames.has(entry)),
+      ...(name ? [name] : []),
+    ];
     if (next.length > 4) {
       onNotify?.('An item can be shared between at most 4 tailors.', 'error');
       return;
@@ -4951,13 +4960,10 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify, rel
       {items.map((item, localIndex) => {
         const index = indexOffset + localIndex;
         const itemDepartments = Array.isArray(item.departments) ? item.departments : [];
-        const eligibleTailors = itemDepartments.length
-          ? tailors.filter((person) => itemDepartments.includes(person.tailorDepartment))
-          : [];
         return (
         <div className="tailor-assign-item" key={item.key || index}>
           <header>
-            <strong>{item.item || `Item ${index + 1}`}</strong>
+            <strong>Tailor assignment</strong>
             <span>{(item.tailors || []).length ? `${item.tailors.length} of 4 assigned` : 'Nobody assigned yet'}</span>
           </header>
           {/* The customer's delivery date is the shop's business; the tailor
@@ -4978,20 +4984,30 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, onSaved, onNotify, rel
                 : 'The tailor does not see the customer\'s delivery date.'}
             </small>
           </label>
-          <div className="tailor-assign-picks">
-            {eligibleTailors.map((person) => {
-              const chosen = (item.tailors || []).includes(person.displayName);
+          <div className="tailor-assign-departments">
+            {itemDepartments.map((departmentKey) => {
+              const department = departments.find((entry) => entry.key === departmentKey);
+              const eligibleTailors = tailors.filter((person) => person.tailorDepartment === departmentKey);
+              const selected = eligibleTailors.find((person) => (item.tailors || []).includes(person.displayName))?.displayName || '';
               return (
-                <button
-                  type="button"
-                  key={person.id}
-                  className={chosen ? 'is-chosen' : ''}
-                  disabled={saving || relatedSavePending}
-                  onClick={() => toggleTailor(index, person.displayName)}
-                >{person.displayName}</button>
+                <label key={departmentKey}>
+                  <span>{department?.name || department?.label || DEPARTMENT_FIELDS[departmentKey]?.label || departmentKey}</span>
+                  <select
+                    value={selected}
+                    disabled={saving || relatedSavePending || !eligibleTailors.length}
+                    onChange={(event) => setDepartmentTailor(index, departmentKey, event.target.value)}
+                  >
+                    <option value="">{eligibleTailors.length ? 'Select tailor…' : 'No tailor available'}</option>
+                    {eligibleTailors.map((person) => (
+                      <option key={person.id} value={person.displayName}>
+                        {person.displayName}{person.tailorGrade ? ` · Grade ${person.tailorGrade}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               );
             })}
-            {eligibleTailors.length ? null : <span className="tailor-assign-empty">{itemDepartments.length ? 'No active tailors belong to this item’s department.' : 'Assign a department before choosing a tailor.'}</span>}
+            {itemDepartments.length ? null : <span className="tailor-assign-empty">Assign a department before choosing a tailor.</span>}
           </div>
 
           {/* Scoring only makes sense once there is finished work to judge, so
@@ -5979,6 +5995,23 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       )}
                     </div>
 
+                    {/* Assignment sits with the departments it belongs to:
+                        one compact dropdown per department, instead of a
+                        detached grid of every tailor at the foot of the item. */}
+                    <TailorAssignmentPanel
+                      job={jobModal}
+                      itemIndex={itemIndex}
+                      tailors={tailors}
+                      departments={departments}
+                      relatedSavePending={pendingFabricSaves > 0}
+                      onSaved={(sheet) => {
+                        const mergedSheet = mergeAssignmentSheet(jobModal, sheet);
+                        setJobModal(mergedSheet);
+                        onUpdateJob(jobModal.id, mergedSheet);
+                      }}
+                      onNotify={notify}
+                    />
+
                     <div>
                       <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Reference Images ({itemImages.length})</div>
                       {itemImages.length ? (
@@ -6008,21 +6041,6 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       )}
                     </div>
 
-                    {/* Who is making this garment — scoped to this item alone,
-                        since a suit's jacket and trousers are rarely the same
-                        pair of hands. */}
-                    <TailorAssignmentPanel
-                      job={jobModal}
-                      itemIndex={itemIndex}
-                      tailors={tailors}
-                      relatedSavePending={pendingFabricSaves > 0}
-                      onSaved={(sheet) => {
-                        const mergedSheet = mergeAssignmentSheet(jobModal, sheet);
-                        setJobModal(mergedSheet);
-                        onUpdateJob(jobModal.id, mergedSheet);
-                      }}
-                      onNotify={notify}
-                    />
                   </div>
                 );
                 });

@@ -10712,13 +10712,17 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 .tailor-assign-item header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
 .tailor-assign-item header strong { font-size: 13px; color: #1a1611; }
 .tailor-assign-item header span { font-size: 11px; color: #8a7a6a; white-space: nowrap; }
-.tailor-assign-picks { display: flex; flex-wrap: wrap; gap: 6px; }
-.tailor-assign-picks button {
-  border: 1px solid #ddd5c8; border-radius: 999px; background: #fff; color: #5a4e42;
-  font: inherit; font-size: 12px; font-weight: 600; padding: 6px 13px; cursor: pointer;
+.tailor-assign-departments { display: grid; gap: 9px; }
+.tailor-assign-departments label { display: grid; gap: 5px; }
+.tailor-assign-departments label > span {
+  font-size: 11px; font-weight: 700; color: #7a6030;
+  text-transform: uppercase; letter-spacing: .05em;
 }
-.tailor-assign-picks button.is-chosen { background: #1a1611; border-color: #1a1611; color: #fff; }
-.tailor-assign-picks button:disabled { opacity: .6; cursor: wait; }
+.tailor-assign-departments select {
+  width: 100%; min-height: 38px; border: 1px solid #ddd5c8; border-radius: 8px;
+  background: #fff; color: #1a1611; font: inherit; font-size: 13px; padding: 7px 10px;
+}
+.tailor-assign-departments select:disabled { opacity: .65; cursor: not-allowed; }
 .tailor-assign-empty { font-size: 12px; color: #8a7a6a; }
 .tailor-assign-scores {
   display: flex; flex-wrap: wrap; gap: 10px;
