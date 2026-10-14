@@ -565,11 +565,15 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
                   </select>
                 </label>
                 <label className="os-field">
-                  <span>{form.role === 'inventory_manager' ? 'Store Access' : 'Assigned Store'} <span style={{ color: '#e05252' }}>*</span></span>
-                  <select value={form.role === 'inventory_manager' ? 'all' : form.store} onChange={(e) => update('store', e.target.value)} disabled={form.role === 'inventory_manager'}>
+                  <span>Assigned Store <span style={{ color: '#e05252' }}>*</span></span>
+                  <select value={form.role === 'inventory_manager' ? 'all' : form.store} onChange={(e) => update('store', e.target.value)}>
                     <option value="all">All stores</option>
-                    {assignableStores.map((store) => <option key={store.key} value={store.key}>{store.name.replace(/\s+Store$/i, '')}</option>)}
-                    <option value="production">Production</option>
+                    {form.role === 'inventory_manager' ? null : (
+                      <>
+                        {assignableStores.map((store) => <option key={store.key} value={store.key}>{store.name.replace(/\s+Store$/i, '')}</option>)}
+                        <option value="production">Production</option>
+                      </>
+                    )}
                   </select>
                 </label>
                 {form.role === 'tailor' && (
