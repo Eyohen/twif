@@ -5045,7 +5045,11 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
   );
 }
 
-function DepartmentFabricPicker({ fabrics, inventory, allocated, departmentLabel, onQuantity, onRemove, onAdd }) {
+function DepartmentFabricPicker({ fabrics, inventory, allocated, departmentLabel, storeKey, onQuantity, onRemove, onAdd }) {
+  const availableAtStore = (fabric) => {
+    const balances = fabric?.stockByStore;
+    return balances && Object.keys(balances).length ? toNumber(balances[storeKey]) : toNumber(fabric?.quantity);
+  };
   return (
     <div className="os-field fabric-picker department-fabric-picker">
       <span>Fabric for {departmentLabel}</span>
@@ -5053,7 +5057,7 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, departmentLabel
         <ul className="fabric-chosen">
           {fabrics.map((entry) => {
             const stock = inventory.find((fabric) => fabric.id === entry.fabricId);
-            const available = toNumber(stock?.quantity);
+            const available = availableAtStore(stock);
             const short = Boolean(entry.fabricId) && toNumber(entry.quantity) > available;
             return (
               <li key={entry.fabricId || 'client-supplied'}>
@@ -5071,9 +5075,10 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, departmentLabel
       <select value="" disabled={allocated} onChange={(event) => { onAdd(event.target.value); event.target.value = ''; }}>
         <option value="">{fabrics.length ? 'Add another fabric…' : 'Select inventory fabric'}</option>
         <option value="client-supplied">Client supplied</option>
-        {inventory.filter((fabric) => !fabrics.some((entry) => entry.fabricId === fabric.id)).map((fabric) => (
-          <option key={fabric.id} value={fabric.id} disabled={toNumber(fabric.quantity) <= 0}>{fabric.name} ({toNumber(fabric.quantity)} {fabric.unit}){toNumber(fabric.quantity) <= 0 ? ' · Out of stock' : ''}</option>
-        ))}
+        {inventory.filter((fabric) => !fabrics.some((entry) => entry.fabricId === fabric.id)).map((fabric) => {
+          const available = availableAtStore(fabric);
+          return <option key={fabric.id} value={fabric.id} disabled={available <= 0}>{fabric.name} ({available} {fabric.unit}){available <= 0 ? ' · Out of stock at this store' : ''}</option>;
+        })}
       </select>
       {allocated ? <span className="os-fabric-hint">Already allocated — stock has been taken for this item.</span> : null}
     </div>
@@ -6011,6 +6016,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                             inventory={inventory}
                             allocated={itemAllocated}
                             departmentLabel={config?.label || departmentKey}
+                            storeKey={String(jobModal.storeKey || jobModal.store || '').trim().toLowerCase().replace(/\s+store$/i, '').replace(/[^a-z0-9]+/g, '-')}
                             onQuantity={(fabricId, quantity) => setItemFabricQuantity(itemIndex, departmentKey, fabricId, quantity)}
                             onRemove={(fabricId) => removeItemFabric(itemIndex, departmentKey, fabricId)}
                             onAdd={(fabricId) => addItemFabric(itemIndex, departmentKey, fabricId)}

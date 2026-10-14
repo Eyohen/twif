@@ -10,7 +10,7 @@ import EditItemPage from './EditItemPage';
 import OwnerInventoryApprovalsPage from '../owner/InventoryApprovalsPage';
 
 const PAGE_SIZE = 10;
-const EMPTY_FORM = { sku: '', name: '', type: '', colour: '', quantity: '', unit: 'yards', cost: '', location: '', supplier: '', lowStockThreshold: '', image: '' };
+const EMPTY_FORM = { sku: '', name: '', type: '', colour: '', quantity: '', unit: 'yards', cost: '', location: '', store: '', supplier: '', lowStockThreshold: '', image: '' };
 
 const selectStyle = {
   padding: '9px 32px 9px 12px', border: '1px solid #ddd5c8', borderRadius: 8, fontSize: 13, color: '#5a4e42',
@@ -54,7 +54,8 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
     setShowApprovals(true);
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
-  const locationOptions = ['Storage', ...stores.filter((store) => store.status === 'active').map((store) => store.name)];
+  const activeStores = useMemo(() => stores.filter((store) => store.status === 'active'), [stores]);
+  const locationOptions = useMemo(() => ['Storage', ...activeStores.map((store) => store.name)], [activeStores]);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -102,8 +103,10 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
     return haystack.includes(search.toLowerCase())
       && (type === 'All Types' || item.type === type)
       && (status === 'All Statuses' || stockStatus(item) === status)
-      && (locationFilter === 'All Locations' || item.location === locationFilter);
-  }), [items, search, type, status, locationFilter]);
+      && (locationFilter === 'All Locations' || item.location === locationFilter
+        || (locationFilter === 'Storage' && Number(item.stockByStore?.storage || 0) > 0)
+        || Number(item.stockByStore?.[activeStores.find((store) => store.name === locationFilter)?.key] || 0) > 0);
+  }), [items, search, type, status, locationFilter, activeStores]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -164,10 +167,11 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
   };
 
   const exportCsv = () => {
-    const header = ['SKU', 'Name', 'Type', 'Colour', 'Quantity', 'Unit', 'Cost', 'Location', 'Supplier', 'Low stock at', 'Status'];
+    const header = ['SKU', 'Name', 'Type', 'Colour', 'Total Quantity', ...activeStores.map((store) => `${store.name} Quantity`), 'Storage Quantity', 'Unit', 'Cost', 'Supplier', 'Low stock at', 'Status'];
     const rows = filtered.map((item) => [
-      item.sku || '', item.name, item.type, item.colour || '', Number(item.quantity || 0), item.unit,
-      item.cost ?? '', item.location || '', item.supplier || '', Number(item.lowStockThreshold || 0), stockStatus(item),
+      item.sku || '', item.name, item.type, item.colour || '', Number(item.quantity || 0),
+      ...activeStores.map((store) => Number(item.stockByStore?.[store.key] || 0)), Number(item.stockByStore?.storage || 0), item.unit,
+      item.cost ?? '', item.supplier || '', Number(item.lowStockThreshold || 0), stockStatus(item),
     ]);
     const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -326,7 +330,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              {['Item', 'Type', 'Colour', 'In Stock', 'Unit Cost', 'Location', 'Status', ''].map((col) => (
+              {['Item', 'Type', 'Colour', 'Total Stock', 'Stock by Store', 'Unit Cost', 'Status', ''].map((col) => (
                 <th key={col} style={{ textTransform: 'uppercase', fontSize: 10, color: '#8a7a6a', letterSpacing: '0.08em', padding: '11px 14px', background: '#faf7f3', fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '1px solid #eee5da' }}>{col}</th>
               ))}
             </tr>
@@ -386,8 +390,10 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
                   <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5', color: item.cost ? '#1a1611' : '#b0a090' }}>
                     {item.cost ? money.format(Number(item.cost)) : '—'}
                   </td>
-                  <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5', color: item.location ? '#5a4e42' : '#b0a090' }}>
-                    {item.location || '—'}
+                  <td style={{ padding: '12px 14px', fontSize: 12, borderBottom: '1px solid #f3ede5', color: '#5a4e42' }}>
+                    {Object.keys(item.stockByStore || {}).length
+                      ? Object.entries(item.stockByStore).map(([key, amount]) => <div key={key}><strong style={{ textTransform: 'capitalize' }}>{stores.find((store) => store.key === key)?.name || key}:</strong> {formatInventoryNumber(amount)} {item.unit}</div>)
+                      : <span style={{ color: '#b0a090' }}>{item.location || 'Unassigned legacy stock'}</span>}
                   </td>
                   <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5' }}>
                     <Status>{itemStatus}</Status>
@@ -488,8 +494,10 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Location</div>
-                    <div style={{ fontSize: 12, color: item.location ? '#5a4e42' : '#b0a090', marginTop: 3 }}>{item.location || '—'}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Stock by Store</div>
+                    <div style={{ fontSize: 12, color: '#5a4e42', marginTop: 3 }}>
+                      {activeStores.map((store) => `${store.name.replace(/ Store$/i, '')}: ${formatInventoryNumber(item.stockByStore?.[store.key] || 0)}`).join(' · ')}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -610,10 +618,10 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
 
               <div className="os-grid-2">
                 <label className="os-field">
-                  <span>Location</span>
-                  <select value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })}>
-                    <option value="">Select a location</option>
-                    {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  <span>Receiving Store</span>
+                  <select value={form.store} onChange={(event) => { const selected = stores.find((store) => store.key === event.target.value); setForm({ ...form, store: event.target.value, location: selected?.name || '' }); }} required={Number(form.quantity) > 0}>
+                    <option value="">Select a store</option>
+                    {stores.filter((store) => store.status === 'active').map((store) => <option key={store.key} value={store.key}>{store.name}</option>)}
                   </select>
                 </label>
                 <label className="os-field">

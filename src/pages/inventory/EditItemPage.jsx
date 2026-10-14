@@ -24,6 +24,7 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
   // than an arbitrary new number.
   const [adjustAction, setAdjustAction] = useState('add');
   const [adjustAmount, setAdjustAmount] = useState('');
+  const [adjustStore, setAdjustStore] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -41,8 +42,9 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
     ...(item.location && !stores.some((store) => store.name === item.location) && item.location !== 'Storage' ? [item.location] : []),
   ];
   const currentQuantity = Number(item.quantity || 0);
+  const storeQuantity = Number(item.stockByStore?.[adjustStore] || 0);
   const adjustAmountNumber = Number(adjustAmount) || 0;
-  const rawNextQuantity = adjustAction === 'add' ? currentQuantity + adjustAmountNumber : currentQuantity - adjustAmountNumber;
+  const rawNextQuantity = adjustAction === 'add' ? storeQuantity + adjustAmountNumber : storeQuantity - adjustAmountNumber;
   const nextQuantity = Math.round((rawNextQuantity + Number.EPSILON) * 100) / 100;
   const quantityChanged = adjustAmountNumber > 0;
   const detailsChanged = DETAIL_FIELDS.some((field) => String(form[field] ?? '') !== String(item[field] ?? ''))
@@ -82,18 +84,19 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
   const submitQuantity = async (event) => {
     event.preventDefault();
     setError('');
+    if (!adjustStore) { setError('Select the store whose stock should change.'); return; }
     if (adjustAction === 'deduct' && nextQuantity < 0) {
-      setError(`Only ${formatInventoryNumber(currentQuantity)} ${item.unit} in stock — cannot deduct ${formatInventoryNumber(adjustAmountNumber)}.`);
+      setError(`Only ${formatInventoryNumber(storeQuantity)} ${item.unit} in stock at this store — cannot deduct ${formatInventoryNumber(adjustAmountNumber)}.`);
       return;
     }
     setSubmitting(true);
     try {
       const response = await api.post(`/oms/fabrics/${item.id}/edit-requests`, {
-        proposedChanges: { quantity: nextQuantity },
+        proposedChanges: { stockByStore: { ...(item.stockByStore || {}), [adjustStore]: nextQuantity } },
         // The server only stores the resulting total, not the movement — the
         // action and amount are folded into the reason so the Owner reviews
         // an "Add 20 yards" / "Deduct 5 yards" request, not a bare number.
-        reason: `${adjustAction === 'add' ? 'Add' : 'Deduct'} ${adjustAmountNumber} ${item.unit}: ${reason}`.trim(),
+        reason: `${adjustAction === 'add' ? 'Add' : 'Deduct'} ${adjustAmountNumber} ${item.unit} at ${stores.find((store) => store.key === adjustStore)?.name || adjustStore}: ${reason}`.trim(),
         requestedBy: currentRole?.name?.split(' (')[0] || 'Inventory Manager',
         requestedByRole: 'inventory_manager',
       });
@@ -221,11 +224,18 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
               </div>
               <div className="edit-item-grid">
                 <label>
+                  Store
+                  <select value={adjustStore} onChange={(event) => setAdjustStore(event.target.value)} required>
+                    <option value="">Select a store</option>
+                    {stores.filter((store) => store.status === 'active').map((store) => <option key={store.key} value={store.key}>{store.name}</option>)}
+                  </select>
+                </label>
+                <label>
                   Amount to {adjustAction === 'add' ? 'add' : 'deduct'}
                   <input type="number" min="0" step="0.01" value={adjustAmount} onChange={(event) => setAdjustAmount(event.target.value)} />
                   <small>
-                    Currently {formatInventoryNumber(currentQuantity)} {item.unit}.
-                    {quantityChanged ? ` New total once approved: ${formatInventoryNumber(nextQuantity)} ${item.unit}.` : ' Stock normally moves through production allocation.'}
+                    Currently {formatInventoryNumber(storeQuantity)} {item.unit} at this store; {formatInventoryNumber(currentQuantity)} {item.unit} company-wide.
+                    {quantityChanged ? ` New balance at this store once approved: ${formatInventoryNumber(nextQuantity)} ${item.unit}.` : ' Stock normally moves through production allocation.'}
                   </small>
                 </label>
               </div>

@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle, XCircle, Clock, AlertTriangle, RefreshCw,
-  Package, ArrowLeft, ChevronRight, Info, Filter, Boxes,
+  Package, ArrowLeft, ChevronRight, Info, Boxes,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Status } from '../../components/oms/Common';
+import { useStores } from '../../utils/oms';
 
 const TABS = ['All', 'Pending', 'Approved', 'Rejected'];
 
-function ChangePill({ fieldKey, value }) {
+function ChangePill({ fieldKey, value, stores }) {
   const label = fieldKey.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+  if (fieldKey === 'stockByStore' && value && typeof value === 'object') {
+    return Object.entries(value).map(([key, amount]) => (
+      <ChangePill key={key} fieldKey={stores.find((store) => store.key === key)?.name || (key === 'storage' ? 'Storage / unassigned' : key)} value={amount} stores={stores} />
+    ));
+  }
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px',
@@ -23,6 +29,7 @@ function ChangePill({ fieldKey, value }) {
 }
 
 export default function OwnerInventoryApprovalsPage({ onBack }) {
+  const stores = useStores();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -268,7 +275,7 @@ export default function OwnerInventoryApprovalsPage({ onBack }) {
                       <td style={{ padding: '12px 14px' }}>
                         <div style={{ display: 'flex', flexWrap: 'wrap' }}>
                           {Object.entries(request.proposedChanges || {}).map(([key, value]) => (
-                            <ChangePill key={key} fieldKey={key} value={value} />
+                            <ChangePill key={key} fieldKey={key} value={value} stores={stores} />
                           ))}
                         </div>
                       </td>
@@ -349,7 +356,7 @@ export default function OwnerInventoryApprovalsPage({ onBack }) {
                   </div>
                   <div style={{ marginBottom: 8, display: 'flex', flexWrap: 'wrap' }}>
                     {Object.entries(request.proposedChanges || {}).map(([key, value]) => (
-                      <ChangePill key={key} fieldKey={key} value={value} />
+                      <ChangePill key={key} fieldKey={key} value={value} stores={stores} />
                     ))}
                   </div>
                   <p style={{ margin: '0 0 10px', fontSize: 13, color: '#5a4e42', lineHeight: 1.4 }}>{request.reason}</p>

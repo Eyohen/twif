@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Edit3, Box, Tag, Sliders, TrendingUp, Building2, Activity, AlignLeft, MapPin } from 'lucide-react';
 import { api } from '../../lib/api';
-import { money, formatMoment } from '../../utils/oms';
+import { money, formatMoment, useStores } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import { stockStatus, itemImage, colourSwatch, formatInventoryNumber } from './item';
 
@@ -11,6 +11,7 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
   const [item, setItem] = useState(fallbackItem || null);
   const [allocations, setAllocations] = useState([]);
   const [loadError, setLoadError] = useState('');
+  const stores = useStores();
 
   useEffect(() => {
     let live = true;
@@ -144,6 +145,17 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
 
       <section className="item-detail-grid">
         <main>
+          <article className="item-detail-card">
+            <header><h3 style={{ display: 'flex', alignItems: 'center', gap: 7 }}><MapPin size={13} />Stock by Store</h3></header>
+            <div className="os-grid-3">
+              {stores.filter((store) => store.status === 'active').map((store) => (
+                <div key={store.key}><small>{store.name}</small><strong style={{ display: 'block', marginTop: 4 }}>{formatInventoryNumber(item.stockByStore?.[store.key] || 0)} {unit}</strong></div>
+              ))}
+              {Number(item.stockByStore?.storage || 0) > 0 && (
+                <div><small>Storage / unassigned</small><strong style={{ display: 'block', marginTop: 4 }}>{formatInventoryNumber(item.stockByStore.storage)} {unit}</strong></div>
+              )}
+            </div>
+          </article>
           <article className="item-detail-card allocation-history">
             <header>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -161,6 +173,7 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
                     <th>Date</th>
                     <th>Job</th>
                     <th>Taken By</th>
+                    <th>Store</th>
                     <th>Quantity</th>
                   </tr>
                 </thead>
@@ -170,6 +183,7 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
                       <td>{formatMoment(row.createdAt)}</td>
                       <td><code style={{ fontSize: 10, color: '#596273' }}>{row.jobId || row.invoiceNumber || '—'}</code></td>
                       <td>{row.allocatedBy || row.requestedBy || 'Production'}</td>
+                      <td>{stores.find((store) => store.key === row.store)?.name || row.store || '—'}</td>
                       <td><strong>{formatInventoryNumber(row.quantity)} {unit}</strong></td>
                     </tr>
                   ))}
