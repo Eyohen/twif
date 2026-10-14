@@ -4878,7 +4878,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
 // `itemIndex` renders just that one item (used from inside each item's own
 // card) rather than every item on the job; the index passed to every write
 // below is offset to match so it still patches the right item on the server.
-function TailorAssignmentPanel({ job, itemIndex, tailors, departments, onSaved, onNotify, relatedSavePending = false }) {
+function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDepartmentFabric, onSaved, onNotify, relatedSavePending = false }) {
   // Older sheets kept fabric on the order itself. When the first assignment
   // creates item 0, carry that fabric into the item instead of replacing it
   // with an assignment-only object and making the selection disappear.
@@ -4990,8 +4990,11 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, onSaved, 
               const eligibleTailors = tailors.filter((person) => person.tailorDepartment === departmentKey);
               const selected = eligibleTailors.find((person) => (item.tailors || []).includes(person.displayName))?.displayName || '';
               return (
-                <label key={departmentKey}>
-                  <span>{department?.name || department?.label || DEPARTMENT_FIELDS[departmentKey]?.label || departmentKey}</span>
+                <div className="tailor-department-group" key={departmentKey}>
+                  <strong>{department?.name || department?.label || DEPARTMENT_FIELDS[departmentKey]?.label || departmentKey}</strong>
+                  {renderDepartmentFabric?.(departmentKey)}
+                  <label>
+                  <span>Tailor</span>
                   <select
                     value={selected}
                     disabled={saving || relatedSavePending || !eligibleTailors.length}
@@ -5004,7 +5007,8 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, onSaved, 
                       </option>
                     ))}
                   </select>
-                </label>
+                  </label>
+                </div>
               );
             })}
             {itemDepartments.length ? null : <span className="tailor-assign-empty">Assign a department before choosing a tailor.</span>}
@@ -5037,6 +5041,41 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, onSaved, 
         </div>
         );
       })}
+    </div>
+  );
+}
+
+function DepartmentFabricPicker({ fabrics, inventory, allocated, departmentLabel, onQuantity, onRemove, onAdd }) {
+  return (
+    <div className="os-field fabric-picker department-fabric-picker">
+      <span>Fabric for {departmentLabel}</span>
+      {fabrics.length ? (
+        <ul className="fabric-chosen">
+          {fabrics.map((entry) => {
+            const stock = inventory.find((fabric) => fabric.id === entry.fabricId);
+            const available = toNumber(stock?.quantity);
+            const short = Boolean(entry.fabricId) && toNumber(entry.quantity) > available;
+            return (
+              <li key={entry.fabricId || 'client-supplied'}>
+                <div><strong>{entry.name}</strong><small>{entry.clientSupplied ? 'The customer is bringing this' : `${available} ${stock?.unit || entry.unit} in stock`}</small></div>
+                {entry.clientSupplied ? <span className="fabric-supplied">Customer&apos;s own</span> : (
+                  <label><input type="number" min="0" step="0.01" value={entry.quantity ?? ''} disabled={allocated} onChange={(event) => onQuantity(entry.fabricId, event.target.value)} aria-label={`How much ${entry.name} this department needs`} /><span>{entry.unit || 'units'}</span></label>
+                )}
+                <button type="button" disabled={allocated} onClick={() => onRemove(entry.fabricId)} aria-label={`Remove ${entry.name}`}>×</button>
+                {short ? <p>Only {available} {stock?.unit} left.</p> : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      <select value="" disabled={allocated} onChange={(event) => { onAdd(event.target.value); event.target.value = ''; }}>
+        <option value="">{fabrics.length ? 'Add another fabric…' : 'Select inventory fabric'}</option>
+        <option value="client-supplied">Client supplied</option>
+        {inventory.filter((fabric) => !fabrics.some((entry) => entry.fabricId === fabric.id)).map((fabric) => (
+          <option key={fabric.id} value={fabric.id} disabled={toNumber(fabric.quantity) <= 0}>{fabric.name} ({toNumber(fabric.quantity)} {fabric.unit}){toNumber(fabric.quantity) <= 0 ? ' · Out of stock' : ''}</option>
+        ))}
+      </select>
+      {allocated ? <span className="os-fabric-hint">Already allocated — stock has been taken for this item.</span> : null}
     </div>
   );
 }
@@ -5219,16 +5258,23 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   // sheet with no real `items` array, where the modal itself stands in for
   // item 0 and the old whole-job fields are read/written directly, same
   // fallback used everywhere else in this component.
-  const itemFabricsFor = (itemIndex) => {
+  const itemFabricsFor = (itemIndex, departmentKey) => {
     if (!jobModal) return [];
-    if (itemIndex !== undefined) return jobModal.items?.[itemIndex]?.fabrics || [];
-    if (jobModal.fabrics?.length) return jobModal.fabrics;
-    if (jobModal.fabric === 'Client supplied') {
-      return [{ fabricId: '', name: 'Client supplied', unit: '', quantity: '', clientSupplied: true }];
+    let fabrics;
+    if (itemIndex !== undefined) fabrics = jobModal.items?.[itemIndex]?.fabrics || [];
+    else if (jobModal.fabrics?.length) fabrics = jobModal.fabrics;
+    else if (jobModal.fabric === 'Client supplied') {
+      fabrics = [{ fabricId: '', name: 'Client supplied', unit: '', quantity: '', clientSupplied: true }];
+    } else {
+      fabrics = jobModal.fabricId
+        ? [{ fabricId: jobModal.fabricId, name: jobModal.fabric, unit: jobModal.fabricUnit, quantity: jobModal.fabricUsage || '' }]
+        : [];
     }
-    return jobModal.fabricId
-      ? [{ fabricId: jobModal.fabricId, name: jobModal.fabric, unit: jobModal.fabricUnit, quantity: jobModal.fabricUsage || '' }]
-      : [];
+    if (!departmentKey) return fabrics;
+    const item = itemIndex !== undefined ? jobModal.items?.[itemIndex] : jobModal;
+    const firstDepartment = item?.departments?.[0];
+    return fabrics.filter((entry) => entry.departmentKey === departmentKey
+      || (!entry.departmentKey && departmentKey === firstDepartment));
   };
 
   const itemFabricAllocated = (itemIndex) => (
@@ -5266,24 +5312,32 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
       .finally(() => setPendingFabricSaves((count) => Math.max(0, count - 1)));
   };
 
-  const addItemFabric = (itemIndex, fabricId) => {
-    const current = itemFabricsFor(itemIndex);
-    if (!fabricId || current.some((entry) => entry.fabricId === fabricId)) return;
+  const addItemFabric = (itemIndex, departmentKey, fabricId) => {
+    const all = itemFabricsFor(itemIndex);
+    const current = itemFabricsFor(itemIndex, departmentKey);
+    if (!fabricId || current.some((entry) => (
+      fabricId === 'client-supplied' ? entry.clientSupplied : entry.fabricId === fabricId
+    ))) return;
     const chosen = fabricId === 'client-supplied'
-      ? { fabricId: '', name: 'Client supplied', unit: '', quantity: '', clientSupplied: true }
+      ? { fabricId: '', name: 'Client supplied', unit: '', quantity: '', clientSupplied: true, departmentKey }
       : (() => {
         const item = inventory.find((fabric) => fabric.id === fabricId);
-        return item ? { fabricId: item.id, name: item.name, unit: item.unit, quantity: '' } : null;
+        return item ? { fabricId: item.id, name: item.name, unit: item.unit, quantity: '', departmentKey } : null;
       })();
-    if (chosen) saveItemFabrics(itemIndex, [...current, chosen]);
+    if (chosen) saveItemFabrics(itemIndex, [...all, chosen]);
   };
 
-  const setItemFabricQuantity = (itemIndex, fabricId, quantity) => saveItemFabrics(
-    itemIndex, itemFabricsFor(itemIndex).map((entry) => (entry.fabricId === fabricId ? { ...entry, quantity } : entry))
+  const setItemFabricQuantity = (itemIndex, departmentKey, fabricId, quantity) => saveItemFabrics(
+    itemIndex, itemFabricsFor(itemIndex).map((entry) => (
+      entry.fabricId === fabricId && (entry.departmentKey === departmentKey || (!entry.departmentKey && departmentKey === (itemIndex !== undefined ? jobModal.items?.[itemIndex] : jobModal)?.departments?.[0]))
+        ? { ...entry, quantity, departmentKey } : entry
+    ))
   );
 
-  const removeItemFabric = (itemIndex, fabricId) => saveItemFabrics(
-    itemIndex, itemFabricsFor(itemIndex).filter((entry) => entry.fabricId !== fabricId)
+  const removeItemFabric = (itemIndex, departmentKey, fabricId) => saveItemFabrics(
+    itemIndex, itemFabricsFor(itemIndex).filter((entry) => !(
+      entry.fabricId === fabricId && (entry.departmentKey === departmentKey || (!entry.departmentKey && departmentKey === (itemIndex !== undefined ? jobModal.items?.[itemIndex] : jobModal)?.departments?.[0]))
+    ))
   );
 
   // Fabric edits and tailor assignments are saved through different routes.
@@ -5347,13 +5401,14 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   // closure of `jobModal`.
   const allocateFabricForItem = async (item, itemIndex, itemLabel) => {
     const itemFabrics = item.fabrics?.length ? item.fabrics : itemFabricsFor(undefined);
-    const isClientSupplied = itemFabrics.some((entry) => entry.clientSupplied)
+    const hasClientSupplied = itemFabrics.some((entry) => entry.clientSupplied)
       || (!itemFabrics.length && item.fabric === 'Client supplied');
-    if (isClientSupplied) {
+    const stockFabrics = itemFabrics.filter((entry) => !entry.clientSupplied);
+    if (hasClientSupplied && !stockFabrics.length) {
       notify(`Client-supplied fabric confirmed for ${itemLabel}`, 'success');
       return { success: true, changes: { fabricConfirmed: true, fabricAllocated: true } };
     }
-    const lines = itemFabrics
+    const lines = stockFabrics
       .filter((entry) => entry.fabricId && Number(entry.quantity) > 0)
       .map((entry) => ({ fabricId: entry.fabricId, quantity: Number(entry.quantity), name: entry.name, unit: entry.unit }));
     if (!lines.length) { notify(`Add a fabric and say how much ${itemLabel} needs`, 'error'); return { success: false }; }
@@ -5875,7 +5930,6 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                 const hasRealItems = Boolean(jobModal.items?.length);
                 return (hasRealItems ? jobModal.items : [jobModal]).map((item, index, list) => {
                 const itemIndex = hasRealItems ? index : undefined;
-                const itemFabrics = itemFabricsFor(itemIndex);
                 const itemAllocated = itemFabricAllocated(itemIndex);
                 const itemImages = Array.isArray(item.styleImages) ? item.styleImages : [];
                 const itemDepartments = Array.isArray(item.departments) ? item.departments : [];
@@ -5890,60 +5944,6 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                         <div style={{ fontSize: 13, color: '#5a4e42' }}>{item.designNotes}</div>
                       </div>
                     ) : null}
-                    <div className="os-field fabric-picker">
-                      <span>Fabric</span>
-                      {itemFabrics.length ? (
-                        <ul className="fabric-chosen">
-                          {itemFabrics.map((entry) => {
-                            const stock = inventory.find((fabric) => fabric.id === entry.fabricId);
-                            const available = toNumber(stock?.quantity);
-                            const short = Boolean(entry.fabricId) && toNumber(entry.quantity) > available;
-                            return (
-                              <li key={entry.fabricId || 'client-supplied'}>
-                                <div>
-                                  <strong>{entry.name}</strong>
-                                  <small>{entry.clientSupplied ? 'The customer is bringing this' : `${available} ${stock?.unit || entry.unit} in stock`}</small>
-                                </div>
-                                {entry.clientSupplied ? <span className="fabric-supplied">Customer&apos;s own</span> : (
-                                  <label>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      value={entry.quantity ?? ''}
-                                      disabled={itemAllocated}
-                                      onChange={(event) => setItemFabricQuantity(itemIndex, entry.fabricId, event.target.value)}
-                                      aria-label={`How much ${entry.name} this item needs`}
-                                    />
-                                    <span>{entry.unit || 'units'}</span>
-                                  </label>
-                                )}
-                                <button
-                                  type="button"
-                                  disabled={itemAllocated}
-                                  onClick={() => removeItemFabric(itemIndex, entry.fabricId)}
-                                  aria-label={`Remove ${entry.name}`}
-                                >×</button>
-                                {short ? <p>Only {available} {stock?.unit} left.</p> : null}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      ) : null}
-                      <select
-                        value=""
-                        disabled={itemAllocated}
-                        onChange={(event) => { addItemFabric(itemIndex, event.target.value); event.target.value = ''; }}
-                      >
-                        <option value="">{itemFabrics.length ? 'Add another fabric…' : 'Select inventory fabric'}</option>
-                        <option value="client-supplied">Client supplied</option>
-                        {inventory
-                          .filter((fabric) => !itemFabrics.some((entry) => entry.fabricId === fabric.id))
-                          .map((f) => <option key={f.id} value={f.id} disabled={toNumber(f.quantity) <= 0}>{f.name} ({toNumber(f.quantity)} {f.unit}){toNumber(f.quantity) <= 0 ? ' · Out of stock' : ''}</option>)}
-                      </select>
-                      {itemAllocated ? <span className="os-fabric-hint">Already allocated — stock has been taken for this item.</span> : null}
-                    </div>
-
                     {/* Which department(s) this garment needs — embroidery,
                         native, etc. — and the construction/style details
                         entered for each, chosen when the order sheet was
@@ -5957,7 +5957,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                             const config = departmentConfig(departments, departmentKey);
                             const values = item.departmentFields?.[departmentKey] || {};
                             return (
-                              <div key={departmentKey}>
+                              <div className="production-department-card" key={departmentKey}>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: '#c97b08', marginBottom: 4 }}>{config?.label || departmentKey}</div>
                                 {config?.fields?.length ? (
                                   <div className="os-grid-3" style={{ marginBottom: 8 }}>
@@ -6003,6 +6003,20 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       itemIndex={itemIndex}
                       tailors={tailors}
                       departments={departments}
+                      renderDepartmentFabric={(departmentKey) => {
+                        const config = departmentConfig(departments, departmentKey);
+                        return (
+                          <DepartmentFabricPicker
+                            fabrics={itemFabricsFor(itemIndex, departmentKey)}
+                            inventory={inventory}
+                            allocated={itemAllocated}
+                            departmentLabel={config?.label || departmentKey}
+                            onQuantity={(fabricId, quantity) => setItemFabricQuantity(itemIndex, departmentKey, fabricId, quantity)}
+                            onRemove={(fabricId) => removeItemFabric(itemIndex, departmentKey, fabricId)}
+                            onAdd={(fabricId) => addItemFabric(itemIndex, departmentKey, fabricId)}
+                          />
+                        );
+                      }}
                       relatedSavePending={pendingFabricSaves > 0}
                       onSaved={(sheet) => {
                         const mergedSheet = mergeAssignmentSheet(jobModal, sheet);
