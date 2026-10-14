@@ -40,6 +40,7 @@ import {
   invoiceDocumentPayload, PERIOD_OPTIONS, filterByPeriod, periodTrend, addDaysIso, isEliteCustomer,
   periodWindow, previousWindow, withinWindow, changeAgainst, changeLabel, LOG_PERIODS,
   amountReceived, invoicePayable, formatMoment, CUSTOMER_TRACKING_STEPS,
+  fitNoteFromOrderSheet,
   openDocumentTab, presentInvoiceDocument, downloadInvoicePdf as saveInvoicePdf,
   useStores,
   useDepartments,
@@ -4068,7 +4069,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
       customerId: sheet.customerId || '',
       store: sheet.store || invoice.store || 'Lekki',
       itemNote: '',
-      measurements: sheet.measurements || '',
+      measurements: fitNoteFromOrderSheet(sheet),
       measurementDetails: sheet.measurementDetails || {},
       items: sheetItems.map((item, index) => ({
         key: `edit-item-${index}`,
@@ -4358,6 +4359,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
       // what the order needs without walking the item list.
       fabrics: items.flatMap((item) => item.fabrics || []),
       measurements: sheetForm.measurements,
+      fitNote: sheetForm.measurements,
       measurementDetails: sheetForm.measurementDetails,
       designNotes: firstItem.designNotes,
       images: styleImagesFor(firstItem).length,
@@ -4389,6 +4391,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
           fabricUsage: orderSheet.fabricUsage,
           fabrics: orderSheet.fabrics,
           measurements: orderSheet.measurements,
+          fitNote: orderSheet.fitNote,
           measurementDetails: orderSheet.measurementDetails,
           designNotes: orderSheet.designNotes,
           images: orderSheet.images,

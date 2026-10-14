@@ -444,20 +444,32 @@ export const canShowJobInProduction = (job, invoices, releasePercent) => (
 // The figures a customer's profile holds now, written the way the order sheet
 // writes them.
 const measurementsWrittenOut = (profile) => Object.entries(profile?.measurements || {})
-  .filter(([key, value]) => key !== 'profile' && String(value ?? '').trim())
+  .filter(([key, value]) => !['profile', 'measuredAt', 'measuredBy'].includes(key) && String(value ?? '').trim())
   .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
   .join(', ');
+
+// Before Fit Note had its own field, the generated customer-measurement
+// summary could be saved back into `measurements` by Production. Those legacy
+// values are identifiable by their measurement audit metadata and must not be
+// presented as words entered by a store manager.
+export const fitNoteFromOrderSheet = (sheet = {}) => {
+  const candidate = typeof sheet.fitNote === 'string'
+    ? sheet.fitNote.trim()
+    : (typeof sheet.measurements === 'string' ? sheet.measurements.trim() : '');
+  return /(?:^|[,\n]\s*)measured(?:At|By)\s*:/i.test(candidate) ? '' : candidate;
+};
 
 export const productionJobFromInvoice = (invoice, customers = []) => {
   if (!invoice?.orderSheet) return null;
   const sheet = invoice.orderSheet;
   const styleImages = Array.isArray(sheet.styleImages) ? sheet.styleImages : [];
+  const fitNote = fitNoteFromOrderSheet(sheet);
   // Measurements are copied onto the order sheet at the moment it is raised.
   // A shop that raises the invoice first and measures the customer afterwards
   // — the ordinary way round — left the job held on "Measurements missing" for
   // good, because nothing ever looked at the profile again. If the sheet has
   // none, read what the customer has now.
-  const measurements = String(sheet.measurements ?? '').trim() || measurementsWrittenOut(
+  const measurements = fitNote || measurementsWrittenOut(
     customers.find((entry) => (
       (sheet.customerId && entry.id === sheet.customerId)
       || (sheet.customer && entry.fullName === sheet.customer)
@@ -525,7 +537,7 @@ export const productionJobFromInvoice = (invoice, customers = []) => {
     // which is right for the fallback but wrong for showing the note itself:
     // that fallback text isn't a note the store manager wrote, so it belongs
     // on its own field rather than being read off `measurements`.
-    fitNote: String(sheet.measurements ?? '').trim(),
+    fitNote,
     designNotes: sheet.designNotes || '',
     note: sheet.note || sheet.designNotes || invoice.itemNote || '',
     productionNote: sheet.productionNote || '',
