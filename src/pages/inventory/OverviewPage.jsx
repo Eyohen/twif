@@ -121,6 +121,75 @@ function AwaitingFabricPage({ invoices, loading, onBack }) {
   );
 }
 
+const selectedFabricsFor = (invoice) => {
+  const sheet = invoice.orderSheet || {};
+  const entries = (Array.isArray(sheet.items) ? sheet.items : [])
+    .flatMap((item) => Array.isArray(item.fabrics) ? item.fabrics : []);
+  const fallback = Array.isArray(sheet.fabrics) ? sheet.fabrics : [];
+  const names = [...new Set((entries.length ? entries : fallback)
+    .map((fabric) => fabric?.clientSupplied ? 'Client supplied' : fabric?.name)
+    .filter(Boolean))];
+  return names.length ? names : (sheet.fabric ? [sheet.fabric] : []);
+};
+
+function FabricAssignedOrdersPage({ invoices, loading, onBack }) {
+  return (
+    <div className="os-page">
+      <div className="os-page-header">
+        <div className="os-page-title">
+          <List size={22} />
+          <div>
+            <button type="button" onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0, marginBottom: 5, border: 'none', background: 'none', color: '#8a7a6a', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <ArrowLeft size={13} /> Inventory Overview
+            </button>
+            <h2>Orders With Assigned Fabrics</h2>
+            <p>Production orders with fabric selections · {invoices.length} order{invoices.length === 1 ? '' : 's'}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="os-card">
+        <div className="os-card-head">
+          <Package size={15} style={{ color: '#c0a87a' }} />
+          <div><strong>Fabric Assignment Register</strong><p>Orders currently carrying Production fabric selections</p></div>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          {invoices.length ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 780 }}>
+              <thead>
+                <tr>{['Invoice', 'Customer', 'Garment', 'Assigned Fabrics', 'Store', 'Tailor', 'Production Status'].map((col) => <th key={col} style={th}>{col}</th>)}</tr>
+              </thead>
+              <tbody>
+                {invoices.map((invoice) => {
+                  const sheet = invoice.orderSheet || {};
+                  const sheetItems = Array.isArray(sheet.items) ? sheet.items : [];
+                  const garments = sheetItems.map((item) => item.item).filter(Boolean).join(', ') || invoice.item || '—';
+                  const tailors = [...new Set(sheetItems.flatMap((item) => item.tailors || []).filter(Boolean))];
+                  return (
+                    <tr key={invoice.invoiceNumber}>
+                      <td style={{ ...td, fontFamily: 'monospace', color: '#5a4e42' }}>{invoice.invoiceNumber}</td>
+                      <td style={{ ...td, fontWeight: 600, color: '#1a1611' }}>{invoice.customer}</td>
+                      <td style={{ ...td, color: '#5a4e42' }}>{garments}</td>
+                      <td style={{ ...td, color: '#1a1611' }}>{selectedFabricsFor(invoice).join(', ')}</td>
+                      <td style={{ ...td, color: '#5a4e42' }}>{invoice.store || sheet.store || '—'}</td>
+                      <td style={{ ...td, color: '#5a4e42' }}>{tailors.join(', ') || sheet.tailor || 'Unassigned'}</td>
+                      <td style={td}><span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, background: '#eaf2ff', color: '#1767df', fontSize: 11, fontWeight: 700 }}>{sheet.status || invoice.orderStatus || 'In Production'}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ margin: 0, padding: '40px 16px', textAlign: 'center', fontSize: 13, color: '#8a7a6a' }}>
+              {loading ? 'Loading production orders…' : 'Production has not assigned fabric to any orders yet.'}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Every number and every row on this page used to be written into the source:
 // 156 fabrics, 8 low, 5 out, four named alerts, four pending allocations and
 // four allocations "released today" — none of which had any connection to the
@@ -134,6 +203,7 @@ export default function InventoryOverviewPage({ onNavigate }) {
   const [openItem, setOpenItem] = useState(null);
   const [showAllAllocations, setShowAllAllocations] = useState(false);
   const [showAwaitingFabric, setShowAwaitingFabric] = useState(false);
+  const [showFabricOrders, setShowFabricOrders] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -166,6 +236,7 @@ export default function InventoryOverviewPage({ onNavigate }) {
     const allocated = new Set(allocations.map((row) => row.invoiceNumber).filter(Boolean));
     return invoices.filter((invoice) => isInvoiceApproved(invoice) && !allocated.has(invoice.invoiceNumber));
   }, [invoices, allocations]);
+  const fabricAssignedOrders = useMemo(() => invoices.filter((invoice) => selectedFabricsFor(invoice).length), [invoices]);
 
   const stockValue = items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.cost || 0), 0);
 
@@ -177,6 +248,9 @@ export default function InventoryOverviewPage({ onNavigate }) {
   }
   if (showAwaitingFabric) {
     return <AwaitingFabricPage invoices={awaitingFabric} loading={loading} onBack={() => setShowAwaitingFabric(false)} />;
+  }
+  if (showFabricOrders) {
+    return <FabricAssignedOrdersPage invoices={fabricAssignedOrders} loading={loading} onBack={() => setShowFabricOrders(false)} />;
   }
 
   const kpis = [
@@ -376,14 +450,14 @@ export default function InventoryOverviewPage({ onNavigate }) {
             <div className="os-grid-2" style={{ gap: 10 }}>
               {[
                 { icon: <List size={20} />, title: 'Manage Inventory', detail: 'Add items, edit details, export', tone: 'purple', view: 'Inventory' },
-                { icon: <Package size={20} />, title: 'View Orders', detail: 'See what production is working on', tone: 'blue', view: 'Orders' },
-              ].map(({ icon, title, detail, tone, view }) => {
+                { icon: <Package size={20} />, title: 'View Orders', detail: 'See orders with assigned fabrics', tone: 'blue', action: () => setShowFabricOrders(true) },
+              ].map(({ icon, title, detail, tone, view, action }) => {
                 const palette = TONE_COLORS[tone] || TONE_COLORS.gold;
                 return (
                   <button
                     key={title}
                     type="button"
-                    onClick={() => onNavigate?.(view)}
+                    onClick={() => action ? action() : onNavigate?.(view)}
                     style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, padding: '14px', background: palette.bg, border: `1px solid ${palette.iconBg}`, borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
                     onMouseEnter={(event) => { event.currentTarget.style.opacity = '0.85'; }}
                     onMouseLeave={(event) => { event.currentTarget.style.opacity = '1'; }}
