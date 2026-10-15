@@ -10712,6 +10712,10 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 .tailor-assign-item header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
 .tailor-assign-item header strong { font-size: 13px; color: #1a1611; }
 .tailor-assign-item header span { font-size: 11px; color: #8a7a6a; white-space: nowrap; }
+.production-assignment-lock {
+  margin: 0 0 10px; padding: 8px 10px; border: 1px solid #e8d9a0;
+  border-radius: 8px; background: #fffbf0; color: #7a6030; font-size: 11.5px;
+}
 .tailor-assign-departments { display: grid; gap: 9px; }
 .tailor-department-group { border: 1px solid #e6ddd1; border-radius: 9px; background: #fff; padding: 10px; }
 .tailor-department-group > strong { display: block; margin-bottom: 7px; font-size: 12px; color: #c97b08; }

@@ -4885,7 +4885,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
 // `itemIndex` renders just that one item (used from inside each item's own
 // card) rather than every item on the job; the index passed to every write
 // below is offset to match so it still patches the right item on the server.
-function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDepartmentDetails, renderDepartmentFabric, onSaved, onNotify, relatedSavePending = false }) {
+function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDepartmentDetails, renderDepartmentFabric, onSaved, onNotify, relatedSavePending = false, assignmentsLocked = false }) {
   // Older sheets kept fabric on the order itself. When the first assignment
   // creates item 0, carry that fabric into the item instead of replacing it
   // with an assignment-only object and making the selection disappear.
@@ -4973,6 +4973,9 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
             <strong>Tailor assignment</strong>
             <span>{(item.tailors || []).length ? `${item.tailors.length} of 4 assigned` : 'Nobody assigned yet'}</span>
           </header>
+          {assignmentsLocked ? (
+            <div className="production-assignment-lock">Fabric and tailor assignments are locked because production has started.</div>
+          ) : null}
           {/* The customer's delivery date is the shop's business; the tailor
               works to a date Production sets, normally earlier. Items on one
               order can be promised on different days, so each has its own. */}
@@ -4982,7 +4985,7 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
               type="date"
               value={item.tailorDueDate || ''}
               max={item.delivery || job.delivery || undefined}
-              disabled={saving || relatedSavePending}
+              disabled={saving || relatedSavePending || assignmentsLocked}
               onChange={(event) => setDueDate(index, event.target.value)}
             />
             <small>
@@ -5005,7 +5008,7 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
                   <span>Tailor</span>
                   <select
                     value={selected}
-                    disabled={saving || relatedSavePending || !eligibleTailors.length}
+                    disabled={saving || relatedSavePending || assignmentsLocked || !eligibleTailors.length}
                     onChange={(event) => setDepartmentTailor(index, departmentKey, event.target.value)}
                   >
                     <option value="">{eligibleTailors.length ? 'Select tailor…' : 'No tailor available'}</option>
@@ -5053,7 +5056,7 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
   );
 }
 
-function DepartmentFabricPicker({ fabrics, inventory, allocated, departmentLabel, storeKey, onQuantity, onRemove, onAdd }) {
+function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = false, departmentLabel, storeKey, onQuantity, onRemove, onAdd }) {
   const availableAtStore = (fabric) => {
     const balances = fabric?.stockByStore;
     return balances && Object.keys(balances).length ? toNumber(balances[storeKey]) : toNumber(fabric?.quantity);
@@ -5071,16 +5074,16 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, departmentLabel
               <li key={entry.fabricId || 'client-supplied'}>
                 <div><strong>{entry.name}</strong><small>{entry.clientSupplied ? 'The customer is bringing this' : `${available} ${stock?.unit || entry.unit} in stock`}</small></div>
                 {entry.clientSupplied ? <span className="fabric-supplied">Customer&apos;s own</span> : (
-                  <label><input type="number" min="0" step="0.01" value={entry.quantity ?? ''} disabled={allocated} onChange={(event) => onQuantity(entry.fabricId, event.target.value)} aria-label={`How much ${entry.name} this department needs`} /><span>{entry.unit || 'units'}</span></label>
+                  <label><input type="number" min="0" step="0.01" value={entry.quantity ?? ''} disabled={allocated || readOnly} onChange={(event) => onQuantity(entry.fabricId, event.target.value)} aria-label={`How much ${entry.name} this department needs`} /><span>{entry.unit || 'units'}</span></label>
                 )}
-                <button type="button" disabled={allocated} onClick={() => onRemove(entry.fabricId)} aria-label={`Remove ${entry.name}`}>×</button>
+                <button type="button" disabled={allocated || readOnly} onClick={() => onRemove(entry.fabricId)} aria-label={`Remove ${entry.name}`}>×</button>
                 {short ? <p>Only {available} {stock?.unit} left.</p> : null}
               </li>
             );
           })}
         </ul>
       ) : null}
-      <select value="" disabled={allocated} onChange={(event) => { onAdd(event.target.value); event.target.value = ''; }}>
+      <select value="" disabled={allocated || readOnly} onChange={(event) => { onAdd(event.target.value); event.target.value = ''; }}>
         <option value="">{fabrics.length ? 'Add another fabric…' : 'Select inventory fabric'}</option>
         <option value="client-supplied">Client supplied</option>
         {inventory.filter((fabric) => !fabrics.some((entry) => entry.fabricId === fabric.id)).map((fabric) => {
@@ -5089,6 +5092,7 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, departmentLabel
         })}
       </select>
       {allocated ? <span className="os-fabric-hint">Already allocated — stock has been taken for this item.</span> : null}
+      {!allocated && readOnly ? <span className="os-fabric-hint">Locked because production has started.</span> : null}
     </div>
   );
 }
@@ -5298,6 +5302,10 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   // mirrored onto the single whole-job fields the board and tracking page
   // still read).
   const saveItemFabrics = (itemIndex, fabrics) => {
+    if (['In Progress', 'Ready', 'Ready for Collection'].includes(jobModal?.status)) {
+      notify('Fabric selections are locked once production is in progress', 'error');
+      return;
+    }
     if (itemIndex !== undefined) {
       const nextItems = jobModal.items.map((item, index) => (
         index === itemIndex ? { ...item, fabrics } : item
@@ -5490,7 +5498,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   };
 
   const hasTailor = Boolean(jobModal?.tailor) && jobModal.tailor !== 'Unassigned';
-  const startedJob = jobModal?.status === 'In Progress' || jobModal?.status === 'Ready';
+  const startedJob = ['In Progress', 'Ready', 'Ready for Collection'].includes(jobModal?.status);
 
   return (
     <div className="os-page">
@@ -5965,6 +5973,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       itemIndex={itemIndex}
                       tailors={tailors}
                       departments={departments}
+                      assignmentsLocked={startedJob}
                       renderDepartmentDetails={(departmentKey) => {
                         const config = departmentConfig(departments, departmentKey);
                         const values = item.departmentFields?.[departmentKey] || {};
@@ -6003,6 +6012,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                             fabrics={itemFabricsFor(itemIndex, departmentKey)}
                             inventory={inventory}
                             allocated={itemAllocated}
+                            readOnly={startedJob}
                             departmentLabel={config?.label || departmentKey}
                             storeKey={String(jobModal.storeKey || jobModal.store || '').trim().toLowerCase().replace(/\s+store$/i, '').replace(/[^a-z0-9]+/g, '-')}
                             onQuantity={(fabricId, quantity) => setItemFabricQuantity(itemIndex, departmentKey, fabricId, quantity)}
