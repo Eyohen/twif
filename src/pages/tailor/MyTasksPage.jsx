@@ -15,15 +15,30 @@ const itemsLabelFor = (order) => {
   return names.length ? names.join(', ') : (order.item || 'Not specified');
 };
 
-// Fabric is chosen by Production for the order as a whole, not garment by
-// garment — allocating it writes only the order's own fabric fields, never
-// each item's, so an item with none of its own falls back to what was chosen
-// for the order, same as the Production board already does.
 const fabricNamesOf = (list) => (Array.isArray(list) ? list : [])
   .map((entry) => (entry?.clientSupplied ? 'Client supplied' : entry?.name))
   .filter(Boolean);
-const orderFabricLabelFor = (order) => fabricNamesOf(order.fabrics).join(', ') || order.fabric || '';
-const itemFabricLabelFor = (item, order) => fabricNamesOf(item?.fabrics).join(', ') || item?.fabric || orderFabricLabelFor(order);
+
+// Production stores every department's choices in the item's fabrics array,
+// tagged with departmentKey. Untagged legacy entries belong to the first
+// department, matching the compatibility rule on the Production page.
+const fabricsForDepartment = (list, departmentKey, departments = []) => (Array.isArray(list) ? list : [])
+  .filter((entry) => entry?.departmentKey === departmentKey
+    || (!entry?.departmentKey && (!departmentKey || !departments.length || departments[0] === departmentKey)));
+
+const itemFabricLabelFor = (item, order, departmentKey) => {
+  const departments = Array.isArray(item?.departments) ? item.departments : [];
+  if (Array.isArray(item?.fabrics) && item.fabrics.length) {
+    return fabricNamesOf(fabricsForDepartment(item.fabrics, departmentKey, departments)).join(', ');
+  }
+  if (Array.isArray(order?.fabrics) && order.fabrics.length) {
+    return fabricNamesOf(fabricsForDepartment(order.fabrics, departmentKey, departments)).join(', ');
+  }
+  // Truly old single-department jobs only have the scalar fabric fields.
+  return !departmentKey || !departments.length || departments[0] === departmentKey
+    ? (item?.fabric || order?.fabric || '')
+    : '';
+};
 
 // A reference image is stored as a data URL, so the browser can save it
 // directly; the file is named after its label so a folder of them makes sense.
@@ -172,8 +187,9 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
           const scopedItems = order.items?.length ? order.items.filter(itemBelongsToTailor) : [];
           const itemsLabel = scopedItems.length ? itemsLabelFor({ ...order, items: scopedItems }) : itemsLabelFor(order);
           const scopedDueDate = scopedItems.map((item) => item.tailorDueDate).filter(Boolean).sort()[0] || order.tailorDueDate;
-          const orderFabricLabel = orderFabricLabelFor(order);
-          const fabricLabelFor = (item) => itemFabricLabelFor(item, order);
+          const fabricLabelFor = (item) => itemFabricLabelFor(item, order, tailorDepartment);
+          const orderFabricLabel = [...new Set((scopedItems.length ? scopedItems : [order])
+            .map(fabricLabelFor).filter(Boolean))].join(', ');
 
           return (
             <div
