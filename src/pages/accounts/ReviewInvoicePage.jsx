@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle, Flag, XCircle, HelpCircle, User, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Flag, XCircle, User, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
 import { money, invoiceApprovalStatus, amountReceived, invoicePayable, isFullyPaid, isAwaitingPayment, formatMoment, paidPercent, DEFAULT_RELEASE_PERCENT } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
@@ -380,9 +380,9 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
             <div className="os-card-body" style={{ gap: 8, padding: '12px' }}>
               {[
                 [<CheckCircle size={15} />, 'Approve Completed Payment', 'Payment received in full — release to production', 'Approved', '#2a7d4f', '#f0faf4', '#b8e4cb', completeBlocked],
-                [<Flag size={15} />, 'Approve Partial Payment', status === 'Approved' ? 'Partial payment already approved' : belowThreshold ? `Under ${releasePercent}% — Admin or Owner only` : `At least ${releasePercent}% received — release to production`, 'Approved', '#7a6030', '#fffbf0', '#f0ddb0', partialBlocked],
+                [<img src="/70-percent-payment.svg" alt="" width="28" height="28" />, 'Approve Partial Payment', status === 'Approved' ? 'Partial payment already approved' : belowThreshold ? `Under ${releasePercent}% — Admin or Owner only` : `At least ${releasePercent}% received — release to production`, 'Approved', '#2f8522', '#f4fbf1', '#cce7c2', partialBlocked],
                 [<XCircle size={15} />, 'Reject Invoice', 'Reject and send back to store', 'Rejected', '#8a3520', '#fff5f0', '#f0c8b8'],
-                [<HelpCircle size={15} />, 'Flag for Clarification', 'Request more info from store', 'Flagged', '#5a4e42', '#f5f0e8', '#ddd5c8'],
+                [<Flag size={15} />, 'Flag for Clarification', 'Request more info from store', 'Flagged', '#5a4e42', '#f5f0e8', '#ddd5c8'],
               ].map(([icon, title, detail, action, color, bg, border, blocked]) => (
                 <button
                   key={title}
