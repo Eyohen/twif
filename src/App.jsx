@@ -40,7 +40,7 @@ import {
   invoiceDocumentPayload, PERIOD_OPTIONS, filterByPeriod, periodTrend, addDaysIso, isEliteCustomer,
   periodWindow, previousWindow, withinWindow, changeAgainst, changeLabel, LOG_PERIODS,
   amountReceived, invoicePayable, formatMoment, CUSTOMER_TRACKING_STEPS,
-  fitNoteFromOrderSheet,
+  fitNoteFromOrderSheet, orderNoteFromOrderSheet,
   openDocumentTab, presentInvoiceDocument, downloadInvoicePdf as saveInvoicePdf,
   useStores,
   useDepartments,
@@ -4068,7 +4068,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
       customer: sheet.customer || invoice.customer || '',
       customerId: sheet.customerId || '',
       store: sheet.store || invoice.store || 'Lekki',
-      itemNote: '',
+      itemNote: orderNoteFromOrderSheet(sheet),
       measurements: fitNoteFromOrderSheet(sheet),
       measurementDetails: sheet.measurementDetails || {},
       items: sheetItems.map((item, index) => ({
@@ -4364,7 +4364,10 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
       designNotes: firstItem.designNotes,
       images: styleImagesFor(firstItem).length,
       styleImages: styleImagesFor(firstItem),
-      note: firstItem.designNotes || sheetForm.itemNote || 'Order sheet released by Store Manager.',
+      orderNote: sheetForm.itemNote.trim(),
+      // Retained for older clients; it now mirrors only the actual order note,
+      // never an item's design instructions or generated placeholder text.
+      note: sheetForm.itemNote.trim(),
       assignedAt: new Intl.DateTimeFormat('en-GB', {
         day: '2-digit',
         month: 'short',
@@ -4397,6 +4400,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
           images: orderSheet.images,
           styleImages: orderSheet.styleImages,
           note: orderSheet.note,
+          orderNote: orderSheet.orderNote,
         });
         onOrderSheetUpdated?.(editingSheet.invoiceNumber, response.data?.data?.orderSheet || orderSheet);
       } catch (error) {

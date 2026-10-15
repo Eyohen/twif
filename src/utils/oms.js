@@ -459,11 +459,28 @@ export const fitNoteFromOrderSheet = (sheet = {}) => {
   return /(?:^|[,\n]\s*)measured(?:At|By)\s*:/i.test(candidate) ? '' : candidate;
 };
 
+// Item design instructions and the order-level customer note are separate.
+// Older saves copied the first item's design note into `note` (and sometimes
+// saved the UI's "Customer Note:" prefix too), so suppress that generated
+// duplicate while retaining genuine legacy order notes.
+export const orderNoteFromOrderSheet = (sheet = {}) => {
+  if (typeof sheet.orderNote === 'string') return sheet.orderNote.trim();
+  const candidate = typeof sheet.note === 'string' ? sheet.note.trim() : '';
+  if (!candidate || candidate === 'Order sheet released by Store Manager.') return '';
+  const withoutLabel = candidate.replace(/^(?:Customer Note:\s*)+/i, '').trim();
+  const designNotes = [
+    sheet.designNotes,
+    ...(Array.isArray(sheet.items) ? sheet.items.map((item) => item?.designNotes) : []),
+  ].map((value) => String(value || '').trim()).filter(Boolean);
+  return designNotes.includes(withoutLabel) ? '' : withoutLabel;
+};
+
 export const productionJobFromInvoice = (invoice, customers = []) => {
   if (!invoice?.orderSheet) return null;
   const sheet = invoice.orderSheet;
   const styleImages = Array.isArray(sheet.styleImages) ? sheet.styleImages : [];
   const fitNote = fitNoteFromOrderSheet(sheet);
+  const orderNote = orderNoteFromOrderSheet(sheet);
   // Measurements are copied onto the order sheet at the moment it is raised.
   // A shop that raises the invoice first and measures the customer afterwards
   // — the ordinary way round — left the job held on "Measurements missing" for
@@ -539,7 +556,7 @@ export const productionJobFromInvoice = (invoice, customers = []) => {
     // on its own field rather than being read off `measurements`.
     fitNote,
     designNotes: sheet.designNotes || '',
-    note: sheet.note || sheet.designNotes || invoice.itemNote || '',
+    note: orderNote,
     productionNote: sheet.productionNote || '',
     fabricConfirmed: Boolean(sheet.fabricConfirmed),
     fabricAllocated: Boolean(sheet.fabricAllocated),
