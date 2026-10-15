@@ -105,7 +105,9 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
         </div>
       </div>
 
-      {/* Action Bar */}
+      {/* Status notice. Review decisions live in the Review Actions sidebar;
+          duplicating them here made the top of the page an ambiguous shortcut
+          bar with two different sets of controls for the same decision. */}
       {locked ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#f0faf4', border: '1px solid #b8e4cb', borderRadius: 8, color: '#2a7d4f', fontSize: 13, fontWeight: 700 }}>
           <CheckCircle size={15} /> Approved &amp; fully paid — this decision is final
@@ -117,38 +119,7 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
             ? 'This invoice shows Approved but is still Unpaid — record the payment received below to correct it.'
             : 'Unpaid — record the payment received in the sidebar before this can be reviewed.'}
         </div>
-      ) : (
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={() => requestAction('Approved')}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#f0faf4', border: '1px solid #b8e4cb', borderRadius: 8, color: '#2a7d4f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-        >
-          <CheckCircle size={15} /> Approve
-        </button>
-        <button
-          type="button"
-          onClick={() => requestAction('Flagged')}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#fffbf0', border: '1px solid #f0ddb0', borderRadius: 8, color: '#7a6030', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-        >
-          <Flag size={15} /> Flag
-        </button>
-        <button
-          type="button"
-          onClick={() => requestAction('Rejected')}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#fff5f0', border: '1px solid #f0c8b8', borderRadius: 8, color: '#8a3520', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-        >
-          <XCircle size={15} /> Reject
-        </button>
-        <button
-          type="button"
-          onClick={() => requestAction('Partial')}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#f5f0e8', border: '1px solid #ddd5c8', borderRadius: 8, color: '#5a4e42', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-        >
-          <HelpCircle size={15} /> Request Clarification
-        </button>
-      </div>
-      )}
+      ) : null}
 
       {invoice.storeManagerClarification ? (
         <div style={{ padding: '12px 14px', background: '#f0faf4', border: '1px solid #b8e4cb', borderRadius: 8, color: '#245f40' }}>
