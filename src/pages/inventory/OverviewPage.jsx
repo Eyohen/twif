@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, AlertTriangle, XCircle, Package, LayoutGrid, PlusCircle, List, Boxes, TrendingUp, ChevronRight, Eye } from 'lucide-react';
+import { Box, AlertTriangle, XCircle, Package, LayoutGrid, PlusCircle, List, Boxes, TrendingUp, ChevronRight, Eye, ArrowLeft } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money, formatMoment, isInvoiceApproved } from '../../utils/oms';
 import { stockStatus, itemImage, formatInventoryNumber } from './item';
@@ -14,14 +14,61 @@ const TONE_COLORS = {
   purple: { bg: '#f5f0ff', color: '#6b3fa0', iconBg: '#ede4ff' },
 };
 
-const startOfDay = (value) => {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-};
-
 const th = { textTransform: 'uppercase', fontSize: 10, color: '#8a7a6a', letterSpacing: '0.08em', padding: '9px 14px', background: '#faf7f3', fontWeight: 700, textAlign: 'left', borderBottom: '1px solid #eee5da' };
 const td = { padding: '10px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5' };
 const linkButton = { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', border: '1px solid #ddd5c8', borderRadius: 6, background: '#fff', fontSize: 12, color: '#5a4e42', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 };
+
+function TodaysAllocationsPage({ allocations, loading, onBack }) {
+  return (
+    <div className="os-page">
+      <div className="os-page-header">
+        <div className="os-page-title">
+          <LayoutGrid size={22} />
+          <div>
+            <button type="button" onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0, marginBottom: 5, border: 'none', background: 'none', color: '#8a7a6a', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <ArrowLeft size={13} /> Inventory Overview
+            </button>
+            <h2>Today&apos;s Allocations</h2>
+            <p>Every fabric release recorded today · {allocations.length} allocation{allocations.length === 1 ? '' : 's'}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="os-card">
+        <div className="os-card-head">
+          <LayoutGrid size={15} style={{ color: '#c0a87a' }} />
+          <div><strong>Allocation Register</strong><p>Complete list for today</p></div>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          {allocations.length ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+              <thead>
+                <tr>{['Time', 'Invoice', 'Customer', 'Fabric', 'Quantity', 'Store', 'Tailor'].map((col) => <th key={col} style={th}>{col}</th>)}</tr>
+              </thead>
+              <tbody>
+                {allocations.map((row) => (
+                  <tr key={row.id}>
+                    <td style={{ ...td, whiteSpace: 'nowrap', color: '#8a7a6a' }}>{formatMoment(row.createdAt)}</td>
+                    <td style={{ ...td, fontFamily: 'monospace', color: '#5a4e42' }}>{row.invoiceNumber}</td>
+                    <td style={{ ...td, fontWeight: 600, color: '#1a1611' }}>{row.customerName}</td>
+                    <td style={{ ...td, color: '#5a4e42' }}>{row.fabricName}</td>
+                    <td style={{ ...td, fontWeight: 700, color: '#1a1611', whiteSpace: 'nowrap' }}>{formatInventoryNumber(row.quantity)} {row.unit}</td>
+                    <td style={{ ...td, color: '#5a4e42', textTransform: 'capitalize' }}>{row.store || '—'}</td>
+                    <td style={{ ...td, color: '#5a4e42' }}>{row.tailorName || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ margin: 0, padding: '40px 16px', textAlign: 'center', fontSize: 13, color: '#8a7a6a' }}>
+              {loading ? 'Loading allocations…' : 'No fabric has been released today.'}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Every number and every row on this page used to be written into the source:
 // 156 fabrics, 8 low, 5 out, four named alerts, four pending allocations and
@@ -30,31 +77,36 @@ const linkButton = { marginLeft: 'auto', display: 'flex', alignItems: 'center', 
 export default function InventoryOverviewPage({ onNavigate }) {
   const [items, setItems] = useState([]);
   const [allocations, setAllocations] = useState([]);
+  const [todaysAllocations, setTodaysAllocations] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openItem, setOpenItem] = useState(null);
+  const [showAllAllocations, setShowAllAllocations] = useState(false);
 
   useEffect(() => {
     let live = true;
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const to = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     Promise.allSettled([
       api.get('/oms/fabrics'),
       api.get('/oms/fabrics/allocations'),
+      api.get(`/oms/fabrics/allocations?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`),
       api.get('/oms/invoices/sent'),
-    ]).then(([fabricsResult, allocationsResult, invoicesResult]) => {
+    ]).then(([fabricsResult, allocationsResult, todayResult, invoicesResult]) => {
       if (!live) return;
       setItems(fabricsResult.value?.data?.data?.fabrics || []);
       setAllocations(allocationsResult.value?.data?.data?.allocations || []);
+      setTodaysAllocations(todayResult.value?.data?.data?.allocations || []);
       setInvoices(invoicesResult.value?.data?.data?.invoices || []);
       setLoading(false);
     });
     return () => { live = false; };
   }, []);
 
-  const today = startOfDay(new Date());
   const alerts = useMemo(() => items
     .filter((item) => stockStatus(item) !== 'In Stock')
     .sort((a, b) => Number(a.quantity || 0) - Number(b.quantity || 0)), [items]);
-  const todaysAllocations = useMemo(() => allocations.filter((row) => startOfDay(row.createdAt) === today), [allocations, today]);
 
   // An approved invoice that has had no fabric released against it is still
   // waiting on this desk.
@@ -67,6 +119,9 @@ export default function InventoryOverviewPage({ onNavigate }) {
 
   if (openItem) {
     return <ItemDetailsPage itemId={openItem.id} fallbackItem={openItem} onBack={() => setOpenItem(null)} onEdit={() => onNavigate?.('Inventory')} />;
+  }
+  if (showAllAllocations) {
+    return <TodaysAllocationsPage allocations={todaysAllocations} loading={loading} onBack={() => setShowAllAllocations(false)} />;
   }
 
   const kpis = [
@@ -223,6 +278,9 @@ export default function InventoryOverviewPage({ onNavigate }) {
               <strong>Today&apos;s Allocations</strong>
               <p>Fabric released to production today</p>
             </div>
+            <button type="button" onClick={() => setShowAllAllocations(true)} style={linkButton}>
+              View All <ChevronRight size={12} />
+            </button>
           </div>
           <div style={{ overflowX: 'auto' }}>
             {todaysAllocations.length ? (
