@@ -46,13 +46,26 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
   // than free text, so filtering by location can be an exact match.
   const stores = useStores();
 
-  // A notification about an edit request should land directly on the
-  // approvals queue, not the general item list.
+  // Dashboard links can land on a specific inventory view. Consume only the
+  // parameter handled here so unrelated query state is not discarded.
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
-    if (searchParams.get('tab') !== 'approvals') return;
-    setShowApprovals(true);
-    setSearchParams({}, { replace: true });
+    const opensApprovals = searchParams.get('tab') === 'approvals';
+    const opensAlerts = searchParams.get('stock') === 'alerts';
+    if (!opensApprovals && !opensAlerts) return;
+    if (opensApprovals) setShowApprovals(true);
+    if (opensAlerts) {
+      setStatus('Low / Out of Stock');
+      setPage(1);
+    }
+    // The approvals parameter is a one-time instruction (otherwise closing
+    // approvals immediately reopens it). The stock filter remains in the URL
+    // so refreshes and shared links preserve the alerts-only view.
+    if (opensApprovals) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('tab');
+      setSearchParams(next, { replace: true });
+    }
   }, [searchParams, setSearchParams]);
   const activeStores = useMemo(() => stores.filter((store) => store.status === 'active'), [stores]);
   const locationOptions = useMemo(() => ['Storage', ...activeStores.map((store) => store.name)], [activeStores]);
@@ -102,7 +115,9 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
     const haystack = `${item.name} ${item.type} ${item.sku || ''} ${item.colour || ''} ${item.location || ''}`.toLowerCase();
     return haystack.includes(search.toLowerCase())
       && (type === 'All Types' || item.type === type)
-      && (status === 'All Statuses' || stockStatus(item) === status)
+      && (status === 'All Statuses'
+        || (status === 'Low / Out of Stock' && stockStatus(item) !== 'In Stock')
+        || stockStatus(item) === status)
       && (locationFilter === 'All Locations' || item.location === locationFilter
         || (locationFilter === 'Storage' && Number(item.stockByStore?.storage || 0) > 0)
         || Number(item.stockByStore?.[activeStores.find((store) => store.name === locationFilter)?.key] || 0) > 0);
@@ -306,6 +321,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
             </select>
             <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} style={selectStyle}>
               <option>All Statuses</option>
+              <option>Low / Out of Stock</option>
               <option>In Stock</option>
               <option>Low Stock</option>
               <option>Out of Stock</option>

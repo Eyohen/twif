@@ -230,7 +230,7 @@ export default function InventoryOverviewPage({ onNavigate }) {
               <strong>Inventory Alerts</strong>
               <p>Low stock and out-of-stock items</p>
             </div>
-            <button type="button" onClick={() => onNavigate?.('Inventory')} style={linkButton}>
+            <button type="button" onClick={() => onNavigate?.('Inventory', { stock: 'alerts' })} style={linkButton}>
               View All <ChevronRight size={12} />
             </button>
           </div>
