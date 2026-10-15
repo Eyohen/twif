@@ -4885,7 +4885,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
 // `itemIndex` renders just that one item (used from inside each item's own
 // card) rather than every item on the job; the index passed to every write
 // below is offset to match so it still patches the right item on the server.
-function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDepartmentFabric, onSaved, onNotify, relatedSavePending = false }) {
+function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDepartmentDetails, renderDepartmentFabric, onSaved, onNotify, relatedSavePending = false }) {
   // Older sheets kept fabric on the order itself. When the first assignment
   // creates item 0, carry that fabric into the item instead of replacing it
   // with an assignment-only object and making the selection disappear.
@@ -4999,6 +4999,7 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
               return (
                 <div className="tailor-department-group" key={departmentKey}>
                   <strong>{department?.name || department?.label || DEPARTMENT_FIELDS[departmentKey]?.label || departmentKey}</strong>
+                  {renderDepartmentDetails?.(departmentKey)}
                   {renderDepartmentFabric?.(departmentKey)}
                   <label>
                   <span>Tailor</span>
@@ -5944,7 +5945,6 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                 const itemIndex = hasRealItems ? index : undefined;
                 const itemAllocated = itemFabricAllocated(itemIndex);
                 const itemImages = Array.isArray(item.styleImages) ? item.styleImages : [];
-                const itemDepartments = Array.isArray(item.departments) ? item.departments : [];
                 return (
                   <div key={`${item.item}-${index}`} style={{ border: '1px solid #eee5da', borderRadius: 8, padding: '12px 14px', display: 'grid', gap: 10 }}>
                     {list.length > 1 ? (
@@ -5956,65 +5956,46 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                         <div style={{ fontSize: 13, color: '#5a4e42' }}>{item.designNotes}</div>
                       </div>
                     ) : null}
-                    {/* Which department(s) this garment needs — embroidery,
-                        native, etc. — and the construction/style details
-                        entered for each, chosen when the order sheet was
-                        raised. Production, the tailor and Owner/Admin all
-                        need this to route and cut the work correctly. */}
-                    <div>
-                      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Department{itemDepartments.length > 1 ? 's' : ''}</div>
-                      {itemDepartments.length ? (
-                        <div style={{ display: 'grid', gap: 10 }}>
-                          {itemDepartments.map((departmentKey) => {
-                            const config = departmentConfig(departments, departmentKey);
-                            const values = item.departmentFields?.[departmentKey] || {};
-                            return (
-                              <div className="production-department-card" key={departmentKey}>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: '#c97b08', marginBottom: 4 }}>{config?.label || departmentKey}</div>
-                                {config?.fields?.length ? (
-                                  <div className="os-grid-3" style={{ marginBottom: 8 }}>
-                                    {config.fields.map((field) => (
-                                      <div key={field.key}>
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{field.label}</div>
-                                        <div style={{ fontSize: 13, color: values[field.key] ? '#1a1611' : '#b0a090', fontWeight: 600, marginTop: 3 }}>
-                                          {values[field.key] || 'Not filled in'}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p style={{ margin: '0 0 8px', fontSize: 13, color: '#b0a090' }}>No fields configured for this department.</p>
-                                )}
-                                {/* Instructions belong with the garment and the
-                                    department doing the work — a single note
-                                    for the whole order left the suit department
-                                    reading notes meant for embroidery. */}
-                                <label className="os-field">
-                                  <span style={{ fontSize: 10.5 }}>Instructions for {config?.label || departmentKey}</span>
-                                  <textarea
-                                    value={item.departmentNotes?.[departmentKey] || ''}
-                                    onChange={(event) => updateItemDepartmentNote(index, departmentKey, event.target.value)}
-                                    placeholder="Instructions for the tailor working this department..."
-                                    rows={2}
-                                  />
-                                </label>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No department assigned to this garment yet.</p>
-                      )}
-                    </div>
-
-                    {/* Assignment sits with the departments it belongs to:
-                        one compact dropdown per department, instead of a
-                        detached grid of every tailor at the foot of the item. */}
+                    {/* One loop now owns each department's details, fabric and
+                        tailor. Keeping them inside the same card prevents an
+                        allocation from looking as though it belongs to the
+                        next department on a multi-department garment. */}
                     <TailorAssignmentPanel
                       job={jobModal}
                       itemIndex={itemIndex}
                       tailors={tailors}
                       departments={departments}
+                      renderDepartmentDetails={(departmentKey) => {
+                        const config = departmentConfig(departments, departmentKey);
+                        const values = item.departmentFields?.[departmentKey] || {};
+                        return (
+                          <div className="production-department-details">
+                            {config?.fields?.length ? (
+                              <div className="os-grid-3" style={{ marginBottom: 8 }}>
+                                {config.fields.map((field) => (
+                                  <div key={field.key}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{field.label}</div>
+                                    <div style={{ fontSize: 13, color: values[field.key] ? '#1a1611' : '#b0a090', fontWeight: 600, marginTop: 3 }}>
+                                      {values[field.key] || 'Not filled in'}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p style={{ margin: '0 0 8px', fontSize: 13, color: '#b0a090' }}>No fields configured for this department.</p>
+                            )}
+                            <label className="os-field">
+                              <span style={{ fontSize: 10.5 }}>Instructions for {config?.label || departmentKey}</span>
+                              <textarea
+                                value={item.departmentNotes?.[departmentKey] || ''}
+                                onChange={(event) => updateItemDepartmentNote(index, departmentKey, event.target.value)}
+                                placeholder="Instructions for the tailor working this department..."
+                                rows={2}
+                              />
+                            </label>
+                          </div>
+                        );
+                      }}
                       renderDepartmentFabric={(departmentKey) => {
                         const config = departmentConfig(departments, departmentKey);
                         return (
