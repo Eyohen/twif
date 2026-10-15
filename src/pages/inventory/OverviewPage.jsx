@@ -70,6 +70,57 @@ function TodaysAllocationsPage({ allocations, loading, onBack }) {
   );
 }
 
+function AwaitingFabricPage({ invoices, loading, onBack }) {
+  return (
+    <div className="os-page">
+      <div className="os-page-header">
+        <div className="os-page-title">
+          <Package size={22} />
+          <div>
+            <button type="button" onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0, marginBottom: 5, border: 'none', background: 'none', color: '#8a7a6a', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <ArrowLeft size={13} /> Inventory Overview
+            </button>
+            <h2>Awaiting Fabric</h2>
+            <p>Approved orders with no fabric released · {invoices.length} order{invoices.length === 1 ? '' : 's'}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="os-card">
+        <div className="os-card-head">
+          <Package size={15} style={{ color: '#c0a87a' }} />
+          <div><strong>Awaiting Fabric Register</strong><p>Complete list requiring allocation</p></div>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          {invoices.length ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 680 }}>
+              <thead>
+                <tr>{['Invoice', 'Customer', 'Item', 'Store', 'Delivery Date', 'Approval'].map((col) => <th key={col} style={th}>{col}</th>)}</tr>
+              </thead>
+              <tbody>
+                {invoices.map((invoice) => (
+                  <tr key={invoice.invoiceNumber}>
+                    <td style={{ ...td, fontFamily: 'monospace', color: '#5a4e42' }}>{invoice.invoiceNumber}</td>
+                    <td style={{ ...td, fontWeight: 600, color: '#1a1611' }}>{invoice.customer}</td>
+                    <td style={{ ...td, color: '#5a4e42' }}>{invoice.item || '—'}</td>
+                    <td style={{ ...td, color: '#5a4e42' }}>{invoice.store || '—'}</td>
+                    <td style={{ ...td, color: '#8a7a6a', whiteSpace: 'nowrap' }}>{invoice.deliveryDate ? formatMoment(invoice.deliveryDate) : '—'}</td>
+                    <td style={td}><span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, background: '#f0faf4', color: '#2a7d4f', fontSize: 11, fontWeight: 700 }}>Approved</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ margin: 0, padding: '40px 16px', textAlign: 'center', fontSize: 13, color: '#8a7a6a' }}>
+              {loading ? 'Loading invoices…' : 'Every approved invoice has had fabric released against it.'}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Every number and every row on this page used to be written into the source:
 // 156 fabrics, 8 low, 5 out, four named alerts, four pending allocations and
 // four allocations "released today" — none of which had any connection to the
@@ -82,6 +133,7 @@ export default function InventoryOverviewPage({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [openItem, setOpenItem] = useState(null);
   const [showAllAllocations, setShowAllAllocations] = useState(false);
+  const [showAwaitingFabric, setShowAwaitingFabric] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -122,6 +174,9 @@ export default function InventoryOverviewPage({ onNavigate }) {
   }
   if (showAllAllocations) {
     return <TodaysAllocationsPage allocations={todaysAllocations} loading={loading} onBack={() => setShowAllAllocations(false)} />;
+  }
+  if (showAwaitingFabric) {
+    return <AwaitingFabricPage invoices={awaitingFabric} loading={loading} onBack={() => setShowAwaitingFabric(false)} />;
   }
 
   const kpis = [
@@ -241,7 +296,7 @@ export default function InventoryOverviewPage({ onNavigate }) {
               <strong>Awaiting Fabric</strong>
               <p>Approved invoices with nothing released yet</p>
             </div>
-            <button type="button" onClick={() => onNavigate?.('Orders')} style={linkButton}>
+            <button type="button" onClick={() => setShowAwaitingFabric(true)} style={linkButton}>
               View All <ChevronRight size={12} />
             </button>
           </div>
