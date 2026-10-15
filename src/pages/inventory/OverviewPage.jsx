@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Box, AlertTriangle, XCircle, Package, LayoutGrid, PlusCircle, List, Boxes, TrendingUp, ChevronRight, Eye, ArrowLeft } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money, formatMoment, isInvoiceApproved } from '../../utils/oms';
@@ -195,6 +196,7 @@ function FabricAssignedOrdersPage({ invoices, loading, onBack }) {
 // four allocations "released today" — none of which had any connection to the
 // shop's stock. It all reads from the inventory now.
 export default function InventoryOverviewPage({ onNavigate }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
   const [allocations, setAllocations] = useState([]);
   const [todaysAllocations, setTodaysAllocations] = useState([]);
@@ -204,6 +206,11 @@ export default function InventoryOverviewPage({ onNavigate }) {
   const [showAllAllocations, setShowAllAllocations] = useState(false);
   const [showAwaitingFabric, setShowAwaitingFabric] = useState(false);
   const [showFabricOrders, setShowFabricOrders] = useState(false);
+  const requestedAllocationOrder = searchParams.get('allocation');
+
+  useEffect(() => {
+    if (requestedAllocationOrder) setShowFabricOrders(true);
+  }, [requestedAllocationOrder]);
 
   useEffect(() => {
     let live = true;
@@ -250,7 +257,20 @@ export default function InventoryOverviewPage({ onNavigate }) {
     return <AwaitingFabricPage invoices={awaitingFabric} loading={loading} onBack={() => setShowAwaitingFabric(false)} />;
   }
   if (showFabricOrders) {
-    return <FabricAssignedOrdersPage invoices={fabricAssignedOrders} loading={loading} onBack={() => setShowFabricOrders(false)} />;
+    const visibleOrders = requestedAllocationOrder
+      ? fabricAssignedOrders.filter((invoice) => invoice.invoiceNumber === requestedAllocationOrder)
+      : fabricAssignedOrders;
+    return <FabricAssignedOrdersPage
+      invoices={visibleOrders}
+      loading={loading}
+      onBack={() => {
+        setShowFabricOrders(false);
+        if (!requestedAllocationOrder) return;
+        const next = new URLSearchParams(searchParams);
+        next.delete('allocation');
+        setSearchParams(next, { replace: true });
+      }}
+    />;
   }
 
   const kpis = [

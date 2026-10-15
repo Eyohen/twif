@@ -7722,7 +7722,7 @@ function ReportsView({ role }) {
 // Where each notification takes you when tapped. The metadata written by the
 // API carries the event name and, where relevant, the invoice it refers to.
 const notificationDestination = (item, role) => {
-  const { event, invoiceNumber } = item?.metadata || {};
+  const { event, invoiceNumber, fabricId } = item?.metadata || {};
   // Accounts' Invoices view reads a different query-param key than the
   // Owner/Admin/Store-Manager one does — each view is its own component.
   const invoiceParams = invoiceNumber ? { [role === 'accounts' ? 'review' : 'invoice']: invoiceNumber } : undefined;
@@ -7759,13 +7759,15 @@ const notificationDestination = (item, role) => {
     // generic item list — that's the only place these three actually mean
     // anything to them.
     case 'inventory_edit_requested':
+      return { view: 'Inventory', params: ['owner', 'admin'].includes(role) ? { tab: 'approvals' } : (fabricId ? { item: fabricId } : undefined) };
     case 'inventory_edit_approved':
     case 'inventory_edit_rejected':
-      return { view: 'Inventory', params: ['owner', 'admin'].includes(role) ? { tab: 'approvals' } : undefined };
+      return { view: 'Inventory', params: ['owner', 'admin'].includes(role) ? { tab: 'approvals' } : (fabricId ? { item: fabricId } : undefined) };
     case 'inventory_created':
-    case 'fabric_allocated':
     case 'low_stock':
-      return { view: 'Inventory' };
+      return { view: 'Inventory', params: fabricId ? { item: fabricId } : undefined };
+    case 'fabric_allocated':
+      return { view: role === 'inventory_manager' ? 'Overview' : 'Inventory', params: invoiceNumber ? { allocation: invoiceNumber } : undefined };
     case 'customer_updated':
     case 'customer_archived':
       return { view: 'Customers', params: item?.metadata?.customerId ? { customer: item.metadata.customerId } : undefined };

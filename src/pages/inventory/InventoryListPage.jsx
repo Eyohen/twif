@@ -67,6 +67,21 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  const requestedItemId = searchParams.get('item');
+  useEffect(() => {
+    if (!requestedItemId || !items.length) return;
+    const match = items.find((item) => item.id === requestedItemId);
+    if (match) setSelectedItem(match);
+  }, [items, requestedItemId]);
+
+  const closeSelectedItem = () => {
+    setSelectedItem(null);
+    if (!requestedItemId) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('item');
+    setSearchParams(next, { replace: true });
+  };
   const activeStores = useMemo(() => stores.filter((store) => store.status === 'active'), [stores]);
   const locationOptions = useMemo(() => ['Storage', ...activeStores.map((store) => store.name)], [activeStores]);
 
@@ -220,7 +235,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
       <ItemDetailsPage
         itemId={selectedItem.id}
         fallbackItem={selectedItem}
-        onBack={() => setSelectedItem(null)}
+        onBack={closeSelectedItem}
         onEdit={readOnly ? undefined : () => setEditingItem(selectedItem)}
         readOnly={readOnly}
         approvalRequest={approvalRequest}
