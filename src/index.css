@@ -8309,8 +8309,58 @@ dd {
   .tailor-detail-grid { grid-template-columns:1fr; }
   .task-confirm-modal { padding:22px; }
 }
+
+/* My Tasks keeps its desktop density, while an expanded task becomes a
+   readable vertical document on phones. These selectors are page-specific. */
+@media (max-width: 700px) {
+  .tailor-my-task-card { min-width: 0; }
+  .tailor-my-task-header {
+    display: grid !important;
+    grid-template-columns: 40px minmax(0, 1fr) 32px;
+    align-items: start !important;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+  .tailor-my-task-header > span:first-child { width: 40px !important; height: 40px !important; }
+  .tailor-my-task-heading { min-width: 0; }
+  .tailor-my-task-heading > div:first-child { align-items: flex-start !important; gap: 3px 6px !important; }
+  .tailor-my-task-heading strong,
+  .tailor-my-task-heading span,
+  .tailor-task-expanded,
+  .tailor-task-expanded li,
+  .tailor-task-expanded p { overflow-wrap: anywhere; }
+  .tailor-my-task-status { grid-column: 2; justify-self: start; margin-top: 5px; }
+  .tailor-my-task-header > button { grid-column: 3; grid-row: 1; }
+  .tailor-my-task-card > .os-info-grid > div { min-width: 0; padding: 9px 10px !important; }
+  .tailor-my-task-card > .os-info-grid > div > div { min-width: 0; }
+  .tailor-my-task-card > .os-info-grid strong { overflow-wrap: anywhere; line-height: 1.35; }
+  .tailor-task-expanded { padding: 12px !important; min-width: 0; }
+  .tailor-task-detail-item { min-width: 0; padding-bottom: 4px; }
+  .tailor-task-detail-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 14px !important; }
+  .tailor-task-detail-grid > section {
+    min-width: 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0ebe4;
+  }
+  .tailor-task-detail-grid > section:empty { display: none; }
+  .tailor-task-detail-grid > section:last-child { padding-bottom: 0; border-bottom: 0; }
+  .tailor-task-department-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 12px !important; }
+  .tailor-task-department-grid > section {
+    min-width: 0;
+    padding: 11px;
+    border: 1px solid #eee5da;
+    border-radius: 8px;
+    background: #fffdf9;
+  }
+  .tailor-task-actions { flex-direction: column; padding: 12px !important; }
+  .tailor-task-actions button { width: 100%; min-width: 0; }
+}
+
 @media (max-width: 480px) {
   .owner-stores-kpis { grid-template-columns:1fr; }
+  .tailor-task-measurements { grid-template-columns: minmax(0, 1fr) !important; }
+  .tailor-task-reference-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .tailor-task-reference-grid .tailor-style-image img { max-height: 260px; }
 }
 
 /* Accountant invoice action confirmation */

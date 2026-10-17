@@ -193,6 +193,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
 
           return (
             <div
+              className="tailor-my-task-card"
               key={order.id}
               style={{
                 background: '#fff', border: `1px solid ${isExpanded ? '#c97b08' : '#eee5da'}`,
@@ -202,7 +203,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
               }}
             >
               {/* Card Header */}
-              <div style={{
+              <div className="tailor-my-task-header" style={{
                 display: 'flex', alignItems: 'center', gap: 14,
                 padding: '14px 18px', cursor: 'pointer',
                 borderBottom: isExpanded ? '1px solid #eee5da' : 'none',
@@ -215,7 +216,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                   fontSize: 13, fontWeight: 700, flexShrink: 0,
                 }}>{initials}</span>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="tailor-my-task-heading" style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <strong style={{ fontSize: 14, color: '#1a1611' }}>{order.customer}</strong>
                     <span style={{ fontSize: 12, color: '#8a7a6a' }}>·</span>
@@ -233,7 +234,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                   </div>
                 </div>
 
-                <span style={{
+                <span className="tailor-my-task-status" style={{
                   fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20,
                   background: bg, color, border: `1px solid ${border}`, flexShrink: 0,
                 }}>{label}</span>
@@ -297,7 +298,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                 // first place is trusted over an empty screen.
                 const detailItems = rawDetailItems.filter(itemBelongsToTailor);
                 return (
-                <div style={{ padding: '16px 18px' }}>
+                <div className="tailor-task-expanded" style={{ padding: '16px 18px' }}>
                   {/* Orders that cover several garments list each one, so the
                       tailor sees the whole job rather than only the first item. */}
                   {detailItems.length > 1 ? (
@@ -344,14 +345,14 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                   {detailItems.map((item, itemIndex) => {
                     const itemImages = Array.isArray(item.styleImages) ? item.styleImages : [];
                     return (
-                      <div key={`${item.item}-${itemIndex}`} style={{ marginBottom: 16 }}>
+                      <div className="tailor-task-detail-item" key={`${item.item}-${itemIndex}`} style={{ marginBottom: 16 }}>
                         {detailItems.length > 1 ? (
                           <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             Item {itemIndex + 1}: {item.item || 'Unnamed item'}
                             {item.tailorDueDate ? <span style={{ marginLeft: 10, textTransform: 'none', letterSpacing: 0, color: '#a76900' }}>Due {formatDue(item.tailorDueDate)}</span> : null}
                           </h4>
                         ) : null}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                        <div className="tailor-task-detail-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
                           <section>
                             <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Product Details</h4>
                             <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, color: '#5a4e42' }}>
@@ -379,7 +380,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                                 // Same label/value grid Production reads from — a
                                 // bulleted list read differently on the same figures
                                 // depending on which screen a tailor happened to be on.
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, border: '1px solid #eee5da', borderRadius: 8, overflow: 'hidden' }}>
+                                <div className="tailor-task-measurements" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, border: '1px solid #eee5da', borderRadius: 8, overflow: 'hidden' }}>
                                   {(order.measurementDetails
                                     ? Object.entries(order.measurementDetails)
                                     : String(order.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line) => {
@@ -401,7 +402,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                           <section>
                             <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Images ({itemImages.length})</h4>
                             {itemImages.length ? (
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                              <div className="tailor-task-reference-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                                 {itemImages.map((image, index) => (
                                   image.dataUrl ? (
                                     <div key={`${image.label}-${index}`} style={{ display: 'grid', gap: 4 }}>
@@ -456,7 +457,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                             <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                               Department{visibleDepartments.length > 1 ? 's' : ''}
                             </h4>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                            <div className="tailor-task-department-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                               {visibleDepartments.map((departmentKey) => {
                                 const config = departmentConfig(departmentDirectory, departmentKey);
                                 const values = item.departmentFields?.[departmentKey] || {};
@@ -507,7 +508,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
               })()}
 
               {/* Action Buttons */}
-              <div style={{
+              <div className="tailor-task-actions" style={{
                 display: 'flex', gap: 10, padding: '12px 18px',
                 borderTop: '1px solid #f3ede5', background: '#fff',
               }}>
