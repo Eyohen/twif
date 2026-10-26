@@ -36,6 +36,12 @@ Feature: Who may reach the shop's records
       Then the account should be created
       And the Owner should be able to remove it again
 
+    Scenario: The Owner can find the permanent delete action
+      Given I am signed in as the Owner
+      And I open the User Management page
+      When the Owner opens the actions for a non-owner staff account
+      Then a permanent Delete action should be available
+
     Scenario: A Store Manager cannot add a staff account
       When the Store Manager tries to add a staff account
       Then the API should refuse me as not the Owner

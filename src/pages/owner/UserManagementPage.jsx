@@ -426,6 +426,8 @@ export default function UserManagementPage() {
                       <td data-label="Status" style={{ padding: '12px 14px' }}><Status>{person.status}</Status></td>
                       <td data-label="Actions" style={{ padding: '12px 14px' }} onClick={(e) => e.stopPropagation()}>
                         <button
+                          type="button"
+                          aria-label={`Open actions for ${person.displayName}`}
                           style={{
                             width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             border: '1px solid #ddd5c8', borderRadius: 6, background: '#faf7f3', cursor: 'pointer',
@@ -764,6 +766,7 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onSta
                 {person.status === 'active' ? 'Deactivate' : 'Reactivate'}
               </button>
               <button
+                type="button"
                 onClick={() => onModal('delete')}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,

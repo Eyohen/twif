@@ -91,6 +91,16 @@ Then('the Owner should be able to remove it again', async function () {
   expect(response.status()).toBe(200);
 });
 
+When('the Owner opens the actions for a non-owner staff account', async function () {
+  const row = this.page.locator('tbody tr').filter({ hasText: 'Accountant' }).first();
+  await expect(row, 'no non-owner staff row was available').toBeVisible();
+  await row.getByRole('button', { name: /open actions/i }).click();
+});
+
+Then('a permanent Delete action should be available', async function () {
+  await expect(this.page.getByRole('button', { name: /^delete$/i })).toBeVisible();
+});
+
 Then('the API should refuse me as not the Owner', function () {
   expect(this.response.status(), 'a store manager was allowed to create staff').toBe(403);
 });
