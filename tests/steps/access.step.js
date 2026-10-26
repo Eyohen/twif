@@ -142,6 +142,53 @@ Then('their old PIN should no longer sign them in', async function () {
   await owner.dispose();
 });
 
+Given('a staff account whose status can be changed', async function () {
+  this.statusProbe = probeAccount();
+  const owner = await this.api('Owner');
+  const response = await owner.post(`${API_URL}/oms/staff`, { data: this.statusProbe });
+  const body = await response.json();
+  await owner.dispose();
+  this.statusProbeId = body?.data?.staffUser?.id;
+  expect(response.status(), body?.message || 'the status probe could not be created').toBe(201);
+  expect(this.statusProbeId).toBeTruthy();
+});
+
+When('the Owner deactivates that staff account', async function () {
+  const owner = await this.api('Owner');
+  const response = await owner.patch(`${API_URL}/oms/staff/${this.statusProbeId}`, {
+    data: { status: 'inactive' },
+  });
+  this.statusPatchBody = await response.json();
+  await owner.dispose();
+  expect(response.status(), this.statusPatchBody?.message || 'the status change was refused').toBe(200);
+  expect(this.statusPatchBody?.data?.staffUser?.status).toBe('inactive');
+});
+
+Then('a fresh staff list should show that account as inactive', async function () {
+  const owner = await this.api('Owner');
+  const response = await owner.get(`${API_URL}/oms/staff?refreshedAt=${Date.now()}`);
+  const body = await response.json();
+  await owner.dispose();
+  const saved = body?.data?.staffUsers?.find((person) => person.id === this.statusProbeId);
+  expect(response.status()).toBe(200);
+  expect(response.headers()['cache-control']).toContain('no-store');
+  expect(saved?.status, 'the status reverted in a fresh database-backed list').toBe('inactive');
+});
+
+Then('that inactive staff account should not be able to sign in', async function () {
+  const anonymous = await request.newContext();
+  const response = await anonymous.post(`${API_URL}/oms/auth/login`, {
+    data: { phone: this.statusProbe.phone, pin: this.statusProbe.pin },
+  });
+  await anonymous.dispose();
+
+  const owner = await this.api('Owner');
+  await owner.delete(`${API_URL}/oms/staff/${this.statusProbeId}`);
+  await owner.dispose();
+
+  expect(response.status(), 'the inactive account was still allowed to sign in').toBe(403);
+});
+
 // Staff are attached to one of the shop's stores, to production, or to all of
 // them. The form used to offer names like "Victoria Island" — neither a place
 // the shop has nor a value the column accepts.

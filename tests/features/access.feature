@@ -46,6 +46,12 @@ Feature: Who may reach the shop's records
       Then their old session should stop working
       And their old PIN should no longer sign them in
 
+    Scenario: Deactivating a staff account survives a fresh page load
+      Given a staff account whose status can be changed
+      When the Owner deactivates that staff account
+      Then a fresh staff list should show that account as inactive
+      And that inactive staff account should not be able to sign in
+
   # The Add Staff form offered store names the database has never accepted, so
   # every save came back with a raw Postgres enum error. Nothing covered it.
   Rule: A staff account can actually be created

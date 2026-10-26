@@ -95,21 +95,27 @@ export default function UserManagementPage() {
   const [modal, setModal] = useState(null);
   const [message, setMessage] = useState('');
 
-  const reload = () => {
+  const reload = async () => {
     setLoading(true);
-    api.get('/oms/staff')
-      .then((response) => {
-        setStaff(response.data?.data?.staffUsers || []);
-        setMessage('');
-      })
-      .catch((error) => {
-        setStaff([]);
-        setMessage(error.response?.data?.message || 'The staff list could not be loaded.');
-      })
-      .finally(() => setLoading(false));
+    try {
+      const response = await api.get('/oms/staff', {
+        params: { refreshedAt: Date.now() },
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      const staffUsers = response.data?.data?.staffUsers || [];
+      setStaff(staffUsers);
+      setMessage('');
+      return staffUsers;
+    } catch (error) {
+      setStaff([]);
+      setMessage(error.response?.data?.message || 'The staff list could not be loaded.');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(reload, []);
+  useEffect(() => { reload().catch(() => {}); }, []);
 
   const stores = useMemo(() => [...new Set(staff.map((p) => p.store).filter(Boolean))], [staff]);
 
@@ -190,6 +196,7 @@ export default function UserManagementPage() {
         onModal={setModal}
         modal={modal}
         onStatusChanged={onStatusChanged}
+        reloadStaff={reload}
         onDeleted={onDeleted}
       />
     );
@@ -240,7 +247,7 @@ export default function UserManagementPage() {
               border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
               fontSize: 13, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
             }}
-            onClick={reload}
+            onClick={() => reload().catch(() => {})}
           >
             <RefreshCw size={13} /> Refresh
           </button>
@@ -680,7 +687,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
   );
 }
 
-function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onStatusChanged, onDeleted }) {
+function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onStatusChanged, reloadStaff, onDeleted }) {
   const storeLabel = useStoreLabel();
   const roleS = roleStyle[person.role] || { bg: '#f5f0e8', color: '#5a4e42' };
   return (
@@ -878,6 +885,7 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onSta
           person={person}
           close={() => onModal(null)}
           onStatusChanged={onStatusChanged}
+          reloadStaff={reloadStaff}
           onDeleted={onDeleted}
         />
       )}
@@ -885,7 +893,7 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onSta
   );
 }
 
-function StaffModal({ type, person, close, onStatusChanged, onDeleted }) {
+function StaffModal({ type, person, close, onStatusChanged, reloadStaff, onDeleted }) {
   // Reset PIN used to arrive with "1234" already filled in, ask for a Google
   // Auth code that was never checked, and then change nothing at all — the
   // member of staff's old PIN kept working.
@@ -918,10 +926,15 @@ function StaffModal({ type, person, close, onStatusChanged, onDeleted }) {
     setError('');
     setSaving(true);
     try {
-      const response = await api.patch(`/oms/staff/${person.id}`, { status });
-      onStatusChanged(response.data?.data?.staffUser || { ...person, status });
+      await api.patch(`/oms/staff/${person.id}`, { status });
+      const savedStaff = await reloadStaff();
+      const saved = savedStaff.find((candidate) => candidate.id === person.id);
+      if (!saved || saved.status !== status) {
+        throw new Error('The server did not retain the account status change.');
+      }
+      onStatusChanged(saved);
     } catch (requestError) {
-      setError(requestError.response?.data?.message || 'That could not be saved.');
+      setError(requestError.response?.data?.message || requestError.message || 'That could not be saved.');
     } finally {
       setSaving(false);
     }
