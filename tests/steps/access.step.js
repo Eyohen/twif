@@ -302,3 +302,46 @@ Then('the new member of staff should appear on the staff list', async function (
   await client.delete(`${API_URL}/oms/staff/${made.id}`);
   await client.dispose();
 });
+
+Given('a staff account with a separate full name and display name', async function () {
+  const tag = String(Date.now()).slice(-7);
+  this.nameProbe = {
+    fullName: `Complete Legal Name ${tag}`,
+    displayName: `Work Name ${tag}`,
+    phone: `0815${tag}`,
+    pin: 'probe26',
+    role: 'accounts',
+    store: 'all',
+  };
+  const owner = await this.api('Owner');
+  const response = await owner.post(`${API_URL}/oms/staff`, { data: this.nameProbe });
+  const body = await response.json();
+  await owner.dispose();
+  this.nameProbeId = body?.data?.staffUser?.id;
+  expect(response.status(), body?.message || 'the name probe could not be created').toBe(201);
+  expect(body?.data?.staffUser?.fullName).toBe(this.nameProbe.fullName);
+  expect(body?.data?.staffUser?.displayName).toBe(this.nameProbe.displayName);
+});
+
+When('the Owner edits both names independently', async function () {
+  this.editedFullName = `${this.nameProbe.fullName} Updated`;
+  this.editedDisplayName = `${this.nameProbe.displayName} Short`;
+  const owner = await this.api('Owner');
+  const response = await owner.patch(`${API_URL}/oms/staff/${this.nameProbeId}`, {
+    data: { fullName: this.editedFullName, displayName: this.editedDisplayName },
+  });
+  const body = await response.json();
+  await owner.dispose();
+  expect(response.status(), body?.message || 'the independent names could not be saved').toBe(200);
+});
+
+Then('a fresh staff list should retain both names independently', async function () {
+  const owner = await this.api('Owner');
+  const response = await owner.get(`${API_URL}/oms/staff?refreshedAt=${Date.now()}`);
+  const body = await response.json();
+  const saved = body?.data?.staffUsers?.find((person) => person.id === this.nameProbeId);
+  await owner.delete(`${API_URL}/oms/staff/${this.nameProbeId}`);
+  await owner.dispose();
+  expect(saved?.fullName).toBe(this.editedFullName);
+  expect(saved?.displayName).toBe(this.editedDisplayName);
+});

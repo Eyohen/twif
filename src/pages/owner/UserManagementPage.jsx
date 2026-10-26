@@ -120,7 +120,7 @@ export default function UserManagementPage() {
   const stores = useMemo(() => [...new Set(staff.map((p) => p.store).filter(Boolean))], [staff]);
 
   const filtered = useMemo(() => staff.filter((person) => {
-    const matchSearch = `${person.displayName} ${person.role} ${person.phone}`.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = `${person.fullName || ''} ${person.displayName} ${person.role} ${person.phone}`.toLowerCase().includes(search.toLowerCase());
     const matchRole = roleFilter === 'all' || person.role === roleFilter;
     const matchStore = storeFilter === 'all' || person.store === storeFilter;
     const matchStatus = statusFilter === 'all' || person.status === statusFilter;
@@ -131,7 +131,7 @@ export default function UserManagementPage() {
   const openAdd = () => { setForm(blankForm); setScreen('add'); };
   const openProfile = (person) => { setSelected(person); setScreen('profile'); };
   const openEdit = () => {
-    setForm({ ...blankForm, ...selected, fullName: selected.displayName?.replace(/\s*\(.+\)$/, '') || '' });
+    setForm({ ...blankForm, ...selected, fullName: selected.fullName || selected.displayName || '' });
     setScreen('edit');
   };
 
@@ -213,9 +213,9 @@ export default function UserManagementPage() {
 
   const exportStaff = () => downloadCsv(
     `twif-staff-${csvStamp()}.csv`,
-    ['Name', 'Role', 'Store', 'Phone', 'Status', 'Date of birth', 'Last signed in'],
+    ['Full Name', 'Display Name', 'Role', 'Store', 'Phone', 'Status', 'Date of birth', 'Last signed in'],
     filtered.map((person) => [
-      person.displayName, roleLabel(person.role), person.store || '', person.phone,
+      person.fullName || person.displayName, person.displayName, roleLabel(person.role), person.store || '', person.phone,
       person.status, person.dateOfBirth || '',
       person.lastLoginAt ? formatMoment(person.lastLoginAt) : 'Never',
     ])
@@ -398,7 +398,7 @@ export default function UserManagementPage() {
                           <Avatar name={person.displayName} size="sm" />
                           <div>
                             <strong style={{ display: 'block', fontSize: 13, color: '#1a1611' }}>{person.displayName}</strong>
-                            <small style={{ fontSize: 11, color: '#8a7a6a' }}>{person.displayName?.replace(/\s*\(.+\)$/, '')}</small>
+                            <small style={{ fontSize: 11, color: '#8a7a6a' }}>{person.fullName || person.displayName}</small>
                           </div>
                         </div>
                       </td>
@@ -810,7 +810,7 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onSta
           <div className="os-card-body">
             <dl style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[
-                ['Full Name', person.displayName],
+                ['Full Name', person.fullName || person.displayName],
                 ['Phone', person.phone],
                 ['Date of Birth', '14 Mar 1992'],
               ].map(([dt, dd]) => (

@@ -79,3 +79,8 @@ Feature: Who may reach the shop's records
       And I open the User Management page
       When the Owner fills in the Add Staff form
       Then the new member of staff should appear on the staff list
+
+    Scenario: Full name and display name remain independent after editing
+      Given a staff account with a separate full name and display name
+      When the Owner edits both names independently
+      Then a fresh staff list should retain both names independently
