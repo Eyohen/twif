@@ -1,9 +1,25 @@
 import axios from 'axios';
 
 const ACCESS_TOKEN_KEY = 'twif_access_token';
+const PRODUCTION_API_BASE_URL = 'https://twif-app-backend-production.up.railway.app/api';
+const DEFAULT_API_BASE_URL = import.meta.env.PROD
+  ? PRODUCTION_API_BASE_URL
+  : 'http://localhost:8082/api';
 
 const normalizeApiBaseUrl = (value) => {
-  const baseUrl = (value || 'http://localhost:8082/api').replace(/\/+$/, '');
+  // Hosting dashboards expect the value without quotes, but accepting a quoted
+  // value avoids producing an invalid URL if it was pasted from an .env file.
+  let baseUrl = String(value || DEFAULT_API_BASE_URL)
+    .trim()
+    .replace(/^(["'])(.*)\1$/, '$2')
+    .replace(/\/+$/, '');
+
+  // A localhost API can only be reached by the machine serving the browser.
+  // Never let a stale hosting variable bake it into a production bundle.
+  if (import.meta.env.PROD && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(baseUrl)) {
+    baseUrl = PRODUCTION_API_BASE_URL;
+  }
+
   return baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
 };
 
