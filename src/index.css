@@ -10288,10 +10288,11 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 .tailor-style-ref strong { font-size: 12px; color: #3a2e22; }
 .tailor-style-ref small { font-size: 11px; color: #8a7e72; overflow-wrap: anywhere; }
 
-/* Style image slots hold the photo itself. */
+/* Style image slots hold the photo itself. Video slots reuse the same
+   layout, just filling with a muted preview clip instead of a photo. */
 .os-image-slot { position: relative; overflow: hidden; }
 .os-image-slot input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.os-image-slot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.os-image-slot img, .os-image-slot video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .os-image-remove {
   position: absolute;
   top: 4px;

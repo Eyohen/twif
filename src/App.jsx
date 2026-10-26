@@ -3916,6 +3916,9 @@ const emptyOrderItem = () => ({
   fabricUnit: '',
   designNotes: '',
   styleImages: [null, null, null, null, null],
+  // Up to 2 — a short reference clip, uploaded straight to Cloudinary rather
+  // than embedded as a data URL the way images are (far too large for that).
+  styleVideos: [],
   // A garment can combine work from more than one department — a native
   // outfit with embroidery, say — so this is a list, not a single choice.
   // departmentFields is keyed by department, since field keys like
@@ -4175,6 +4178,40 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
     }));
   };
 
+  // Far too large to carry as a data URL the way images are, so this
+  // uploads straight to Cloudinary and keeps only the URL on the item.
+  const uploadStyleVideo = async (index, file) => {
+    if (!file) return;
+    if (!file.type.startsWith('video/')) { setMessage('Please choose a video file.'); return; }
+    if (file.size > 25 * 1024 * 1024) { setMessage('Style videos need to be under 25 MB each.'); return; }
+    if ((sheetForm.items[index]?.styleVideos || []).length >= 2) { setMessage('Up to 2 style videos per item.'); return; }
+    setMessage('Uploading video…');
+    try {
+      const formData = new FormData();
+      formData.append('video', file);
+      const response = await api.post('/oms/order-sheets/style-video', formData);
+      const { url, publicId } = response.data?.data || {};
+      setSheetForm((current) => ({
+        ...current,
+        items: current.items.map((item, itemIdx) => (itemIdx === index
+          ? { ...item, styleVideos: [...(item.styleVideos || []), { label: `Video ${(item.styleVideos || []).length + 1}`, name: file.name, url, publicId }] }
+          : item)),
+      }));
+      setMessage('');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'That video could not be uploaded.');
+    }
+  };
+
+  const removeStyleVideo = (index, videoIndex) => {
+    setSheetForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIdx) => (itemIdx === index
+        ? { ...item, styleVideos: (item.styleVideos || []).filter((_, i) => i !== videoIndex) }
+        : item)),
+    }));
+  };
+
   // The board, the tracking page and the tailor's list were all built around a
   // single fabric name, so the first choice is mirrored onto the old fields and
   // they keep working unchanged.
@@ -4364,6 +4401,8 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
       designNotes: firstItem.designNotes,
       images: styleImagesFor(firstItem).length,
       styleImages: styleImagesFor(firstItem),
+      videos: (firstItem.styleVideos || []).length,
+      styleVideos: firstItem.styleVideos || [],
       orderNote: sheetForm.itemNote.trim(),
       // Retained for older clients; it now mirrors only the actual order note,
       // never an item's design instructions or generated placeholder text.
@@ -4813,6 +4852,33 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
                         />
                       </label>
                     ))}
+                  </div>
+                </div>
+                <div className="os-field os-field-full">
+                  <span className="os-field-label">Style Videos <em>(up to 2, under 25 MB each — the Tailor sees these too)</em></span>
+                  <div className="os-image-grid">
+                    {(orderItem.styleVideos || []).map((video, videoIndex) => (
+                      <div key={video.publicId || `${video.url}-${videoIndex}`} className="os-image-slot os-image-slot-filled">
+                        <video src={video.url} muted />
+                        <button
+                          type="button"
+                          className="os-image-remove"
+                          aria-label={`Remove video ${videoIndex + 1}`}
+                          onClick={(event) => { event.preventDefault(); removeStyleVideo(index, videoIndex); }}
+                        >×</button>
+                      </div>
+                    ))}
+                    {(orderItem.styleVideos || []).length < 2 ? (
+                      <label className="os-image-slot">
+                        <Plus size={16} strokeWidth={1.5} />
+                        <span>Video {(orderItem.styleVideos || []).length + 1}</span>
+                        <input
+                          type="file"
+                          accept="video/*"
+                          onChange={(event) => { uploadStyleVideo(index, event.target.files?.[0]); event.target.value = ''; }}
+                        />
+                      </label>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -5973,7 +6039,10 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       itemIndex={itemIndex}
                       tailors={tailors}
                       departments={departments}
-                      assignmentsLocked={startedJob}
+                      // Fabric stays locked once production has started
+                      // (DepartmentFabricPicker's own readOnly below), but a
+                      // tailor can still be reassigned — the work moving to
+                      // someone else doesn't change what's already on order.
                       renderDepartmentDetails={(departmentKey) => {
                         const config = departmentConfig(departments, departmentKey);
                         const values = item.departmentFields?.[departmentKey] || {};
@@ -6058,6 +6127,20 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                         <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No reference images uploaded</p>
                       )}
                     </div>
+
+                    {Array.isArray(item.styleVideos) && item.styleVideos.length ? (
+                      <div>
+                        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Reference Videos ({item.styleVideos.length})</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                          {item.styleVideos.map((video, videoIndex) => (
+                            <div key={video.publicId || `${video.name}-${videoIndex}`}>
+                              <video src={video.url} controls preload="metadata" style={{ width: '100%', borderRadius: 8, background: '#000', display: 'block' }} />
+                              <small style={{ display: 'block', marginTop: 2, color: '#8a7a6a' }}>{video.label || video.name || `Video ${videoIndex + 1}`}</small>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
 
                   </div>
                 );
@@ -7740,6 +7823,7 @@ const notificationDestination = (item, role) => {
     case 'tailor_assigned':
       return { view: role === 'tailor' ? 'My Tasks' : 'Production', params: invoiceParams };
     case 'order_ready':
+    case 'department_ready':
       return { view: role === 'store_manager' ? 'Orders' : 'Production', params: invoiceParams };
     case 'job_comment':
       return {

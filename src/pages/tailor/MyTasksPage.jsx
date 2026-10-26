@@ -85,8 +85,17 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
     setSearchParams({}, { replace: true });
   }, [requestedInvoice, allAssigned, setSearchParams]);
 
+  // The order as a whole isn't Ready until every assigned department is —
+  // but this tailor's own part can be done well before that, and their task
+  // list should say so rather than still showing "in progress" on work
+  // they've already finished just because someone else's hasn't.
+  const myDepartmentReady = (order) => {
+    const items = order.items?.length ? order.items.filter(itemBelongsToTailor) : (itemBelongsToTailor(order) ? [order] : []);
+    return items.length > 0 && items.every((item) => item.departmentReady?.[tailorDepartment]);
+  };
+
   const getStatus = (order) => {
-    if (order.status === 'Ready') return 'ready';
+    if (order.status === 'Ready' || order.status === 'Ready for Collection' || myDepartmentReady(order)) return 'ready';
     if (order.status === 'In Progress') return 'in_progress';
     return 'in_queue';
   };
@@ -344,6 +353,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
 
                   {detailItems.map((item, itemIndex) => {
                     const itemImages = Array.isArray(item.styleImages) ? item.styleImages : [];
+                    const itemVideos = Array.isArray(item.styleVideos) ? item.styleVideos : [];
                     return (
                       <div className="tailor-task-detail-item" key={`${item.item}-${itemIndex}`} style={{ marginBottom: 16 }}>
                         {detailItems.length > 1 ? (
@@ -370,35 +380,6 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                               {item.fabricNote && <li style={{ marginBottom: 4 }}>{item.fabricNote}</li>}
                             </ul>
                           </section>
-                          {itemIndex === 0 ? (
-                            <section>
-                              <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Measurements</h4>
-                              {/* The figures themselves, not a note saying they exist.
-                                  A tailor cannot cut to "Measurements on file". One set
-                                  for the whole order, not per item — shown once. */}
-                              {order.measurementDetails || order.measurements ? (
-                                // Same label/value grid Production reads from — a
-                                // bulleted list read differently on the same figures
-                                // depending on which screen a tailor happened to be on.
-                                <div className="tailor-task-measurements" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, border: '1px solid #eee5da', borderRadius: 8, overflow: 'hidden' }}>
-                                  {(order.measurementDetails
-                                    ? Object.entries(order.measurementDetails)
-                                    : String(order.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line) => {
-                                      const [label, ...rest] = line.split(':');
-                                      return rest.length ? [label.trim(), rest.join(':').trim()] : [line, ''];
-                                    })
-                                  ).map(([label, value], index) => (
-                                    <div key={`${label}-${index}`} style={{ padding: '8px 12px', borderBottom: '1px solid #f3ede5', background: '#faf7f3' }}>
-                                      <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
-                                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 2 }}>{value || '—'}</div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>
-                              )}
-                            </section>
-                          ) : <section />}
                           <section>
                             <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Images ({itemImages.length})</h4>
                             {itemImages.length ? (
@@ -437,6 +418,16 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                               <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No reference images uploaded</p>
                             )}
                           </section>
+                          {itemVideos.length ? (
+                            <section>
+                              <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Videos ({itemVideos.length})</h4>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                {itemVideos.map((video, videoIndex) => (
+                                  <video key={video.publicId || `${video.url}-${videoIndex}`} src={video.url} controls style={{ width: '100%', borderRadius: 8, border: '1px solid #eee5da' }} />
+                                ))}
+                              </div>
+                            </section>
+                          ) : null}
                         </div>
 
                         {/* Which department(s) this garment needs — embroidery,
@@ -493,6 +484,33 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                       </div>
                     );
                   })}
+
+                  {/* One set of measurements for the whole order, not per item —
+                      full width rather than squeezed into one of the four
+                      per-item detail columns, where long figures and labels
+                      were wrapping and clipping against each other. Same
+                      label/value grid Production reads from. */}
+                  <div style={{ marginBottom: 16 }}>
+                    <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Measurements</h4>
+                    {order.measurementDetails || order.measurements ? (
+                      <div className="tailor-task-measurements" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, border: '1px solid #eee5da', borderRadius: 8, overflow: 'hidden' }}>
+                        {(order.measurementDetails
+                          ? Object.entries(order.measurementDetails)
+                          : String(order.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line) => {
+                            const [label, ...rest] = line.split(':');
+                            return rest.length ? [label.trim(), rest.join(':').trim()] : [line, ''];
+                          })
+                        ).map(([label, value], index) => (
+                          <div key={`${label}-${index}`} style={{ padding: '8px 12px', borderBottom: '1px solid #f3ede5', background: '#faf7f3' }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 2 }}>{value || '—'}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>
+                    )}
+                  </div>
 
                   {/* The same thread the Production Manager reads, so a query
                       about a garment is answered against the job. */}

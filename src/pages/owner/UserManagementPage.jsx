@@ -3,7 +3,7 @@ import {
   Plus, Search, Filter, Users, UserCog, UserCheck, Cake,
   MoreVertical, Edit2, Clock, Shield, ChevronRight, ArrowLeft,
   Download, RefreshCw, CheckCircle, XCircle, AlertCircle,
-  Phone, Calendar, Briefcase, Store, Star, Activity,
+  Phone, Calendar, Briefcase, Store, Star, Activity, Trash2,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { downloadCsv, csvStamp } from '../../utils/csv';
@@ -159,10 +159,19 @@ export default function UserManagementPage() {
     }
   };
 
-  const setStatus = (status) => {
-    setStaff((current) => current.map((person) => person.id === selected.id ? { ...person, status } : person));
-    setSelected((current) => ({ ...current, status }));
+  // Reflects what the server actually saved — a staff member stays able to
+  // sign in until the server itself has them deactivated, so the list and
+  // the server must agree, not just the screen that asked for it.
+  const onStatusChanged = (updated) => {
+    setStaff((current) => current.map((person) => person.id === selected.id ? updated : person));
+    setSelected(updated);
     setModal(null);
+  };
+
+  const onDeleted = () => {
+    setStaff((current) => current.filter((person) => person.id !== selected.id));
+    setModal(null);
+    setScreen('list');
   };
 
   if (screen === 'add' || screen === 'edit') {
@@ -180,7 +189,8 @@ export default function UserManagementPage() {
         onHistory={() => setScreen('history')}
         onModal={setModal}
         modal={modal}
-        setStatus={setStatus}
+        onStatusChanged={onStatusChanged}
+        onDeleted={onDeleted}
       />
     );
   }
@@ -670,7 +680,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
   );
 }
 
-function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setStatus }) {
+function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onStatusChanged, onDeleted }) {
   const storeLabel = useStoreLabel();
   const roleS = roleStyle[person.role] || { bg: '#f5f0e8', color: '#5a4e42' };
   return (
@@ -746,6 +756,14 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setSt
                 {person.status === 'active' ? <XCircle size={13} /> : <CheckCircle size={13} />}
                 {person.status === 'active' ? 'Deactivate' : 'Reactivate'}
               </button>
+              <button
+                onClick={() => onModal('delete')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
+                  border: '1px solid #f0c8b8', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                  background: '#fff', color: '#b02a2a',
+                }}
+              ><Trash2 size={13} /> Delete</button>
             </div>
           </div>
         </div>
@@ -859,14 +877,15 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, setSt
           type={modal}
           person={person}
           close={() => onModal(null)}
-          confirm={() => setStatus(modal === 'deactivate' ? 'inactive' : modal === 'reactivate' ? 'active' : person.status)}
+          onStatusChanged={onStatusChanged}
+          onDeleted={onDeleted}
         />
       )}
     </div>
   );
 }
 
-function StaffModal({ type, person, close, confirm }) {
+function StaffModal({ type, person, close, onStatusChanged, onDeleted }) {
   // Reset PIN used to arrive with "1234" already filled in, ask for a Google
   // Auth code that was never checked, and then change nothing at all — the
   // member of staff's old PIN kept working.
@@ -892,12 +911,51 @@ function StaffModal({ type, person, close, confirm }) {
     }
   };
 
+  // Deactivate/Reactivate used to only update the screen in front of you —
+  // the account itself stayed active on the server either way, so a
+  // "deactivated" account could still sign in. This saves it for real.
+  const changeStatus = async (status) => {
+    setError('');
+    setSaving(true);
+    try {
+      const response = await api.patch(`/oms/staff/${person.id}`, { status });
+      onStatusChanged(response.data?.data?.staffUser || { ...person, status });
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'That could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Deactivating only blocks sign-in; the record (and everything they
+  // created) stays. Deleting removes the staff account itself — for when it
+  // shouldn't exist at all, not just stop being used.
+  const deleteStaff = async () => {
+    setError('');
+    setSaving(true);
+    try {
+      await api.delete(`/oms/staff/${person.id}`);
+      onDeleted();
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'That account could not be deleted.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const config = {
     reset:      { title: 'Reset PIN',       icon: Shield,       tone: 'blue',  bg: '#eff6ff', color: '#1d4ed8' },
     deactivate: { title: 'Deactivate Staff', icon: XCircle,     tone: 'red',   bg: '#fce8e8', color: '#b02a2a' },
     reactivate: { title: 'Reactivate Staff', icon: CheckCircle, tone: 'green', bg: '#eaf7ee', color: '#168647' },
+    delete:     { title: 'Delete Staff Account', icon: Trash2,  tone: 'red',   bg: '#fce8e8', color: '#b02a2a' },
   };
   const { title, icon: Icon, tone, bg, color } = config[type];
+  const confirmAction = {
+    reset: resetPin,
+    deactivate: () => changeStatus('inactive'),
+    reactivate: () => changeStatus('active'),
+    delete: deleteStaff,
+  }[type];
 
   return (
     <div style={{
@@ -924,9 +982,14 @@ function StaffModal({ type, person, close, confirm }) {
           <p style={{ textAlign: 'center', fontSize: 14, color: '#5a4e42', margin: '0 0 20px', lineHeight: 1.5 }}>
             {type === 'deactivate'
               ? <>Are you sure you want to deactivate <strong>{person.displayName}</strong>? They will lose access immediately.</>
-              : <>You are about to reactivate <strong>{person.displayName}</strong>. They will regain platform access.</>}
+              : type === 'reactivate'
+                ? <>You are about to reactivate <strong>{person.displayName}</strong>. They will regain platform access.</>
+                : <>This permanently deletes <strong>{person.displayName}</strong>&apos;s account. This cannot be undone — if you only want to stop their access, deactivate instead. Anything they already created (invoices, order sheets) stays on record.</>}
           </p>
         )}
+        {type !== 'reset' && error ? (
+          <p style={{ margin: '0 0 16px', padding: '9px 11px', borderRadius: 8, background: '#fff5f0', border: '1px solid #f0c8b8', color: '#8a3520', fontSize: 12, textAlign: 'center' }}>{error}</p>
+        ) : null}
         {type === 'reset' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
             <p style={{ margin: 0, fontSize: 13, color: '#5a4e42', lineHeight: 1.5, textAlign: 'center' }}>
@@ -957,7 +1020,7 @@ function StaffModal({ type, person, close, confirm }) {
           >Cancel</button>
           <button
             type="button"
-            onClick={type === 'reset' ? resetPin : confirm}
+            onClick={confirmAction}
             disabled={saving}
             style={{
               flex: 1, padding: '10px 16px', border: 'none', borderRadius: 8,
