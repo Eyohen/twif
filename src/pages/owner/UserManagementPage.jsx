@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Search, Filter, Users, UserCog, UserCheck, Cake,
   MoreVertical, Edit2, Clock, Shield, ChevronRight, ArrowLeft,
@@ -83,6 +83,7 @@ const useStoreLabel = () => {
 
 export default function UserManagementPage() {
   const storeLabel = useStoreLabel();
+  const reloadSequence = useRef(0);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -96,22 +97,24 @@ export default function UserManagementPage() {
   const [message, setMessage] = useState('');
 
   const reload = async () => {
+    const requestSequence = ++reloadSequence.current;
     setLoading(true);
     try {
       const response = await api.get('/oms/staff', {
         params: { refreshedAt: Date.now() },
-        headers: { 'Cache-Control': 'no-cache' },
       });
       const staffUsers = response.data?.data?.staffUsers || [];
+      if (requestSequence !== reloadSequence.current) return staffUsers;
       setStaff(staffUsers);
       setMessage('');
       return staffUsers;
     } catch (error) {
+      if (requestSequence !== reloadSequence.current) return [];
       setStaff([]);
       setMessage(error.response?.data?.message || 'The staff list could not be loaded.');
       throw error;
     } finally {
-      setLoading(false);
+      if (requestSequence === reloadSequence.current) setLoading(false);
     }
   };
 

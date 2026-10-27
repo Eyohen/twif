@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const ACCESS_TOKEN_KEY = 'twif_access_token';
 const PRODUCTION_API_BASE_URL = 'https://twif-app-backend-production.up.railway.app/api';
+const ALLOW_LOCAL_API = import.meta.env.VITE_ALLOW_LOCAL_API === 'true';
 const DEFAULT_API_BASE_URL = import.meta.env.PROD
   ? PRODUCTION_API_BASE_URL
   : 'http://localhost:8082/api';
@@ -16,7 +17,7 @@ const normalizeApiBaseUrl = (value) => {
 
   // A localhost API can only be reached by the machine serving the browser.
   // Never let a stale hosting variable bake it into a production bundle.
-  if (import.meta.env.PROD && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(baseUrl)) {
+  if (import.meta.env.PROD && !ALLOW_LOCAL_API && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(baseUrl)) {
     baseUrl = PRODUCTION_API_BASE_URL;
   }
 

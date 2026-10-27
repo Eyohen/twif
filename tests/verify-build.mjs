@@ -63,7 +63,9 @@ if (fatal.length) {
 console.log('  nothing undefined');
 
 step('Building');
-if (await run('npx', ['vite', 'build'])) {
+if (await run('npx', ['vite', 'build'], {
+  env: { ...process.env, VITE_ALLOW_LOCAL_API: 'true' },
+})) {
   console.error('\nBuild failed.');
   process.exit(1);
 }
@@ -81,7 +83,16 @@ if (!(await waitForServer(APP_URL))) {
 }
 
 step('Opening every page in every role against the built app');
-const code = await run('npx', ['cucumber-js', 'tests/features/every-page-renders.feature'], {
+// cucumber-js currently merges a CLI feature path with the paths in its
+// config, which accidentally turned this six-page smoke check into the full
+// regression suite. The name filter keeps this check fast and deterministic
+// on both current and upcoming cucumber-js path semantics.
+const code = await run('npx', [
+  'cucumber-js',
+  'tests/features/every-page-renders.feature',
+  '--name',
+  'can open every page in their menu',
+], {
   env: { ...process.env, TWIF_APP_URL: APP_URL },
 });
 

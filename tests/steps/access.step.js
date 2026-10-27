@@ -268,7 +268,7 @@ When('the Owner fills in the Add Staff form', async function () {
   const page = this.page;
   await page.getByRole('button', { name: /add staff/i }).first().click();
 
-  const tag = String(Date.now()).slice(-6);
+  const tag = String(Date.now()).slice(-7);
   this.newStaffName = `Form Check ${tag}`;
   this.newStaffPhone = `0816${tag}`;
 
@@ -333,6 +333,40 @@ When('the Owner edits both names independently', async function () {
   const body = await response.json();
   await owner.dispose();
   expect(response.status(), body?.message || 'the independent names could not be saved').toBe(200);
+});
+
+When('the Owner edits both names from the staff profile', async function () {
+  this.editedFullName = `${this.nameProbe.fullName} Updated`;
+  this.editedDisplayName = `${this.nameProbe.displayName} Short`;
+
+  // User Management loads alongside the dashboard's other owner data. Wait
+  // for its own request instead of racing the temporary loading/empty state.
+  // Refresh is also part of this regression: the values must come back from
+  // storage, not merely remain in React state after saving.
+  await this.page.getByRole('button', { name: /^refresh$/i }).click();
+  await expect(
+    this.page.getByText(this.nameProbe.displayName, { exact: true }).first(),
+    `staff page after refresh:\n${await this.bodyText()}`,
+  ).toBeVisible({ timeout: 20000 });
+  const search = this.page.getByPlaceholder(/search by name/i);
+  await search.fill(this.nameProbe.displayName);
+  const row = this.page.locator('tbody tr').filter({ hasText: this.nameProbe.displayName }).first();
+  await expect(row).toBeVisible();
+  await row.getByRole('button', { name: /open actions/i }).click();
+  await this.page.getByRole('button', { name: /^edit$/i }).click();
+
+  const fullName = this.page.getByLabel(/^full name/i);
+  const displayName = this.page.getByLabel(/^display name/i);
+  await expect(fullName).toHaveValue(this.nameProbe.fullName);
+  await expect(displayName).toHaveValue(this.nameProbe.displayName);
+  await fullName.fill(this.editedFullName);
+  await displayName.fill(this.editedDisplayName);
+  await this.page.getByRole('button', { name: /save changes/i }).click();
+});
+
+Then('the profile should show both edited names independently', async function () {
+  await expect(this.page.getByRole('heading', { name: this.editedDisplayName })).toBeVisible();
+  await expect(this.page.getByText(this.editedFullName, { exact: true })).toBeVisible();
 });
 
 Then('a fresh staff list should retain both names independently', async function () {

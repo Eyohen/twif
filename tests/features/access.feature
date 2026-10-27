@@ -84,3 +84,11 @@ Feature: Who may reach the shop's records
       Given a staff account with a separate full name and display name
       When the Owner edits both names independently
       Then a fresh staff list should retain both names independently
+
+    Scenario: The Owner edits full name and display name independently on screen
+      Given a staff account with a separate full name and display name
+      And I am signed in as the Owner
+      And I open the User Management page
+      When the Owner edits both names from the staff profile
+      Then the profile should show both edited names independently
+      And a fresh staff list should retain both names independently
