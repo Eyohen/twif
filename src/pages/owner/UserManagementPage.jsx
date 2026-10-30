@@ -151,6 +151,13 @@ export default function UserManagementPage() {
     if (!isValidPhone(form.phone)) { setMessage(PHONE_ERROR); return; }
 
     const payload = { ...form, displayName: form.displayName || form.fullName };
+    if (screen === 'edit' && selected?.role === 'owner') {
+      delete payload.role;
+      delete payload.store;
+      delete payload.status;
+      delete payload.tailorDepartment;
+      delete payload.tailorGrade;
+    }
     try {
       if (screen === 'edit') {
         const response = await api.patch(`/oms/staff/${selected.id}`, payload);
@@ -577,8 +584,9 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
               </div>
             </div>
 
-            {/* Work Info */}
-            <div className="os-card">
+            {/* The Owner may update personal details, but ownership and its
+                all-store scope are fixed system permissions. */}
+            {!(mode === 'edit' && form.role === 'owner') && <div className="os-card">
               <div className="os-card-head">
                 <span className="os-step-num">2</span>
                 <div><strong>Work Information</strong><p>Role, store and department assignment</p></div>
@@ -621,7 +629,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
                   </>
                 )}
               </div>
-            </div>
+            </div>}
 
             {/* Credentials (add only) */}
             {mode === 'add' && (
@@ -760,27 +768,31 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onSta
                   fontSize: 13, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
                 }}
               ><Shield size={13} /> Reset PIN</button>
-              <button
-                onClick={() => onModal(person.status === 'active' ? 'deactivate' : 'reactivate')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
-                  border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                  background: person.status === 'active' ? '#fce8e8' : '#eaf7ee',
-                  color: person.status === 'active' ? '#b02a2a' : '#168647',
-                }}
-              >
-                {person.status === 'active' ? <XCircle size={13} /> : <CheckCircle size={13} />}
-                {person.status === 'active' ? 'Deactivate' : 'Reactivate'}
-              </button>
-              <button
-                type="button"
-                onClick={() => onModal('delete')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
-                  border: '1px solid #f0c8b8', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                  background: '#fff', color: '#b02a2a',
-                }}
-              ><Trash2 size={13} /> Delete</button>
+              {person.role !== 'owner' && (
+                <>
+                  <button
+                    onClick={() => onModal(person.status === 'active' ? 'deactivate' : 'reactivate')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
+                      border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                      background: person.status === 'active' ? '#fce8e8' : '#eaf7ee',
+                      color: person.status === 'active' ? '#b02a2a' : '#168647',
+                    }}
+                  >
+                    {person.status === 'active' ? <XCircle size={13} /> : <CheckCircle size={13} />}
+                    {person.status === 'active' ? 'Deactivate' : 'Reactivate'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onModal('delete')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
+                      border: '1px solid #f0c8b8', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                      background: '#fff', color: '#b02a2a',
+                    }}
+                  ><Trash2 size={13} /> Delete</button>
+                </>
+              )}
             </div>
           </div>
         </div>
