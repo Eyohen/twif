@@ -31,7 +31,7 @@ const roleStyle = {
 };
 
 const blankForm = {
-  displayName: '', fullName: '', phone: '', dateOfBirth: '',
+  displayName: '', fullName: '', phone: '', email: '', dateOfBirth: '',
   role: 'tailor', store: 'all', tailorDepartment: 'native',
   tailorGrade: '1', pin: '', confirmPin: '',
 };
@@ -123,7 +123,7 @@ export default function UserManagementPage() {
   const stores = useMemo(() => [...new Set(staff.map((p) => p.store).filter(Boolean))], [staff]);
 
   const filtered = useMemo(() => staff.filter((person) => {
-    const matchSearch = `${person.fullName || ''} ${person.displayName} ${person.role} ${person.phone}`.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = `${person.fullName || ''} ${person.displayName} ${person.role} ${person.phone} ${person.email || ''}`.toLowerCase().includes(search.toLowerCase());
     const matchRole = roleFilter === 'all' || person.role === roleFilter;
     const matchStore = storeFilter === 'all' || person.store === storeFilter;
     const matchStatus = statusFilter === 'all' || person.status === statusFilter;
@@ -570,6 +570,10 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
                   <span>Date of Birth</span>
                   <input type="date" value={form.dateOfBirth} onChange={(e) => update('dateOfBirth', e.target.value)} />
                 </label>
+                <label className="os-field">
+                  <span>Email Address</span>
+                  <input type="email" value={form.email || ''} onChange={(e) => update('email', e.target.value)} placeholder="name@company.com" />
+                </label>
               </div>
             </div>
 
@@ -815,7 +819,8 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onSta
               {[
                 ['Full Name', person.fullName || person.displayName],
                 ['Phone', person.phone],
-                ['Date of Birth', '14 Mar 1992'],
+                ['Email', person.email || 'Not provided'],
+                ['Date of Birth', person.dateOfBirth ? formatMoment(person.dateOfBirth) : 'Not provided'],
               ].map(([dt, dd]) => (
                 <div key={dt} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingBottom: 10, borderBottom: '1px solid #f3ede5' }}>
                   <dt style={{ color: '#8a7a6a', fontWeight: 400 }}>{dt}</dt>
