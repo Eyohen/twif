@@ -8416,7 +8416,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Departments') return <DepartmentsPage />;
   if (activeView === 'Memberships') return <MembershipsPage />;
   if (activeView === 'Shopify Sync') return <ShopifySyncPage />;
-  if (activeView === 'Settings') return <SettingsPage />;
+  if (activeView === 'Settings') return <SettingsPage onLogout={viewProps.onLogout} />;
   if (activeView === 'Reports') return <ReportsView role={role} />;
   if (activeView === 'My Tasks') return <MyTasksPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
   if (activeView === 'My Log') return <WeeklyLogPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} />;
@@ -8974,6 +8974,7 @@ function App() {
                 onUpdateJob: updateProductionJob,
                 onOverrideHold: overrideProductionHold,
                 releasePercent,
+                onLogout: handleLogout,
               })}
             />
           ))}

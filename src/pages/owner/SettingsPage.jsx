@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, Save, Building2, FileText, Factory, Bell, RotateCcw, Users, Trash2, CheckCircle, Shield } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Building2, FileText, Factory, Bell, RotateCcw, Users, Trash2, CheckCircle, Shield, Mail, KeyRound, XCircle } from 'lucide-react';
 import { api } from '../../lib/api';
 
 // Grouped the way an owner would look for them, rather than by data type.
@@ -151,14 +151,124 @@ function CustomerRecordsPanel() {
   );
 }
 
-// An Admin signs in with a code from an authenticator app as well as a PIN.
-// This is where they see that it is on, how many recovery codes they have left,
-// and where they turn it off if they are moving to a new phone.
+function ConfirmDialog({ title, text, confirmLabel, busy, onConfirm, onCancel }) {
+  return (
+    <div className="um-modal-backdrop" role="presentation">
+      <div className="um-modal" role="dialog" aria-modal="true" aria-labelledby="security-confirm-title">
+        <button type="button" className="um-modal-close" onClick={onCancel} aria-label="Close"><XCircle size={18} /></button>
+        <Shield size={32} style={{ color: '#c97b08', margin: '0 auto 12px', display: 'block' }} />
+        <h3 id="security-confirm-title" style={{ textAlign: 'center', margin: '0 0 8px' }}>{title}</h3>
+        <p style={{ textAlign: 'center', color: '#6f6255', lineHeight: 1.5 }}>{text}</p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+          <button type="button" className="um-btn-ghost" style={{ flex: 1 }} onClick={onCancel} disabled={busy}>Cancel</button>
+          <button type="button" className="os-release-btn" style={{ flex: 1 }} onClick={onConfirm} disabled={busy}>
+            {busy ? 'Saving…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AccountSecurityPanel({ account, reload, onLogout }) {
+  const [email, setEmail] = useState(account?.email || '');
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pending, setPending] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
+
+  useEffect(() => setEmail(account?.email || ''), [account?.email]);
+
+  const requestEmailChange = () => {
+    const clean = email.trim().toLowerCase();
+    if (!clean || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+      setNotice({ tone: 'error', text: 'Enter a valid email address.' });
+      return;
+    }
+    if (clean === String(account.email || '').toLowerCase()) {
+      setNotice({ tone: 'error', text: 'The email address has not changed.' });
+      return;
+    }
+    setNotice(null);
+    setPending('email');
+  };
+
+  const requestPinChange = () => {
+    if (pin.trim().length < 4) return setNotice({ tone: 'error', text: 'A PIN must be at least 4 characters.' });
+    if (pin !== confirmPin) return setNotice({ tone: 'error', text: 'The two PINs do not match.' });
+    setNotice(null);
+    setPending('pin');
+  };
+
+  const confirmChange = async () => {
+    setBusy(true);
+    try {
+      if (pending === 'email') {
+        await api.patch(`/oms/staff/${account.id}`, { email: email.trim().toLowerCase() });
+        await reload();
+        setNotice({ tone: 'success', text: 'Email address changed successfully.' });
+        setPending(null);
+      } else {
+        await api.patch(`/oms/staff/${account.id}`, { pin: pin.trim() });
+        setPending(null);
+        setPin('');
+        setConfirmPin('');
+        onLogout('PIN changed successfully. Sign in again with your new PIN.');
+      }
+    } catch (error) {
+      setPending(null);
+      setNotice({ tone: 'error', text: error.response?.data?.message || `The ${pending === 'email' ? 'email address' : 'PIN'} could not be changed.` });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="os-card">
+      <div className="os-card-head">
+        <KeyRound size={16} strokeWidth={1.6} style={{ color: '#c97b08' }} />
+        <div><strong>Owner account security</strong><p>Change the sign-in email or PIN with confirmation</p></div>
+      </div>
+      <div className="os-card-body" style={{ gap: 16 }}>
+        {notice ? <div className={`os-row-notice${notice.tone === 'error' ? ' is-error' : ''}`} role="status"><span>{notice.text}</span><button type="button" onClick={() => setNotice(null)}>×</button></div> : null}
+        <div className="settings-fields">
+          <label className="os-field">
+            <span><Mail size={13} /> Email address</span>
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+            <button type="button" className="um-btn-ghost" onClick={requestEmailChange}>Change email</button>
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <label className="os-field"><span>New PIN</span><input type="password" value={pin} onChange={(event) => setPin(event.target.value)} autoComplete="new-password" /></label>
+            <label className="os-field"><span>Confirm new PIN</span><input type="password" value={confirmPin} onChange={(event) => setConfirmPin(event.target.value)} autoComplete="new-password" /></label>
+            <button type="button" className="um-btn-ghost" onClick={requestPinChange} style={{ gridColumn: '1 / -1' }}>Change PIN</button>
+          </div>
+        </div>
+      </div>
+      {pending ? (
+        <ConfirmDialog
+          title={pending === 'email' ? 'Change email address?' : 'Change login PIN?'}
+          text={pending === 'email'
+            ? `Your Owner account email will change to ${email.trim().toLowerCase()}.`
+            : 'Your current sessions will end and you will sign in again using the new PIN.'}
+          confirmLabel={pending === 'email' ? 'Yes, change email' : 'Yes, change PIN'}
+          busy={busy}
+          onConfirm={confirmChange}
+          onCancel={() => setPending(null)}
+        />
+      ) : null}
+    </section>
+  );
+}
+
 function TwoFactorPanel() {
   const [account, setAccount] = useState(null);
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [setup, setSetup] = useState(null);
+  const [recoveryCodes, setRecoveryCodes] = useState([]);
+  const [confirmDisable, setConfirmDisable] = useState(false);
 
   const load = () => api.get('/oms/auth/me')
     .then((response) => setAccount(response.data?.data?.staff || null))
@@ -166,7 +276,38 @@ function TwoFactorPanel() {
 
   useEffect(() => { load(); }, []);
 
-  if (!account?.twoFactorRequired) return null;
+  if (!account || !['owner', 'admin'].includes(account.role)) return null;
+
+  const startSetup = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await api.post('/oms/auth/2fa/settings/setup');
+      setSetup(response.data?.data || null);
+      setCode('');
+    } catch (error) {
+      setNotice({ tone: 'error', text: error.response?.data?.message || 'Two-factor setup could not be started.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmSetup = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await api.post('/oms/auth/2fa/settings/confirm', { code: code.trim() });
+      setRecoveryCodes(response.data?.data?.recoveryCodes || []);
+      setSetup(null);
+      setCode('');
+      await load();
+      setNotice({ tone: 'success', text: 'Two-factor sign-in is on. Google Authenticator will be required at your next login.' });
+    } catch (error) {
+      setNotice({ tone: 'error', text: error.response?.data?.message || 'That code could not be confirmed.' });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const turnOff = async () => {
     setBusy(true);
@@ -174,6 +315,7 @@ function TwoFactorPanel() {
     try {
       await api.post('/oms/auth/2fa/disable', { code: code.trim() });
       setCode('');
+      setConfirmDisable(false);
       await load();
       setNotice({ tone: 'success', text: 'Two-factor sign-in is off. You will be asked to set it up again next time you sign in.' });
     } catch (error) {
@@ -189,7 +331,7 @@ function TwoFactorPanel() {
         <Shield size={16} strokeWidth={1.6} style={{ color: '#c97b08' }} />
         <div>
           <strong>Two-factor sign-in</strong>
-          <p>Required on an Admin account</p>
+          <p>{account.role === 'owner' ? 'Protect Owner login with Google Authenticator' : 'Required on an Admin account'}</p>
         </div>
       </div>
       <div className="os-card-body" style={{ gap: 12 }}>
@@ -200,7 +342,16 @@ function TwoFactorPanel() {
           </div>
         ) : null}
 
-        {account.twoFactorEnabled ? (
+        {recoveryCodes.length ? (
+          <div className="sheet-measurements-empty">
+            <strong>Save these recovery codes now</strong>
+            <p>Each code works once if Google Authenticator is unavailable. They cannot be shown again.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontFamily: 'monospace' }}>
+              {recoveryCodes.map((item) => <code key={item}>{item}</code>)}
+            </div>
+            <button type="button" className="um-btn-ghost" onClick={() => setRecoveryCodes([])} style={{ marginTop: 12 }}>I have saved these codes</button>
+          </div>
+        ) : account.twoFactorEnabled ? (
           <>
             <p className="dup-clean"><CheckCircle size={15} strokeWidth={1.8} /> On, with {account.recoveryCodesLeft} recovery code{account.recoveryCodesLeft === 1 ? '' : 's'} left.</p>
             {account.recoveryCodesLeft <= 2 ? (
@@ -216,23 +367,42 @@ function TwoFactorPanel() {
                 <span>Code from your app, or a recovery code</span>
                 <input value={code} onChange={(event) => setCode(event.target.value)} autoComplete="one-time-code" />
               </label>
-              <button type="button" onClick={turnOff} disabled={busy || !code.trim()}>
-                {busy ? 'Turning off…' : 'Turn off'}
+              <button type="button" onClick={() => setConfirmDisable(true)} disabled={busy || !code.trim()}>
+                Turn off
               </button>
             </div>
           </>
+        ) : setup ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
+            <p style={{ margin: 0 }}>Scan this QR code in Google Authenticator, then enter the six-digit code it shows.</p>
+            <img src={setup.qr} alt="Google Authenticator setup QR code" width="220" height="220" />
+            <details><summary>Cannot scan the QR code?</summary><code style={{ wordBreak: 'break-all' }}>{setup.secret}</code></details>
+            <label className="os-field" style={{ width: '100%' }}><span>Six-digit code</span><input inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} autoComplete="one-time-code" /></label>
+            <div style={{ display: 'flex', gap: 8 }}><button type="button" className="um-btn-ghost" onClick={() => { setSetup(null); setCode(''); }}>Cancel</button><button type="button" className="os-release-btn" style={{ width: 'auto' }} onClick={confirmSetup} disabled={busy || code.length !== 6}>{busy ? 'Checking…' : 'Confirm and turn on'}</button></div>
+          </div>
         ) : (
           <p className="sheet-measurements-empty">
-            Not set up yet. You will be asked to scan a barcode the next time you sign in.
+            Two-factor sign-in is off. <button type="button" className="um-btn-ghost" onClick={startSetup} disabled={busy}>{busy ? 'Starting…' : 'Set up Google Authenticator'}</button>
           </p>
         )}
       </div>
+      {confirmDisable ? (
+        <ConfirmDialog
+          title="Turn off two-factor sign-in?"
+          text="Your Owner account will return to PIN-only login. You can set Google Authenticator up again later."
+          confirmLabel="Yes, turn it off"
+          busy={busy}
+          onConfirm={turnOff}
+          onCancel={() => setConfirmDisable(false)}
+        />
+      ) : null}
     </section>
   );
 }
 
-export default function SettingsPage() {
+export default function SettingsPage({ onLogout }) {
   const [settings, setSettings] = useState(null);
+  const [account, setAccount] = useState(null);
   const [saved, setSaved] = useState(null);
   const [notice, setNotice] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -245,7 +415,17 @@ export default function SettingsPage() {
         setSaved(value);
       })
       .catch(() => setNotice({ tone: 'error', text: 'Settings could not be loaded.' }));
+    api.get('/oms/auth/me')
+      .then((response) => setAccount(response.data?.data?.staff || null))
+      .catch(() => setAccount(null));
   }, []);
+
+  const reloadAccount = async () => {
+    const response = await api.get('/oms/auth/me');
+    const value = response.data?.data?.staff || null;
+    setAccount(value);
+    return value;
+  };
 
   const update = (key, value) => setSettings((current) => ({ ...current, [key]: value }));
   const dirty = settings && saved && JSON.stringify(settings) !== JSON.stringify(saved);
@@ -360,6 +540,8 @@ export default function SettingsPage() {
       {/* Every control in this panel is a plain button, so it cannot submit
           the settings form it sits inside. */}
       <CustomerRecordsPanel />
+
+      {account?.role === 'owner' ? <AccountSecurityPanel account={account} reload={reloadAccount} onLogout={onLogout} /> : null}
 
       <TwoFactorPanel />
 
