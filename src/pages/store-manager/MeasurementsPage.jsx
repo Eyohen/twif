@@ -232,7 +232,7 @@ export default function MeasurementsPage({ customer, currentRole, onBack, onSave
                 <Mail size={11} /> {customer.email || '—'}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#8a7a6a' }}>
-                <User size={11} /> {customer.stores?.[0] || 'Lekki'} Store
+                <User size={11} /> {customer.stores?.[0] ? `${customer.stores[0]} Store` : 'No preferred store'}
               </span>
             </div>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#b0a090', marginTop: 4 }}>

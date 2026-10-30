@@ -407,6 +407,7 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate, rel
 }
 
 function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
+  const stores = useStores();
   const [inventory, setInventory] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -489,9 +490,10 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
   const delayed = productionJobs.filter((job) => job.delivery && new Date(`${job.delivery}T23:59:59`) < new Date() && job.status !== 'Ready');
   const lowStock = inventory.filter((item) => toNumber(item.quantity) <= toNumber(item.lowStockThreshold || 5));
   const outstanding = filteredInvoices.filter((invoice) => invoice.paymentStatus !== 'Fully Paid').reduce((sum, invoice) => sum + Math.max(0, toNumber(invoice.total) - toNumber(invoice.paid)), 0);
-  const storeRows = ['Lekki', 'Ikeja', 'Surulere'].map((store) => {
-    const rowInvoices = storeInvoices.filter((invoice) => String(invoice.store).toLowerCase().includes(store.toLowerCase()));
-    return { store, revenue: rowInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), orders: rowInvoices.length };
+  const storeRows = stores.filter((store) => store.status === 'active').map((store) => {
+    const storeName = String(store.name || store.key || '').replace(/\s+Store$/i, '').trim();
+    const rowInvoices = storeInvoices.filter((invoice) => String(invoice.store || '').toLowerCase() === storeName.toLowerCase());
+    return { store: storeName, revenue: rowInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), orders: rowInvoices.length };
   });
   const storeRevenue = storeRows.reduce((sum, row) => sum + row.revenue, 0);
   // Ranked on what they actually spent in the period on screen, from the
@@ -666,7 +668,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
             </tbody>
           </table>
         </section>
-        <section className="owner-panel owner-table-panel"><header><span>Inventory Alerts</span><button onClick={() => onNavigate?.('Inventory')}>View full inventory →</button></header><table><thead><tr><th>Item</th><th>Category</th><th>Stock</th><th>Status</th><th>Location</th></tr></thead><tbody>{lowStock.slice(0, 5).map((item) => <tr key={item.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Inventory')}><td>{item.name}</td><td>{item.type}</td><td>{item.quantity} {item.unit}</td><td><Status>{toNumber(item.quantity) <= 0 ? 'Out of Stock' : 'Low Stock'}</Status></td><td>{item.store || 'Lekki'}</td></tr>)}</tbody></table></section>
+        <section className="owner-panel owner-table-panel"><header><span>Inventory Alerts</span><button onClick={() => onNavigate?.('Inventory')}>View full inventory →</button></header><table><thead><tr><th>Item</th><th>Category</th><th>Stock</th><th>Status</th><th>Location</th></tr></thead><tbody>{lowStock.slice(0, 5).map((item) => <tr key={item.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Inventory')}><td>{item.name}</td><td>{item.type}</td><td>{item.quantity} {item.unit}</td><td><Status>{toNumber(item.quantity) <= 0 ? 'Out of Stock' : 'Low Stock'}</Status></td><td>{item.store || 'Not assigned'}</td></tr>)}</tbody></table></section>
         <section className="owner-panel owner-table-panel"><header><span>Staff Performance (This Week)</span><button onClick={() => onNavigate?.('Staff')}>View all staff →</button></header><table><thead><tr><th>Staff Member</th><th>Role</th><th>Jobs Completed</th><th>Rating</th></tr></thead><tbody>{tailorRows.map((person, index) => <tr key={person.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Staff')}><td><i>{person.displayName?.slice(0, 1)}</i>{person.displayName}</td><td>Tailor</td><td>{productionJobs.filter((job) => worksOnJob(job, person.displayName) && job.status === 'Ready').length}</td><td>{(() => { const average = averageScore(productionJobs, person.displayName); return average === null ? <span style={{ color: '#8a7a6a' }}>Not scored</span> : `★ ${average.toFixed(1)} / 10`; })()}</td></tr>)}</tbody></table></section>
       </section>
     </div>
@@ -3934,7 +3936,7 @@ const emptySheetForm = () => ({
   trackingUrl: '',
   customer: '',
   customerId: '',
-  store: 'Ikeja',
+  store: '',
   itemNote: '',
   // Free-text fit notes for this order only — never pre-filled from the
   // customer's profile, unlike measurementDetails below.
@@ -3990,7 +3992,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
   // and strip " Store" the way the rest of this screen already names stores
   // ("Lekki", not "Lekki Store"), so a new store fits the existing values
   // rather than introducing a second naming convention for `store`.
-  const [storeOptions, setStoreOptions] = useState(() => (assignedStoreFallback ? [assignedStoreFallback] : ['Lekki', 'Ikeja']));
+  const [storeOptions, setStoreOptions] = useState(() => (assignedStoreFallback ? [assignedStoreFallback] : []));
   useEffect(() => {
     api.get('/oms/stores')
       .then((response) => {
@@ -4070,7 +4072,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
       trackingUrl: sheet.trackingUrl || invoice.trackingUrl,
       customer: sheet.customer || invoice.customer || '',
       customerId: sheet.customerId || '',
-      store: sheet.store || invoice.store || 'Lekki',
+      store: sheet.store || invoice.store || '',
       itemNote: orderNoteFromOrderSheet(sheet),
       measurements: fitNoteFromOrderSheet(sheet),
       measurementDetails: sheet.measurementDetails || {},
@@ -8330,7 +8332,7 @@ function CustomerPortalPage({ token, sentInvoices = [] }) {
           <main>
             <article className="client-current-order"><header><div><h2>Your Current Order</h2><strong>{currentOrder?.items?.map((item)=>item.description).join(', ') || 'No active order'}</strong><p>Order No. {currentOrder?.invoiceNumber || '—'} &nbsp; • &nbsp; {(() => { const qty = currentOrder?.items?.reduce((sum,item)=>sum+toNumber(item.quantity),0)||0; return <>{qty} {qty === 1 ? 'piece' : 'pieces'}</>; })()} &nbsp; • &nbsp; {currentOrder?.store || '—'} Store</p></div><Status>{currentOrder?.orderStatus || 'No order'}</Status></header><div className="client-portal-steps">{CUSTOMER_TRACKING_STEPS.map((step,index)=>{const current=Math.max(0,CUSTOMER_TRACKING_STEPS.indexOf(customerStatus(currentOrder?.orderStatus)));const isFinal=current===CUSTOMER_TRACKING_STEPS.length-1;const done=index<current||(isFinal&&index===current);return <div className={classNames('tracking-step',index===current&&!done&&'active',done&&'done')} key={step}><span>{done?'✓':index+1}</span><strong>{step}</strong></div>;})}</div><dl><div><dt>Delivery Date</dt><dd>{currentOrder?.deliveryDate ? new Date(`${String(currentOrder.deliveryDate).slice(0,10)}T00:00:00`).toLocaleDateString('en-GB') : 'To be confirmed'}</dd></div><div><dt>Tailor</dt><dd>{currentOrder?.tailor || 'To be assigned'}</dd></div><div><dt>Fabric</dt><dd>{currentOrder?.fabric || 'To be confirmed'}</dd></div><div><dt>Style Images</dt><dd>{currentOrder?.styleImages?.length || 0} uploaded</dd></div></dl><a href="#order-history">View Order Details &nbsp;›</a></article>
             <section className="client-portal-triple" id="order-history"><article><header><h2>Order History</h2></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{invoice.items.map((item)=>item.description).join(', ')}</strong><small>{(() => { const qty = invoice.items.reduce((sum,item)=>sum+toNumber(item.quantity),0); return <>{qty} {qty === 1 ? 'piece' : 'pieces'}</>; })()} &nbsp; • &nbsp; {invoice.store} Store</small></span><Status>{invoice.orderStatus}</Status></div>)}</article><article><header><h2>Invoices</h2></header>{profile.invoices.slice(0,4).map((invoice)=><div className="client-list-row" key={invoice.invoiceNumber}><span><small>{invoice.invoiceNumber}</small><strong>{money.format(invoice.total)}</strong><small>{invoice.paymentStatus}</small></span><time>{new Date(invoice.invoiceDate).toLocaleDateString('en-GB')}</time></div>)}</article><article><header><h2>Measurements</h2></header><div className="client-measure-card"><i>⌁</i><strong>Your measurements</strong><p>{Object.keys(measurements).filter((key)=>key!=='profile').length ? 'We have your latest measurements saved.' : 'Measurements have not been saved yet.'}</p></div></article></section>
-            <section className="client-portal-bottom"><article id="contact-details"><header><h2>Contact Details</h2></header><p>⌕ &nbsp; {profile.phone || 'Not provided'}</p><p>✉ &nbsp; {profile.email}</p><p>⌖ &nbsp; {details.address || 'Address not provided'}</p></article><article id="saved-styles"><header><h2>Saved Styles</h2></header><div className="client-saved-styles">{savedStyles.length ? savedStyles.map((image,index)=><img src={image.url || image.dataUrl || image} alt={`Saved style ${index+1}`} key={image.url || image.dataUrl || index}/>) : <p>Your saved style references will appear here.</p>}</div></article><article><header><h2>Address Book</h2></header><p><strong>⌖ &nbsp; Home</strong><br/>{details.address || 'No saved address'}</p><p><strong>⌖ &nbsp; Preferred Store</strong><br/>{details.preferredStore || currentOrder?.store || 'Lekki'} Store</p></article></section>
+            <section className="client-portal-bottom"><article id="contact-details"><header><h2>Contact Details</h2></header><p>⌕ &nbsp; {profile.phone || 'Not provided'}</p><p>✉ &nbsp; {profile.email}</p><p>⌖ &nbsp; {details.address || 'Address not provided'}</p></article><article id="saved-styles"><header><h2>Saved Styles</h2></header><div className="client-saved-styles">{savedStyles.length ? savedStyles.map((image,index)=><img src={image.url || image.dataUrl || image} alt={`Saved style ${index+1}`} key={image.url || image.dataUrl || index}/>) : <p>Your saved style references will appear here.</p>}</div></article><article><header><h2>Address Book</h2></header><p><strong>⌖ &nbsp; Home</strong><br/>{details.address || 'No saved address'}</p><p><strong>⌖ &nbsp; Preferred Store</strong><br/>{details.preferredStore || currentOrder?.store ? `${details.preferredStore || currentOrder.store} Store` : 'Not assigned'}</p></article></section>
           </main>
           <aside className="client-membership" id="membership"><header>♕ &nbsp; Your membership — Regular</header><p>Here’s where you stand this year:</p><label>Spend <strong>{money.format(profile.totalSpend)} of {money.format(spendGoal)}</strong><span><i style={{width:`${spendProgress}%`}}/></span><b>{spendProgress}%</b></label><label>Purchases <strong>{profile.totalOrders} of {purchaseGoal}</strong><span><i style={{width:`${purchaseProgress}%`}}/></span><b>{purchaseProgress}%</b></label><p>You need both <strong>{money.format(Math.max(0,spendGoal-profile.totalSpend))}</strong> more in spend and <strong>{Math.max(0,purchaseGoal-profile.totalOrders)} more purchases</strong> to qualify for Elite membership.</p></aside>
         </div>

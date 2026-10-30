@@ -7,48 +7,29 @@ export const money = new Intl.NumberFormat('en-NG', {
   maximumFractionDigits: 0,
 });
 
-// Seeded with the two stores the shop actually has, so a select using this
-// hook never renders empty for the instant before /oms/stores answers — it
-// just replaces this with the live list once the fetch lands.
-const DEFAULT_STORES = [
-  { id: 'lekki', key: 'lekki', name: 'Lekki Store', status: 'active' },
-  { id: 'ikeja', key: 'ikeja', name: 'Ikeja Store', status: 'active' },
-];
-
 // The single source of truth for what stores exist, used everywhere a store
 // needs to be picked or listed — so adding a store in one place makes it show
 // up everywhere else, rather than each screen keeping its own guess.
 export const useStores = () => {
-  const [stores, setStores] = useState(DEFAULT_STORES);
+  const [stores, setStores] = useState([]);
   useEffect(() => {
     api.get('/oms/stores')
       .then((response) => {
         const list = response.data?.data?.stores;
-        if (Array.isArray(list) && list.length) setStores(list);
+        if (Array.isArray(list)) setStores(list);
       })
       .catch(() => {});
   }, []);
   return stores;
 };
 
-const DEFAULT_DEPARTMENTS = [
-  { id: 'suit', key: 'suit', name: 'Suit', status: 'active' },
-  { id: 'native', key: 'native', name: 'Native', status: 'active' },
-  { id: 'shirts', key: 'shirts', name: 'Shirts', status: 'active' },
-  { id: 'agbada', key: 'agbada', name: 'Agbada', status: 'active' },
-  { id: 'design', key: 'design', name: 'Design', status: 'active' },
-  { id: 'pants', key: 'pants', name: 'Pants', status: 'active' },
-];
-
-// Mirrors useStores exactly — seeded so a select never renders empty before
-// /oms/departments answers.
 export const useDepartments = () => {
-  const [departments, setDepartments] = useState(DEFAULT_DEPARTMENTS);
+  const [departments, setDepartments] = useState([]);
   useEffect(() => {
     api.get('/oms/departments')
       .then((response) => {
         const list = response.data?.data?.departments;
-        if (Array.isArray(list) && list.length) setDepartments(list);
+        if (Array.isArray(list)) setDepartments(list);
       })
       .catch(() => {});
   }, []);
@@ -499,7 +480,7 @@ export const productionJobFromInvoice = (invoice, customers = []) => {
     trackingUrl: sheet.trackingUrl || invoice.trackingUrl,
     customer: sheet.customer || invoice.customer || '',
     phone: sheet.phone || '',
-    store: sheet.store || invoice.store || 'Lekki',
+    store: sheet.store || invoice.store || '',
     item: sheet.item || invoice.item || '',
     // Every garment on the order. Older sheets only carried a single item, so
     // fall back to synthesising a one-entry list from the top-level fields.

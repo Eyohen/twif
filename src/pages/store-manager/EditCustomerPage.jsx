@@ -16,7 +16,7 @@ export default function EditCustomerPage({ customer, onCancel, onSave, onViewMea
     registrationDate: customer.createdAt ? String(customer.createdAt).slice(0, 10) : '',
     referredBy: customer.referredBy || 'Walk-in',
     dateOfBirth: customer.dateOfBirth ? String(customer.dateOfBirth).slice(0, 10) : '',
-    preferredStore: customer.stores?.[0] || 'Lekki',
+    preferredStore: customer.stores?.[0] || '',
     gender: customer.gender || '',
     communicationPreference: customer.communicationPreference || 'WhatsApp',
     occupation: customer.occupation || '',

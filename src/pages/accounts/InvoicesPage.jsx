@@ -209,7 +209,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
                       <strong>{invoice.customer}</strong>
                       {Number(invoice.eliteDiscountAmount || 0) > 0 && <small>ELITE</small>}
                     </td>
-                    <td>{invoice.store || 'Lekki'}</td>
+                    <td>{invoice.store || 'Not assigned'}</td>
                     <td><strong>{money.format(invoice.total)}</strong></td>
                     <td><Status>{invoice.paymentStatus}</Status></td>
                     <td><Status>{status}</Status></td>
@@ -238,7 +238,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
                   <div>
                     <small>{invoice.invoiceNumber}</small>
                     <strong>{invoice.customer}</strong>
-                    <span>{invoice.store || 'Lekki'}</span>
+                    <span>{invoice.store || 'Not assigned'}</span>
                   </div>
                   <Status>{status}</Status>
                 </header>

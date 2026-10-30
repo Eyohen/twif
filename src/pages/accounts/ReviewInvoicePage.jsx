@@ -159,7 +159,7 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
                 {[
                   ['Invoice Number', invoice.invoiceNumber],
                   ['Invoice Date', formatMoment(invoice.invoiceDate || invoice.createdAt)],
-                  ['Store', invoice.store || 'Lekki'],
+                  ['Store', invoice.store || 'Not assigned'],
                 ].map(([label, val]) => (
                   <div key={label}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>

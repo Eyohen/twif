@@ -101,10 +101,10 @@ export default function CustomerOrdersPage({ customer, sentInvoices = [], onBack
               )}
               <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#5a4e42' }}>
                 <MapPin size={11} strokeWidth={1.8} style={{ color: '#c97b08' }} />
-                {customer.stores?.[0] || 'Lekki'} Store
+                {customer.stores?.[0] ? `${customer.stores[0]} Store` : 'No preferred store'}
               </span>
               <span style={{ fontSize: 12, color: '#8a7a6a' }}>
-                Since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Jan 2025'}
+                {customer.createdAt ? `Since ${new Date(customer.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}` : 'Registration date unavailable'}
               </span>
             </div>
           </div>

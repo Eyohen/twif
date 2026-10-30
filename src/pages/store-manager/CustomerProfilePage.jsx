@@ -150,7 +150,7 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
               )}
               <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#5a4e42' }}>
                 <MapPin size={12} strokeWidth={1.8} style={{ color: '#c97b08' }} />
-                {customer.stores?.[0] || 'Lekki'} Store
+                {customer.stores?.[0] ? `${customer.stores[0]} Store` : 'No preferred store'}
               </span>
             </div>
             <div style={{ fontSize: 12, color: '#8a7a6a', marginTop: 5 }}>
@@ -164,7 +164,7 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
             { label: 'Total Orders', value: customer.totalOrders || invoices.length, action: 'View all orders', onClick: onViewOrders },
             { label: 'Last Visit', value: customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—', action: 'Recently' },
             { label: 'Store Credit', value: money.format(customer.storeCreditBalance || 0), action: 'View details' },
-            { label: 'Preferred Store', value: customer.stores?.[0] || 'Lekki', action: 'Primary' },
+            { label: 'Preferred Store', value: customer.stores?.[0] || 'Not assigned', action: 'Primary' },
           ].map(({ label, value, action, onClick }, i) => (
             <div key={label} style={{
               padding: '14px 18px', borderRight: i < 3 ? '1px solid #f3ede5' : 'none', textAlign: 'center',
@@ -240,7 +240,7 @@ export default function CustomerProfilePage({ customer, sentInvoices = [], onBac
                   ['Customer Type', customerTierLabel(customer)],
                   ['Registration Date', customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB') : '—'],
                   ['Referred By', customer.referredBy || 'Walk-in'],
-                  ['Preferred Store', `${customer.stores?.[0] || 'Lekki'} Store`],
+                  ['Preferred Store', customer.stores?.[0] ? `${customer.stores[0]} Store` : 'Not assigned'],
                 ].map(([label, value]) => (
                   <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
