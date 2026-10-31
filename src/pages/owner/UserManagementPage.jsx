@@ -95,6 +95,9 @@ export default function UserManagementPage() {
   const [form, setForm] = useState(blankForm);
   const [modal, setModal] = useState(null);
   const [message, setMessage] = useState('');
+  const [messageTone, setMessageTone] = useState('error');
+  const [confirmEdit, setConfirmEdit] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const reload = async () => {
     const requestSequence = ++reloadSequence.current;
@@ -131,9 +134,11 @@ export default function UserManagementPage() {
   }), [staff, search, roleFilter, storeFilter, statusFilter]);
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
-  const openAdd = () => { setForm(blankForm); setScreen('add'); };
+  const openAdd = () => { setMessage(''); setForm(blankForm); setScreen('add'); };
   const openProfile = (person) => { setSelected(person); setScreen('profile'); };
   const openEdit = () => {
+    setMessage('');
+    setMessageTone('error');
     setForm({ ...blankForm, ...selected, fullName: selected.fullName || selected.displayName || '' });
     setScreen('edit');
   };
@@ -141,6 +146,7 @@ export default function UserManagementPage() {
   const save = async (event) => {
     event.preventDefault();
     setMessage('');
+    setMessageTone('error');
 
     // Confirm PIN was asked for and never compared, so a typo in either box
     // became the PIN the new member of staff could not sign in with.
@@ -150,6 +156,15 @@ export default function UserManagementPage() {
     }
     if (!isValidPhone(form.phone)) { setMessage(PHONE_ERROR); return; }
 
+    if (screen === 'edit') {
+      setConfirmEdit(true);
+      return;
+    }
+
+    await persistStaff();
+  };
+
+  const persistStaff = async () => {
     const payload = { ...form, displayName: form.displayName || form.fullName };
     if (screen === 'edit' && selected?.role === 'owner') {
       delete payload.role;
@@ -158,6 +173,7 @@ export default function UserManagementPage() {
       delete payload.tailorDepartment;
       delete payload.tailorGrade;
     }
+    setSaving(true);
     try {
       if (screen === 'edit') {
         const response = await api.patch(`/oms/staff/${selected.id}`, payload);
@@ -165,13 +181,20 @@ export default function UserManagementPage() {
         setStaff((current) => current.map((person) => person.id === selected.id ? updated : person));
         setSelected(updated);
         setScreen('profile');
+        setMessageTone('success');
+        setMessage(`${updated.displayName || updated.fullName}'s account was updated successfully.`);
+        setConfirmEdit(false);
       } else {
         const response = await api.post('/oms/staff', payload);
         setStaff((current) => [response.data?.data?.staffUser || { ...payload, id: crypto.randomUUID(), status: 'active' }, ...current]);
         setScreen('list');
       }
     } catch (error) {
+      setConfirmEdit(false);
+      setMessageTone('error');
       setMessage(error.response?.data?.message || 'Unable to save staff account.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -191,7 +214,7 @@ export default function UserManagementPage() {
   };
 
   if (screen === 'add' || screen === 'edit') {
-    return <StaffForm mode={screen} form={form} update={update} onCancel={() => setScreen(screen === 'edit' ? 'profile' : 'list')} onSubmit={save} message={message} />;
+    return <StaffForm mode={screen} form={form} update={update} onCancel={() => setScreen(screen === 'edit' ? 'profile' : 'list')} onSubmit={save} message={message} messageTone={messageTone} confirmEdit={confirmEdit} saving={saving} onConfirmEdit={persistStaff} onCancelEdit={() => setConfirmEdit(false)} />;
   }
   if (screen === 'history') {
     return <LoginHistory person={selected} onBack={() => setScreen('profile')} />;
@@ -208,6 +231,9 @@ export default function UserManagementPage() {
         onStatusChanged={onStatusChanged}
         reloadStaff={reload}
         onDeleted={onDeleted}
+        message={message}
+        messageTone={messageTone}
+        onDismissMessage={() => setMessage('')}
       />
     );
   }
@@ -506,7 +532,7 @@ export default function UserManagementPage() {
   );
 }
 
-function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
+function StaffForm({ mode, form, update, onCancel, onSubmit, message, messageTone, confirmEdit, saving, onConfirmEdit, onCancelEdit }) {
   const assignableStores = useStores();
   const departments = useDepartments();
   const activeDepartments = departments.filter((department) => (
@@ -543,10 +569,10 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
       {message && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px',
-          background: '#fff5f0', border: '1px solid #f3c5b5', borderRadius: 8,
-          fontSize: 13, color: '#8a3520',
-        }}>
-          <AlertCircle size={15} /> {message}
+          background: messageTone === 'success' ? '#eef9f1' : '#fff5f0', border: `1px solid ${messageTone === 'success' ? '#b7dfc2' : '#f3c5b5'}`, borderRadius: 8,
+          fontSize: 13, color: messageTone === 'success' ? '#176b35' : '#8a3520',
+        }} role="status">
+          {messageTone === 'success' ? <CheckCircle size={15} /> : <AlertCircle size={15} />} {message}
         </div>
       )}
 
@@ -700,15 +726,39 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message }) {
           </aside>
         </div>
       </form>
+      {confirmEdit ? (
+        <div className="um-modal-backdrop" role="presentation">
+          <div className="um-modal" role="dialog" aria-modal="true" aria-labelledby="staff-edit-confirm-title">
+            <button type="button" className="um-modal-close" onClick={onCancelEdit} disabled={saving} aria-label="Close"><XCircle size={18} /></button>
+            <UserCog size={32} style={{ color: '#c97b08', margin: '0 auto 12px', display: 'block' }} />
+            <h3 id="staff-edit-confirm-title" style={{ textAlign: 'center', margin: '0 0 8px' }}>Save changes to this staff member?</h3>
+            <p style={{ textAlign: 'center', color: '#6f6255', lineHeight: 1.5 }}>
+              Please confirm that you want to update the account details for {form.displayName || form.fullName}.
+            </p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button type="button" className="um-btn-ghost" style={{ flex: 1 }} onClick={onCancelEdit} disabled={saving}>Cancel</button>
+              <button type="button" className="os-release-btn" style={{ flex: 1 }} onClick={onConfirmEdit} disabled={saving}>
+                {saving ? 'Saving…' : 'Yes, save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onStatusChanged, reloadStaff, onDeleted }) {
+function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onStatusChanged, reloadStaff, onDeleted, message, messageTone, onDismissMessage }) {
   const storeLabel = useStoreLabel();
   const roleS = roleStyle[person.role] || { bg: '#f5f0e8', color: '#5a4e42' };
   return (
     <div className="os-page">
+      {message ? (
+        <div className={`os-row-notice${messageTone === 'error' ? ' is-error' : ''}`} role="status">
+          <span>{message}</span>
+          <button type="button" onClick={onDismissMessage} aria-label="Dismiss">×</button>
+        </div>
+      ) : null}
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#8a7a6a' }}>
         <button

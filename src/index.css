@@ -10721,6 +10721,44 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 }
 
 /* Customer records that share an email, or have none. */
+.customer-records-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid #eee5da;
+  color: #786b5e;
+  font-size: 12px;
+}
+
+.customer-records-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.customer-records-pagination button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 10px;
+  border: 1px solid #ddd5c8;
+  border-radius: 7px;
+  background: #fff;
+  color: #5a4e42;
+  cursor: pointer;
+}
+
+.customer-records-pagination button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .customer-records-pagination { align-items: flex-start; flex-direction: column; }
+  .customer-records-pagination > div { width: 100%; justify-content: space-between; }
+}
 .dup-panel { display: grid; gap: 14px; }
 .dup-clean { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #2a7d4f; }
 .dup-group { display: grid; gap: 8px; }

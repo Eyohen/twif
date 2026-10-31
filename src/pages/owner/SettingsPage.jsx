@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, Save, Building2, FileText, Factory, Bell, RotateCcw, Users, Trash2, CheckCircle, Shield, Mail, KeyRound, XCircle } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Building2, FileText, Factory, Bell, RotateCcw, Users, Trash2, CheckCircle, Shield, Mail, KeyRound, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../../lib/api';
 
 // Grouped the way an owner would look for them, rather than by data type.
@@ -59,12 +59,17 @@ const SECTIONS = [
 // before that rule went in are still there — and an owner had no way to see
 // them, let alone decide which one to keep.
 function CustomerRecordsPanel() {
+  const PAGE_SIZE = 8;
   const [report, setReport] = useState(null);
   const [notice, setNotice] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [page, setPage] = useState(1);
 
   const load = () => api.get('/oms/customers/duplicates')
-    .then((response) => setReport(response.data?.data || { duplicates: [], missingEmail: [] }))
+    .then((response) => {
+      setReport(response.data?.data || { duplicates: [], missingEmail: [] });
+      setPage(1);
+    })
     .catch(() => setNotice({ tone: 'error', text: 'The customer records could not be checked.' }));
 
   useEffect(() => { load(); }, []);
@@ -87,6 +92,13 @@ function CustomerRecordsPanel() {
 
   const { duplicates = [], missingEmail = [] } = report;
   const clean = !duplicates.length && !missingEmail.length;
+  const records = [
+    ...duplicates.flatMap((group) => group.customers.map((customer) => ({ customer, email: group.email, duplicateCount: group.customers.length, kind: 'duplicate' }))),
+    ...missingEmail.map((customer) => ({ customer, email: null, duplicateCount: 0, kind: 'missing' })),
+  ];
+  const pageCount = Math.max(1, Math.ceil(records.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const visibleRecords = records.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <section className="os-card">
@@ -109,41 +121,41 @@ function CustomerRecordsPanel() {
           <p className="dup-clean"><CheckCircle size={15} strokeWidth={1.8} /> Every customer has an email address of their own.</p>
         ) : null}
 
-        {duplicates.map((group) => (
-          <div className="dup-group" key={group.email}>
-            <h4>{group.email} <span>{group.customers.length} records</span></h4>
-            {/* Keeping the record with measurements — and the older one where
-                neither has any — loses the least history. */}
-            {group.customers.map((customer) => (
-              <div className="dup-row" key={customer.id}>
+        {visibleRecords.map(({ customer, email, duplicateCount, kind }, index) => {
+          const previous = visibleRecords[index - 1];
+          const showHeading = !previous || previous.kind !== kind || previous.email !== email;
+          return (
+            <div className="dup-group" key={customer.id}>
+              {showHeading ? (
+                <h4>{kind === 'duplicate' ? email : 'No email address'} <span>{kind === 'duplicate' ? `${duplicateCount} records` : `${missingEmail.length} records`}</span></h4>
+              ) : null}
+              {kind === 'missing' && showHeading ? (
+                <p className="dup-hint">An email address is required on every new customer. Open this record on the Customers page and add one.</p>
+              ) : null}
+              <div className="dup-row">
                 <div>
                   <strong>{customer.fullName}</strong>
-                  <span>{customer.phone || 'No phone'} · added {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'unknown'}</span>
-                  <small>{customer.hasMeasurements ? 'Has measurements' : 'No measurements'}</small>
+                  <span>{customer.phone || 'No phone'}{kind === 'duplicate' ? ` · added ${customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'unknown'}` : ''}</span>
+                  {kind === 'duplicate' ? <small>{customer.hasMeasurements ? 'Has measurements' : 'No measurements'}</small> : null}
                 </div>
-                <button type="button" onClick={() => archive(customer)} disabled={busyId === customer.id}>
-                  <Trash2 size={13} strokeWidth={1.8} /> {busyId === customer.id ? 'Archiving…' : 'Archive'}
-                </button>
+                {kind === 'duplicate' ? (
+                  <button type="button" onClick={() => archive(customer)} disabled={busyId === customer.id}>
+                    <Trash2 size={13} strokeWidth={1.8} /> {busyId === customer.id ? 'Archiving…' : 'Archive'}
+                  </button>
+                ) : null}
               </div>
-            ))}
-          </div>
-        ))}
+            </div>
+          );
+        })}
 
-        {missingEmail.length ? (
-          <div className="dup-group">
-            <h4>No email address <span>{missingEmail.length} records</span></h4>
-            <p className="dup-hint">
-              An email address is required on every new customer, so these predate the rule.
-              Open each on the Customers page and add one — the tracking link is sent there.
-            </p>
-            {missingEmail.map((customer) => (
-              <div className="dup-row" key={customer.id}>
-                <div>
-                  <strong>{customer.fullName}</strong>
-                  <span>{customer.phone || 'No phone'}</span>
-                </div>
-              </div>
-            ))}
+        {records.length > PAGE_SIZE ? (
+          <div className="customer-records-pagination" aria-label="Customer records pagination">
+            <span>Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, records.length)} of {records.length}</span>
+            <div>
+              <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={safePage === 1} aria-label="Previous customer records page"><ChevronLeft size={14} /> Previous</button>
+              <strong>Page {safePage} of {pageCount}</strong>
+              <button type="button" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={safePage === pageCount} aria-label="Next customer records page">Next <ChevronRight size={14} /></button>
+            </div>
           </div>
         ) : null}
       </div>
