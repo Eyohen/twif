@@ -491,6 +491,10 @@ export default function SettingsPage({ onLogout }) {
         </div>
       ) : null}
 
+      {account?.role === 'owner' ? <AccountSecurityPanel account={account} reload={reloadAccount} onLogout={onLogout} /> : null}
+
+      <TwoFactorPanel />
+
       {SECTIONS.map(({ title, caption, Icon, fields }) => (
         <section className="os-card" key={title}>
           <div className="os-card-head">
@@ -540,10 +544,6 @@ export default function SettingsPage({ onLogout }) {
       {/* Every control in this panel is a plain button, so it cannot submit
           the settings form it sits inside. */}
       <CustomerRecordsPanel />
-
-      {account?.role === 'owner' ? <AccountSecurityPanel account={account} reload={reloadAccount} onLogout={onLogout} /> : null}
-
-      <TwoFactorPanel />
 
       {dirty ? <div className="settings-dirty-bar">You have unsaved changes.</div> : null}
     </form>
