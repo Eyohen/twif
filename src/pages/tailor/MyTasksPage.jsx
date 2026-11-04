@@ -456,24 +456,25 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                                   <section key={departmentKey}>
                                     <h5 style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: '#a76900' }}>{config?.label || departmentKey}</h5>
                                     {config?.fields?.length ? (
-                                      <div className="os-grid-3">
-                                        {config.fields.map((field) => (
-                                          <div key={field.key}>
-                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{field.label}</div>
-                                            <div style={{ fontSize: 13, color: values[field.key] ? '#1a1611' : '#b0a090', fontWeight: 600, marginTop: 3 }}>
-                                              {values[field.key] || 'Not filled in'}
-                                            </div>
-                                          </div>
-                                        ))}
+                                      <div style={{ overflowX: 'auto', border: '1px solid #eee5da', borderRadius: 8 }}>
+                                        <table className="tailor-detail-table">
+                                          <thead><tr><th>Department detail</th><th>Value</th></tr></thead>
+                                          <tbody>
+                                            {config.fields.map((field) => (
+                                              <tr key={field.key}>
+                                                <th scope="row">{field.label}</th>
+                                                <td className={values[field.key] ? '' : 'empty'}>{values[field.key] || 'Not filled in'}</td>
+                                              </tr>
+                                            ))}
+                                            {item.departmentNotes?.[departmentKey] ? (
+                                              <tr><th scope="row">Instructions</th><td>{item.departmentNotes[departmentKey]}</td></tr>
+                                            ) : null}
+                                          </tbody>
+                                        </table>
                                       </div>
                                     ) : (
                                       <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No fields configured for this department.</p>
                                     )}
-                                    {item.departmentNotes?.[departmentKey] ? (
-                                      <p style={{ margin: '6px 0 0', fontSize: 13, color: '#5a4e42', background: '#fffbf0', border: '1px solid #e8d9a0', borderRadius: 6, padding: '6px 8px' }}>
-                                        {item.departmentNotes[departmentKey]}
-                                      </p>
-                                    ) : null}
                                   </section>
                                 );
                               })}
@@ -493,7 +494,10 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                   <div style={{ marginBottom: 16 }}>
                     <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#5a4e42', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Measurements</h4>
                     {order.measurementDetails || order.measurements ? (
-                      <div className="tailor-task-measurements" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, border: '1px solid #eee5da', borderRadius: 8, overflow: 'hidden' }}>
+                      <div className="tailor-task-measurements" style={{ overflowX: 'auto', border: '1px solid #eee5da', borderRadius: 8 }}>
+                        <table className="tailor-detail-table">
+                          <thead><tr><th>Measurement</th><th>Value</th></tr></thead>
+                          <tbody>
                         {(order.measurementDetails
                           ? Object.entries(order.measurementDetails)
                           : String(order.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line) => {
@@ -501,11 +505,13 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                             return rest.length ? [label.trim(), rest.join(':').trim()] : [line, ''];
                           })
                         ).map(([label, value], index) => (
-                          <div key={`${label}-${index}`} style={{ padding: '8px 12px', borderBottom: '1px solid #f3ede5', background: '#faf7f3' }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 2 }}>{value || '—'}</div>
-                          </div>
+                          <tr key={`${label}-${index}`}>
+                            <th scope="row">{label}</th>
+                            <td>{value || '—'}</td>
+                          </tr>
                         ))}
+                          </tbody>
+                        </table>
                       </div>
                     ) : (
                       <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No measurements attached</p>

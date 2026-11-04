@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { ArrowLeft, CheckCircle, Package, CreditCard, Ruler, Clock, User, Scissors, Layers, Image as ImageIcon, ClipboardList } from 'lucide-react';
 import { money, formatMoment, amountReceived, invoicePayable, invoiceApprovalStatus, daysUntilDue, dueDateLabel, toNumber, useDepartments } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
+import JobCommentThread from '../../components/oms/JobCommentThread';
 import { departmentConfig } from '../../config/departmentFields';
 
 const label = { fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' };
@@ -15,7 +16,7 @@ const outlineButton = {
 // what was actually written down for Production to cut and sew from — every
 // garment's own fabric, construction choices and style references, not just
 // its name and a price.
-export default function OrderSheetDetailsPage({ order, onBack, onEdit, backLabel = 'Back to Order Sheets' }) {
+export default function OrderSheetDetailsPage({ order, onBack, onEdit, backLabel = 'Back to Order Sheets', currentRole, role = 'store_manager' }) {
   const departmentDirectory = useDepartments();
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -148,6 +149,12 @@ export default function OrderSheetDetailsPage({ order, onBack, onEdit, backLabel
 
       <div className="os-layout">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          <JobCommentThread
+            invoiceNumber={order.invoiceNumber}
+            currentRole={currentRole}
+            role={role}
+          />
 
           {/* Special instructions */}
           <div className="os-card">

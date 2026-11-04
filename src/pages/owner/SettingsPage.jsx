@@ -343,7 +343,7 @@ function TwoFactorPanel() {
         <Shield size={16} strokeWidth={1.6} style={{ color: '#c97b08' }} />
         <div>
           <strong>Two-factor sign-in</strong>
-          <p>{account.role === 'owner' ? 'Protect Owner login with Google Authenticator' : 'Required on an Admin account'}</p>
+          <p>{account.role === 'owner' ? 'Protect Owner login with Google Authenticator' : 'Owner-controlled protection for this Admin account'}</p>
         </div>
       </div>
       <div className="os-card-body" style={{ gap: 12 }}>
@@ -354,7 +354,15 @@ function TwoFactorPanel() {
           </div>
         ) : null}
 
-        {recoveryCodes.length ? (
+        {account.role === 'admin' ? (
+          <p className="sheet-measurements-empty">
+            {account.twoFactorPolicyRequired
+              ? account.twoFactorEnabled
+                ? 'Two-factor sign-in is on for this Admin account.'
+                : 'The Owner requires two-factor sign-in. You will complete authenticator setup the next time you sign in.'
+              : 'Two-factor sign-in is optional and currently off. Only the Owner can turn it on or off for an Admin account.'}
+          </p>
+        ) : recoveryCodes.length ? (
           <div className="sheet-measurements-empty">
             <strong>Save these recovery codes now</strong>
             <p>Each code works once if Google Authenticator is unavailable. They cannot be shown again.</p>

@@ -3,6 +3,7 @@ import { ArrowLeft, Download, CheckCircle, Package, CreditCard, Ruler, FileText,
 import { api } from '../../lib/api';
 import { money, formatMoment, amountReceived, invoicePayable, invoiceDocumentPayload, downloadInvoicePdf, daysUntilDue, dueDateLabel } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
+import JobCommentThread from '../../components/oms/JobCommentThread';
 
 const label = { fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' };
 const outlineButton = {
@@ -11,7 +12,7 @@ const outlineButton = {
   fontWeight: 600, background: '#fff', color: '#1a1611', cursor: 'pointer', fontFamily: 'inherit',
 };
 
-export default function OrderDetailsPage({ order, onBack }) {
+export default function OrderDetailsPage({ order, onBack, currentRole, role = 'store_manager' }) {
   const [notice, setNotice] = useState('');
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -163,6 +164,14 @@ export default function OrderDetailsPage({ order, onBack }) {
 
       <div className="os-layout">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {job.status ? (
+            <JobCommentThread
+              invoiceNumber={order.invoiceNumber}
+              currentRole={currentRole}
+              role={role}
+            />
+          ) : null}
 
           {/* Order Summary */}
           <div className="os-card">

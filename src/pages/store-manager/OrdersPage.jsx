@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Clock, Package, CheckCircle, AlertCircle, Search, ChevronRight, Eye, Plus } from 'lucide-react';
 import { money, invoiceApprovalStatus, amountReceived, formatMoment, daysUntilDue, dueDateLabel, toNumber } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
@@ -7,7 +8,8 @@ import Pagination from '../../components/oms/Pagination';
 
 const KPI_COUNT = 4;
 
-export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate }) {
+export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, currentRole, role = 'store_manager' }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -15,6 +17,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate }
   const [sortOrder, setSortOrder] = useState('Newest First');
   const [page, setPage] = useState(1);
   const kpiScrollRef = useRef(null);
+  const showStore = role === 'owner' || role === 'admin';
 
   const handleKpiScroll = () => {
     if (!kpiScrollRef.current) return;
@@ -24,6 +27,17 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate }
   };
 
   const orders = sentInvoices.map((invoice) => ({ ...invoice, job: invoice.orderSheet || {}, approval: invoiceApprovalStatus(invoice) }));
+  const requestedInvoice = searchParams.get('invoice');
+
+  // Notification links carry the invoice number. Open the matching order
+  // detail once invoices have loaded instead of stopping at the register.
+  useEffect(() => {
+    if (!requestedInvoice) return;
+    const match = orders.find((order) => order.invoiceNumber === requestedInvoice);
+    if (!match) return;
+    setSelectedOrder(match);
+    setSearchParams({}, { replace: true });
+  }, [requestedInvoice, orders, setSearchParams]);
   const matchesFilter = (order) => filter === 'All'
     || (filter === 'Unpaid' && !['Fully Paid', 'Paid', 'Partial Paid'].includes(order.paymentStatus))
     || (filter === 'Partial Paid' && order.paymentStatus === 'Partial Paid')
@@ -57,7 +71,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate }
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   if (selectedOrder) {
-    return <OrderDetailsPage order={selectedOrder} onBack={() => { setSelectedOrder(null); window.scrollTo(0, 0); }} />;
+    return <OrderDetailsPage order={selectedOrder} currentRole={currentRole} role={role} onBack={() => { setSelectedOrder(null); window.scrollTo(0, 0); }} />;
   }
 
   const kpis = [
@@ -186,7 +200,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate }
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#faf7f3' }}>
-              {['Invoice No.', 'Customer', 'Items', 'Invoice Total', 'Payment', 'Delivery Date', 'Production', 'Created', 'Actions'].map((col) => (
+              {['Invoice No.', 'Customer', ...(showStore ? ['Store'] : []), 'Items', 'Invoice Total', 'Payment', 'Delivery Date', 'Production', 'Created', 'Actions'].map((col) => (
                 <th key={col} style={{
                   padding: '11px 14px', textAlign: 'left', fontSize: 11,
                   fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase',
@@ -218,7 +232,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate }
                     <div style={{ fontWeight: 800, fontSize: 14, color: '#0f0b06' }}>{order.invoiceNumber}</div>
                     {/* An "Order #" was printed here, counted down from 1256 by
                         the row's position — a number that existed nowhere. */}
-                    <div style={{ fontSize: 11, color: '#8a7a6a' }}>{order.store || ''}</div>
+                    {!showStore ? <div style={{ fontSize: 11, color: '#8a7a6a' }}>{order.store || order.job.store || ''}</div> : null}
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -233,6 +247,11 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate }
                       </div>
                     </div>
                   </td>
+                  {showStore ? (
+                    <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42', whiteSpace: 'nowrap' }}>
+                      {order.store || order.job.store || 'Not assigned'}
+                    </td>
+                  ) : null}
                   <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>
                     {order.pieces || order.job.pieces || 1}
                     <span style={{ fontSize: 11, color: '#8a7a6a', marginLeft: 3 }}>pcs</span>
@@ -341,6 +360,12 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate }
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Items</div>
                   <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>{order.pieces || order.job.pieces || 1} pieces</div>
                 </div>
+                {showStore ? (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Store</div>
+                    <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>{order.store || order.job.store || 'Not assigned'}</div>
+                  </div>
+                ) : null}
               </div>
               <div style={{ borderTop: '1px solid #f3ede5', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 12, color: '#8a7a6a' }}>

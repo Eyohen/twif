@@ -19,7 +19,7 @@ const selectStyle = {
   backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', cursor: 'pointer',
 };
 
-export default function InventoryListPage({ currentRole, ownerMode = false, readOnly = false }) {
+export default function InventoryListPage({ currentRole, ownerMode = false, readOnly = false, canArchive = false }) {
   const [items, setItems] = useState([]);
   const [types, setTypes] = useState([]);
   const [units, setUnits] = useState(['yards', 'units']);
@@ -81,6 +81,17 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
     const next = new URLSearchParams(searchParams);
     next.delete('item');
     setSearchParams(next, { replace: true });
+  };
+  const archiveItem = async (item) => {
+    if (!window.confirm(`Archive ${item.name}? It will leave active inventory, but its history will be kept.`)) return;
+    try {
+      await api.delete(`/oms/fabrics/${item.id}`);
+      setItems((current) => current.filter((entry) => entry.id !== item.id));
+      setSelectedItem(null);
+      setMessage(`${item.name} was archived.`);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to archive this item.');
+    }
   };
   const activeStores = useMemo(() => stores.filter((store) => store.status === 'active'), [stores]);
   const locationOptions = useMemo(() => ['Storage', ...activeStores.map((store) => store.name)], [activeStores]);
@@ -237,6 +248,7 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
         fallbackItem={selectedItem}
         onBack={closeSelectedItem}
         onEdit={readOnly ? undefined : () => setEditingItem(selectedItem)}
+        onArchive={canArchive ? archiveItem : undefined}
         readOnly={readOnly}
         approvalRequest={approvalRequest}
       />

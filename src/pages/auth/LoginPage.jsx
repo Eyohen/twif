@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api, setStoredAccessToken } from '../../lib/api';
-import { phoneDigits } from '../../utils/phone';
+import { phoneDigits, PHONE_MAX_LENGTH } from '../../utils/phone';
 
 export default function LoginPage({ onLogin, notice = '' }) {
   const [phone, setPhone] = useState('');
@@ -192,7 +192,7 @@ export default function LoginPage({ onLogin, notice = '' }) {
             <form onSubmit={submit}>
               {error ? <div className="login-error">{error}</div> : null}
               {!error && notice ? <div className="login-notice">{notice}</div> : null}
-              <label>Phone number<span className="login-input-icon">⌕</span><input type="tel" value={phone} onChange={(event) => setPhone(phoneDigits(event.target.value))} inputMode="numeric" maxLength={11} autoComplete="tel" placeholder="08160000000" /></label>
+              <label>Phone number<span className="login-input-icon">⌕</span><input type="tel" value={phone} onChange={(event) => setPhone(phoneDigits(event.target.value))} inputMode="tel" maxLength={PHONE_MAX_LENGTH} autoComplete="tel" placeholder="08160000000" /></label>
               <label>PIN<span className="pin-input-wrap"><input value={pin} onChange={(event) => setPin(event.target.value)} type={showPin ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter PIN" /><button type="button" className="pin-toggle" aria-label={showPin ? 'Hide PIN' : 'Show PIN'} onClick={() => setShowPin((current) => !current)}>{showPin ? '◉' : '◎'}</button></span></label>
               {/* "Remember me" changed nothing — the session is kept either way —
                   and "Forgot PIN?" led nowhere. There is no self-service reset;

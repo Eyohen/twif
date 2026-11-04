@@ -9,7 +9,7 @@ const PAGE_SIZE = 10;
 
 // An order sheet only shows up here once it exists — an invoice still
 // waiting for one belongs on the Orders page, not this one.
-export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavigate }) {
+export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavigate, currentRole, role = 'store_manager' }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [selectedSheet, setSelectedSheet] = useState(null);
@@ -55,6 +55,8 @@ export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavig
         order={selectedSheet}
         onBack={() => { setSelectedSheet(null); window.scrollTo(0, 0); }}
         onEdit={(invoiceNumber) => onNavigate?.('Order Sheet', { edit: invoiceNumber })}
+        currentRole={currentRole}
+        role={role}
       />
     );
   }

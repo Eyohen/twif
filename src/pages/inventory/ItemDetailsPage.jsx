@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Edit3, Box, Tag, Sliders, TrendingUp, Building2, Activity, AlignLeft, MapPin } from 'lucide-react';
+import { ArrowLeft, Edit3, Archive, Box, Tag, Sliders, TrendingUp, Building2, Activity, AlignLeft, MapPin } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money, formatMoment, useStores } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import { stockStatus, itemImage, colourSwatch, formatInventoryNumber } from './item';
 
-export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, approvalRequest, readOnly = false }) {
+export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, onArchive, approvalRequest, readOnly = false }) {
   // The list row is shown immediately so the page never opens blank, then the
   // full record and its movements replace it.
   const [item, setItem] = useState(fallbackItem || null);
@@ -49,11 +49,18 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
           <h2>{item.name}</h2>
           <span>Everything recorded about this item, and where its stock has gone.</span>
         </div>
-        {!readOnly && (
-          <button type="button" onClick={onEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-            <Edit3 size={13} />Edit Item
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!readOnly && (
+            <button type="button" onClick={onEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+              <Edit3 size={13} />Edit Item
+            </button>
+          )}
+          {onArchive ? (
+            <button type="button" onClick={() => onArchive(item)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: '#8a3520', borderColor: '#e4b9aa', background: '#fff5f0' }}>
+              <Archive size={13} />Archive Item
+            </button>
+          ) : null}
+        </div>
       </header>
 
       {loadError && (

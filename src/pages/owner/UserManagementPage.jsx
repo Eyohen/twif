@@ -8,7 +8,7 @@ import {
 import { api } from '../../lib/api';
 import { downloadCsv, csvStamp } from '../../utils/csv';
 import { formatMoment, useDepartments, useStores } from '../../utils/oms';
-import { isValidPhone, phoneDigits, PHONE_ERROR } from '../../utils/phone';
+import { isValidPhone, phoneDigits, PHONE_ERROR, PHONE_MAX_LENGTH, PHONE_PATTERN } from '../../utils/phone';
 import { Status } from '../../components/oms/Common';
 import { roles as staffRoles } from '../../config/oms';
 
@@ -81,7 +81,8 @@ const useStoreLabel = () => {
   };
 };
 
-export default function UserManagementPage() {
+export default function UserManagementPage({ currentRole }) {
+  const isOwner = currentRole?.id === 'owner';
   const storeLabel = useStoreLabel();
   const reloadSequence = useRef(0);
   const [staff, setStaff] = useState([]);
@@ -137,6 +138,11 @@ export default function UserManagementPage() {
   const openAdd = () => { setMessage(''); setForm(blankForm); setScreen('add'); };
   const openProfile = (person) => { setSelected(person); setScreen('profile'); };
   const openEdit = () => {
+    if (!isOwner && selected?.role === 'owner') {
+      setMessageTone('error');
+      setMessage('Only the Owner can change the Owner account.');
+      return;
+    }
     setMessage('');
     setMessageTone('error');
     setForm({ ...blankForm, ...selected, fullName: selected.fullName || selected.displayName || '' });
@@ -214,7 +220,7 @@ export default function UserManagementPage() {
   };
 
   if (screen === 'add' || screen === 'edit') {
-    return <StaffForm mode={screen} form={form} update={update} onCancel={() => setScreen(screen === 'edit' ? 'profile' : 'list')} onSubmit={save} message={message} messageTone={messageTone} confirmEdit={confirmEdit} saving={saving} onConfirmEdit={persistStaff} onCancelEdit={() => setConfirmEdit(false)} />;
+    return <StaffForm mode={screen} form={form} update={update} canAssignOwner={isOwner} onCancel={() => setScreen(screen === 'edit' ? 'profile' : 'list')} onSubmit={save} message={message} messageTone={messageTone} confirmEdit={confirmEdit} saving={saving} onConfirmEdit={persistStaff} onCancelEdit={() => setConfirmEdit(false)} />;
   }
   if (screen === 'history') {
     return <LoginHistory person={selected} onBack={() => setScreen('profile')} />;
@@ -223,6 +229,7 @@ export default function UserManagementPage() {
     return (
       <StaffProfile
         person={selected}
+        isOwner={isOwner}
         onBack={() => setScreen('list')}
         onEdit={openEdit}
         onHistory={() => setScreen('history')}
@@ -532,7 +539,7 @@ export default function UserManagementPage() {
   );
 }
 
-function StaffForm({ mode, form, update, onCancel, onSubmit, message, messageTone, confirmEdit, saving, onConfirmEdit, onCancelEdit }) {
+function StaffForm({ mode, form, update, canAssignOwner, onCancel, onSubmit, message, messageTone, confirmEdit, saving, onConfirmEdit, onCancelEdit }) {
   const assignableStores = useStores();
   const departments = useDepartments();
   const activeDepartments = departments.filter((department) => (
@@ -597,7 +604,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message, messageTon
                 </label>
                 <label className="os-field">
                   <span>Phone Number <span style={{ color: '#e05252' }}>*</span></span>
-                  <input type="tel" inputMode="numeric" pattern="[0-9]{11}" maxLength={11} value={form.phone} onChange={(e) => update('phone', phoneDigits(e.target.value))} required placeholder="08012345678" title={PHONE_ERROR} />
+                  <input type="tel" inputMode="tel" pattern={PHONE_PATTERN} maxLength={PHONE_MAX_LENGTH} value={form.phone} onChange={(e) => update('phone', phoneDigits(e.target.value))} required placeholder="08012345678 or +12025550123" title={PHONE_ERROR} />
                 </label>
                 <label className="os-field">
                   <span>Date of Birth</span>
@@ -621,7 +628,7 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message, messageTon
                 <label className="os-field">
                   <span>Role <span style={{ color: '#e05252' }}>*</span></span>
                   <select value={form.role} onChange={(e) => { update('role', e.target.value); if (e.target.value === 'inventory_manager') update('store', 'all'); }}>
-                    {staffRoles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}
+                    {staffRoles.filter((role) => canAssignOwner || role.id !== 'owner').map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}
                   </select>
                 </label>
                 <label className="os-field">
@@ -748,9 +755,20 @@ function StaffForm({ mode, form, update, onCancel, onSubmit, message, messageTon
   );
 }
 
-function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onStatusChanged, reloadStaff, onDeleted, message, messageTone, onDismissMessage }) {
+function StaffProfile({ person, isOwner, onBack, onEdit, onHistory, onModal, modal, onStatusChanged, reloadStaff, onDeleted, message, messageTone, onDismissMessage }) {
   const storeLabel = useStoreLabel();
   const roleS = roleStyle[person.role] || { bg: '#f5f0e8', color: '#5a4e42' };
+  const mayManage = isOwner || person.role !== 'owner';
+  const [twoFactorBusy, setTwoFactorBusy] = useState(false);
+  const setAdminTwoFactor = async (enabled) => {
+    setTwoFactorBusy(true);
+    try {
+      const response = await api.patch(`/oms/staff/${person.id}/two-factor`, { enabled });
+      onStatusChanged(response.data?.data?.staffUser || { ...person, twoFactorRequired: enabled });
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
   return (
     <div className="os-page">
       {message ? (
@@ -802,23 +820,33 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onSta
               </span>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button
+              {mayManage ? <button
                 onClick={onEdit}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
                   border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
                   fontSize: 13, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
                 }}
-              ><Edit2 size={13} /> Edit</button>
-              <button
+              ><Edit2 size={13} /> Edit</button> : null}
+              {mayManage ? <button
                 onClick={() => onModal('reset')}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
                   border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff',
                   fontSize: 13, color: '#5a4e42', cursor: 'pointer', fontWeight: 500,
                 }}
-              ><Shield size={13} /> Reset PIN</button>
-              {person.role !== 'owner' && (
+              ><Shield size={13} /> Reset PIN</button> : null}
+              {isOwner && person.role === 'admin' ? (
+                <button
+                  type="button"
+                  disabled={twoFactorBusy}
+                  onClick={() => setAdminTwoFactor(!person.twoFactorRequired)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', border: '1px solid #d8c6a6', borderRadius: 8, background: '#fffbf0', color: '#8a5a00', cursor: twoFactorBusy ? 'wait' : 'pointer', fontSize: 13, fontWeight: 600 }}
+                >
+                  <Shield size={13} /> {person.twoFactorRequired ? 'Turn off 2FA' : 'Require 2FA'}
+                </button>
+              ) : null}
+              {mayManage && person.role !== 'owner' && (
                 <>
                   <button
                     onClick={() => onModal(person.status === 'active' ? 'deactivate' : 'reactivate')}
@@ -897,6 +925,7 @@ function StaffProfile({ person, onBack, onEdit, onHistory, onModal, modal, onSta
                 ['Store', storeLabel(person.store)],
                 ...(person.role === 'tailor' ? [['Department', person.tailorDepartment || 'Native'], ['Tailor Grade', `Grade ${person.tailorGrade || 1}`]] : []),
                 ['Account Status', person.status],
+                ...(person.role === 'admin' ? [['Two-factor sign-in', person.twoFactorRequired ? (person.twoFactorEnabledAt ? 'On' : 'Required at next sign-in') : 'Optional / off']] : []),
                 // Was fixed at "22 May 2024" for every member of staff.
                 ['Date Created', person.createdAt ? formatMoment(person.createdAt) : 'Not recorded'],
               ].map(([dt, dd]) => (

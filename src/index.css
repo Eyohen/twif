@@ -2095,6 +2095,7 @@ dd {
 .customer-action-menu::before { content: ''; position: absolute; top: -6px; right: 15px; width: 11px; height: 11px; border: 1px solid #e7dfd5; border-right: 0; border-bottom: 0; background: #fff; transform: rotate(45deg); }
 .customer-action-menu button { min-height: 36px; display: flex; align-items: center; gap: 11px; border: 0; border-radius: 4px; background: #fff; color: #181818; padding: 0 10px; font-size: 9px; text-align: left; }
 .customer-action-menu button:hover { background: #faf6ef; }
+.invoice-action-menu { max-height: min(420px, calc(100dvh - 24px)); overflow-y: auto; }
 .customer-action-menu button i { width: 16px; color: #242424; font-size: 13px; font-style: normal; text-align: center; }
 .customer-action-menu button.danger { margin-top: 4px; border-top: 1px solid #eee7de; border-radius: 0 0 4px 4px; color: #d83228; }
 .customer-action-menu button.danger i { color: #d83228; }
@@ -10348,6 +10349,49 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   .invoice-item-note-row > .os-field { flex: 1 1 100%; }
 }
 
+.invoice-create-actions { display: flex; gap: 10px; }
+.mobile-invoice-actions { display: none; }
+
+@media (max-width: 560px) {
+  /* Invoice creation needs a true one-column phone layout. Three number
+     fields technically fitted in the grid, but their labels, discount toggle
+     and browser-sized inputs did not, producing horizontal overflow. */
+  .store-invoice-create { width: 100%; min-width: 0; overflow-x: clip; }
+  .store-invoice-create .os-page { gap: 14px; min-width: 0; }
+  .store-invoice-create .os-page-header { padding-bottom: 12px; }
+  .store-invoice-create .os-page-title { align-items: flex-start; }
+  .store-invoice-create .os-page-title h2 { font-size: 20px; }
+  .store-invoice-create .os-linked-badge { max-width: 100%; white-space: normal; }
+  .store-invoice-create .os-card-head { align-items: flex-start; padding: 13px 14px; }
+  .store-invoice-create .os-card-head p { line-height: 1.4; }
+  .store-invoice-create .os-card-body { padding: 14px; }
+  .store-invoice-create .invoice-item-row { padding: 12px !important; }
+  .store-invoice-create .invoice-item-fields { grid-template-columns: minmax(0, 1fr); }
+  .store-invoice-create .invoice-item-fields > .os-field { grid-column: 1 / -1; min-width: 0; }
+  .store-invoice-create .os-field > span { line-height: 1.5; }
+  .store-invoice-create .os-field > span button { margin-top: 4px; }
+  .store-invoice-create .invoice-item-note-row > button { width: 100%; justify-content: center !important; }
+  .store-invoice-create .os-sidebar { min-width: 0; }
+  .invoice-create-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .invoice-create-actions .os-release-btn { grid-column: 1 / -1; }
+  .invoice-create-actions > button { min-width: 0; min-height: 48px; }
+
+  /* Download and Edit are primary mobile tasks, so keep them visible instead
+     of requiring the small overflow menu used for the less common actions. */
+  .mobile-invoice-actions {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid #f3ede5;
+  }
+  .mobile-invoice-actions button {
+    min-width: 0; min-height: 42px; display: flex; align-items: center;
+    justify-content: center; gap: 6px; border: 1px solid #d9cdbd;
+    border-radius: 8px; background: #fff; color: #5a4e42;
+    font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .mobile-invoice-actions button:last-child { border-color: #c97b08; color: #9a5d00; }
+  .mobile-invoice-actions button:only-child { grid-column: 1 / -1; }
+}
+
 .os-checkbox-row { display: flex; align-items: center; gap: 10px; }
 .os-checkbox-row label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #5a4e42; }
 .os-field .os-checkbox-row input[type="checkbox"] {
@@ -10680,6 +10724,46 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 }
 
 .job-comments form button:disabled { background: #ddd5c8; cursor: not-allowed; }
+
+.tailor-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.tailor-detail-table thead th {
+  padding: 8px 12px;
+  background: #faf7f3;
+  color: #8a7a6a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.tailor-detail-table tbody th,
+.tailor-detail-table tbody td {
+  padding: 9px 12px;
+  border-top: 1px solid #f3ede5;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.tailor-detail-table tbody th {
+  width: 42%;
+  color: #5a4e42;
+  font-weight: 600;
+}
+
+.tailor-detail-table tbody td {
+  color: #1a1611;
+  font-weight: 600;
+}
+
+.tailor-detail-table tbody td.empty { color: #b0a090; font-weight: 500; }
 
 /* Recording what a customer actually paid. */
 .record-payment { display: grid; gap: 10px; }

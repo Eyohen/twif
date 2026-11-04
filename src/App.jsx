@@ -46,7 +46,7 @@ import {
   useDepartments,
 } from './utils/oms';
 import { DEPARTMENT_FIELDS, departmentConfig } from './config/departmentFields';
-import { isValidPhone, phoneDigits, PHONE_ERROR } from './utils/phone';
+import { isValidPhone, phoneDigits, PHONE_ERROR, PHONE_MAX_LENGTH, PHONE_PATTERN } from './utils/phone';
 
 const trackingBaseUrl = (
   import.meta.env.VITE_TRACKING_BASE_URL ||
@@ -1652,14 +1652,21 @@ function OrdersView({ sentInvoices }) {
 // of its own items, and refuses to be cut below what has already been paid.
 function EditInvoicePage({ invoice, onClose, onSaved }) {
   const flaggedForClarification = invoiceApprovalStatus(invoice) === 'Flagged';
-  const [items, setItems] = useState(() => (invoice.items?.length ? invoice.items : [{}]).map((item, index) => ({
-    key: `line-${index}`,
-    description: item.description || '',
-    quantity: toNumber(item.quantity) || 1,
-    rate: toNumber(item.rate),
-    discountPercent: toNumber(item.discountPercent),
-    note: item.note || '',
-  })));
+  const [items, setItems] = useState(() => (invoice.items?.length ? invoice.items : [{}]).map((item, index) => {
+    const quantity = toNumber(item.quantity) || 1;
+    const rate = toNumber(item.rate);
+    const discountPercent = toNumber(item.discountPercent);
+    return {
+      key: `line-${index}`,
+      description: item.description || '',
+      quantity,
+      rate,
+      discountMode: 'percent',
+      discountPercent,
+      discountAmount: (rate * quantity * discountPercent) / 100,
+      note: item.note || '',
+    };
+  }));
   const [customerName, setCustomerName] = useState(invoice.customer || '');
   const [customerPhone, setCustomerPhone] = useState(() => phoneDigits(invoice.customerPhone || invoice.phone || ''));
   const [customerEmail, setCustomerEmail] = useState(invoice.customerEmail || invoice.email || '');
@@ -1724,11 +1731,37 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   };
   const removeNewEvidence = (index) => setNewEvidence((current) => current.filter((_, position) => position !== index));
 
-  const updateLine = (index, field, value) => setItems((current) => current.map((item, position) => (
-    position === index ? { ...item, [field]: value } : item
-  )));
+  // The API stores discounts as percentages, but staff may know the agreed
+  // naira figure instead. Keep both representations in sync so switching the
+  // input never changes the discount and the saved payload remains compatible.
+  const updateLine = (index, field, value) => setItems((current) => current.map((item, position) => {
+    if (position !== index) return item;
+    const next = { ...item, [field]: value };
+    const gross = toNumber(next.rate) * toNumber(next.quantity);
+
+    if (field === 'discountAmount') {
+      const amount = Math.min(Math.max(toNumber(value), 0), gross);
+      next.discountAmount = amount;
+      next.discountPercent = gross > 0 ? (amount / gross) * 100 : 0;
+    } else if (field === 'discountPercent') {
+      const percent = Math.min(Math.max(toNumber(value), 0), 100);
+      next.discountPercent = percent;
+      next.discountAmount = (gross * percent) / 100;
+    } else if (field !== 'discountMode') {
+      if (next.discountMode === 'amount') {
+        const amount = Math.min(Math.max(toNumber(next.discountAmount), 0), gross);
+        next.discountAmount = amount;
+        next.discountPercent = gross > 0 ? (amount / gross) * 100 : 0;
+      } else {
+        const percent = Math.min(Math.max(toNumber(next.discountPercent), 0), 100);
+        next.discountPercent = percent;
+        next.discountAmount = (gross * percent) / 100;
+      }
+    }
+    return next;
+  }));
   const addLine = () => setItems((current) => [
-    ...current, { key: `line-${current.length}-${Date.now()}`, description: '', quantity: 1, rate: 0, discountPercent: 0, note: '' },
+    ...current, { key: `line-${current.length}-${Date.now()}`, description: '', quantity: 1, rate: 0, discountMode: 'percent', discountPercent: 0, discountAmount: 0, note: '' },
   ]);
   const removeLine = (index) => setItems((current) => current.filter((_, position) => position !== index));
 
@@ -1858,7 +1891,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
           </label>
           <label className="os-field">
             <span>Phone</span>
-            <input type="tel" inputMode="numeric" pattern="[0-9]{11}" maxLength={11} value={customerPhone} onChange={(event) => setCustomerPhone(phoneDigits(event.target.value))} title={PHONE_ERROR} />
+            <input type="tel" inputMode="tel" pattern={PHONE_PATTERN} maxLength={PHONE_MAX_LENGTH} value={customerPhone} onChange={(event) => setCustomerPhone(phoneDigits(event.target.value))} title={PHONE_ERROR} />
           </label>
           <label className="os-field">
             <span>Email</span>
@@ -1903,8 +1936,26 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
                   <input type="number" min="1" value={item.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} />
                 </label>
                 <label className="os-field">
-                  <span>Discount %</span>
-                  <input type="number" min="0" max="100" value={item.discountPercent} onChange={(event) => updateLine(index, 'discountPercent', event.target.value)} />
+                  <span>
+                    Discount
+                    <button
+                      type="button"
+                      onClick={() => updateLine(index, 'discountMode', item.discountMode === 'amount' ? 'percent' : 'amount')}
+                      style={{ marginLeft: 6, fontSize: 12, fontWeight: 800, letterSpacing: 0, textTransform: 'none', color: '#c97b08', background: 'none', border: '1px solid #e3d9c8', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}
+                    >
+                      {item.discountMode === 'amount' ? 'Use %' : 'Use Figures'}
+                    </button>
+                  </span>
+                  {item.discountMode === 'amount' ? (
+                    <input type="number" min="0" max={toNumber(item.rate) * toNumber(item.quantity)} value={item.discountAmount} onChange={(event) => updateLine(index, 'discountAmount', event.target.value)} />
+                  ) : (
+                    <input type="number" min="0" max="100" value={item.discountPercent} onChange={(event) => updateLine(index, 'discountPercent', event.target.value)} />
+                  )}
+                  <small style={{ fontSize: 11, fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#9a8a7a' }}>
+                    {item.discountMode === 'amount'
+                      ? `≈ ${toNumber(item.discountPercent).toFixed(1)}%`
+                      : `≈ ${money.format(toNumber(item.discountAmount))}`}
+                  </small>
                 </label>
               </div>
               <div className="invoice-item-note-row">
@@ -2138,6 +2189,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   // "Order Sheet" document below — without losing which invoice was open.
   const [showOrderSheet, setShowOrderSheet] = useState(false);
   const [openMenu, setOpenMenu] = useState(null);
+  const [invoiceMenuAnchor, setInvoiceMenuAnchor] = useState(null);
   const [rowNotice, setRowNotice] = useState('');
   const invoiceKpiRef = useRef(null);
 
@@ -2521,7 +2573,22 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                         </button>
                         <button
                           type="button"
-                          onClick={() => setOpenMenu(openMenu === invoice.invoiceNumber ? null : invoice.invoiceNumber)}
+                          aria-label={`Actions for ${invoice.invoiceNumber}`}
+                          aria-expanded={openMenu === invoice.invoiceNumber}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (openMenu === invoice.invoiceNumber) {
+                              setOpenMenu(null);
+                              setInvoiceMenuAnchor(null);
+                              return;
+                            }
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            setInvoiceMenuAnchor({
+                              top: rect.bottom + 6,
+                              left: Math.max(8, Math.min(window.innerWidth - 184, rect.right - 176)),
+                            });
+                            setOpenMenu(invoice.invoiceNumber);
+                          }}
                           style={{
                             border: '1px solid #ddd5c8', borderRadius: 6,
                             padding: '5px 8px', fontSize: 12,
@@ -2532,12 +2599,21 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                           <MoreHorizontal size={14} strokeWidth={2} />
                         </button>
                         {openMenu === invoice.invoiceNumber && (
-                          <div className="customer-action-menu" style={{ right: 0, left: 'auto' }}>
+                          <div
+                            className="customer-action-menu invoice-action-menu"
+                            style={{
+                              position: 'fixed',
+                              top: invoiceMenuAnchor?.top ?? 0,
+                              left: invoiceMenuAnchor?.left ?? 0,
+                              right: 'auto',
+                              zIndex: 3000,
+                            }}
+                          >
                             {invoiceActions(invoice).map(([label, icon, action]) => (
                               <button
                                 key={label}
                                 type="button"
-                                onClick={() => { setOpenMenu(null); action(); }}
+                                onClick={(event) => { event.stopPropagation(); setOpenMenu(null); setInvoiceMenuAnchor(null); action(); }}
                               >
                                 <i style={{ display: 'flex' }}>{icon}</i>
                                 {label}
@@ -2586,7 +2662,8 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                       <button
                         type="button"
                         aria-label={`Actions for ${invoice.invoiceNumber}`}
-                        onClick={() => setOpenMenu(openMenu === `m-${invoice.invoiceNumber}` ? null : `m-${invoice.invoiceNumber}`)}
+                        aria-expanded={openMenu === `m-${invoice.invoiceNumber}`}
+                        onClick={() => { setInvoiceMenuAnchor(null); setOpenMenu(openMenu === `m-${invoice.invoiceNumber}` ? null : `m-${invoice.invoiceNumber}`); }}
                         style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           width: 34, height: 34, border: '1px solid #ddd5c8', borderRadius: 8,
@@ -2626,6 +2703,20 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                       View <ChevronRight size={12} strokeWidth={2.5} />
                     </span>
                   </div>
+                </div>
+                <div className="mobile-invoice-actions" onClick={(event) => event.stopPropagation()}>
+                  <button type="button" onClick={() => downloadInvoicePdf(invoice)}>
+                    <Download size={14} strokeWidth={2} /> Download
+                  </button>
+                  {currentRole?.id === 'store_manager' && invoiceApprovalStatus(invoice) === 'Flagged' ? (
+                    <button type="button" onClick={() => setEditingInvoice(invoice)}>
+                      <AlertCircle size={14} strokeWidth={2} /> Review Flag
+                    </button>
+                  ) : mayEdit(invoice) ? (
+                    <button type="button" onClick={() => setEditingInvoice(invoice)}>
+                      <Edit2 size={14} strokeWidth={2} /> Edit
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -3335,7 +3426,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
               </label>
               <label className="os-field">
                 <span>Customer Phone *</span>
-                <input type="tel" inputMode="numeric" pattern="[0-9]{11}" maxLength={11} value={form.customerPhone} onChange={(event) => updateForm('customerPhone', phoneDigits(event.target.value))} placeholder="e.g. 08012345678" title={PHONE_ERROR} required />
+                <input type="tel" inputMode="tel" pattern={PHONE_PATTERN} maxLength={PHONE_MAX_LENGTH} value={form.customerPhone} onChange={(event) => updateForm('customerPhone', phoneDigits(event.target.value))} placeholder="e.g. 08012345678 or +442071234567" title={PHONE_ERROR} required />
               </label>
               <label className="os-field os-field-full">
                 <span>Customer Email</span>
@@ -3600,7 +3691,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
               when the email isn't known yet, or a receipt is being handed
               over in person instead. Download is a quick look at the
               document without saving or sending anything. */}
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div className="invoice-create-actions">
             <button
               type="button"
               onClick={() => sendInvoice(true)}
@@ -5160,7 +5251,7 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = fals
         })}
       </select>
       {allocated ? <span className="os-fabric-hint">Already allocated — stock has been taken for this item.</span> : null}
-      {!allocated && readOnly ? <span className="os-fabric-hint">Locked because production has started.</span> : null}
+      {!allocated && readOnly ? <span className="os-fabric-hint">Locked because this order is completed.</span> : null}
     </div>
   );
 }
@@ -5370,8 +5461,8 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   // mirrored onto the single whole-job fields the board and tracking page
   // still read).
   const saveItemFabrics = (itemIndex, fabrics) => {
-    if (['In Progress', 'Ready', 'Ready for Collection'].includes(jobModal?.status)) {
-      notify('Fabric selections are locked once production is in progress', 'error');
+    if (['Ready', 'Ready for Collection'].includes(jobModal?.status)) {
+      notify('Fabric selections are locked once the order is completed', 'error');
       return;
     }
     if (itemIndex !== undefined) {
@@ -5567,6 +5658,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
 
   const hasTailor = Boolean(jobModal?.tailor) && jobModal.tailor !== 'Unassigned';
   const startedJob = ['In Progress', 'Ready', 'Ready for Collection'].includes(jobModal?.status);
+  const completedJob = ['Ready', 'Ready for Collection'].includes(jobModal?.status);
 
   return (
     <div className="os-page">
@@ -6041,10 +6133,9 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       itemIndex={itemIndex}
                       tailors={tailors}
                       departments={departments}
-                      // Fabric stays locked once production has started
-                      // (DepartmentFabricPicker's own readOnly below), but a
-                      // tailor can still be reassigned — the work moving to
-                      // someone else doesn't change what's already on order.
+                      // Fabric remains selectable while production is under
+                      // way and locks only after completion. A fabric already
+                      // allocated from stock is independently protected.
                       renderDepartmentDetails={(departmentKey) => {
                         const config = departmentConfig(departments, departmentKey);
                         const values = item.departmentFields?.[departmentKey] || {};
@@ -6083,7 +6174,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                             fabrics={itemFabricsFor(itemIndex, departmentKey)}
                             inventory={inventory}
                             allocated={itemAllocated}
-                            readOnly={startedJob}
+                            readOnly={completedJob}
                             departmentLabel={config?.label || departmentKey}
                             storeKey={String(jobModal.storeKey || jobModal.store || '').trim().toLowerCase().replace(/\s+store$/i, '').replace(/[^a-z0-9]+/g, '-')}
                             onQuantity={(fabricId, quantity) => setItemFabricQuantity(itemIndex, departmentKey, fabricId, quantity)}
@@ -6777,7 +6868,7 @@ function StaffView({ role, currentRole }) {
             </label>
             <label className="os-field">
               <span>Phone Number</span>
-              <input type="tel" inputMode="numeric" pattern="[0-9]{11}" maxLength={11} value={form.phone} onChange={(event) => updateForm('phone', phoneDigits(event.target.value))} placeholder="08012345678" title={PHONE_ERROR} required />
+              <input type="tel" inputMode="tel" pattern={PHONE_PATTERN} maxLength={PHONE_MAX_LENGTH} value={form.phone} onChange={(event) => updateForm('phone', phoneDigits(event.target.value))} placeholder="08012345678 or +12025550123" title={PHONE_ERROR} required />
             </label>
             <label className="os-field">
               <span>{editingId ? 'New PIN (optional)' : 'Login PIN'}</span>
@@ -7811,7 +7902,12 @@ const notificationDestination = (item, role) => {
       // Accounts and the Owner keep the payment screens; a store manager
       // lands on the invoice itself — 'Orders' never reads this param at
       // all, which made this a dead end for them.
-      return { view: ['accounts', 'owner', 'admin'].includes(role) ? 'Payments' : 'Invoices', params: invoiceParams };
+      return {
+        view: ['accounts', 'owner', 'admin'].includes(role) ? 'Payments' : 'Invoices',
+        // Every Payments implementation reads `invoice`; `review` is only
+        // understood by Accounts' invoice-approval screen.
+        params: invoiceNumber ? { invoice: invoiceNumber } : undefined,
+      };
     case 'production_override':
       return { view: ['production_manager', 'owner', 'admin'].includes(role) ? 'Production' : 'Orders', params: invoiceParams };
     // A pending-approval event, not a production one — the order sheet hasn't
@@ -8381,7 +8477,7 @@ function renderView(activeView, role, viewProps = {}) {
     }
     return <OrdersView sentInvoices={viewProps.sentInvoices} />;
   }
-  if (activeView === 'Orders') return ['store_manager', 'owner', 'admin'].includes(role) ? <StoreManagerOrdersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} /> : <OrdersView sentInvoices={viewProps.sentInvoices} />;
+  if (activeView === 'Orders') return ['store_manager', 'owner', 'admin'].includes(role) ? <StoreManagerOrdersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} currentRole={viewProps.currentRole} role={role} /> : <OrdersView sentInvoices={viewProps.sentInvoices} />;
   if (activeView === 'Customers') return role === 'store_manager' || role === 'owner' || role === 'admin' ? <StoreManagerCustomersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} currentRole={viewProps.currentRole} /> : <CustomersView />;
   if (activeView === 'New Invoice') return <NewInvoiceView currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
   if (activeView === 'Order Sheet') {
@@ -8395,18 +8491,18 @@ function renderView(activeView, role, viewProps = {}) {
       />
     );
   }
-  if (activeView === 'Order Sheets') return <StoreManagerOrderSheetsPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} />;
+  if (activeView === 'Order Sheets') return <StoreManagerOrderSheetsPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} currentRole={viewProps.currentRole} role={role} />;
   if (activeView === 'Payments') return ['accounts', 'owner', 'admin'].includes(role)
     ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} onInvoiceUpdated={viewProps.onInvoiceUpdated} />
     : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} releasePercent={viewProps.releasePercent} />;
   if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} blockedJobs={viewProps.blockedProductionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} onOverrideHold={viewProps.onOverrideHold} onApproveInvoice={viewProps.onApproveInvoice} />;
-  // Adding stock is limited to Inventory, Owner and Admin — Production Manager
-  // can see levels for planning but not create or edit records, and an Owner
+  // Adding stock is limited to Inventory, Owner and Admin — Production and
+  // Store Managers can see levels for planning/sales but cannot change them, and an Owner
   // both adds directly and reviews the edit requests other roles submit.
   if (activeView === 'Inventory') return role === 'accounts' ? <AccountsInventoryReconciliationPage />
     : role === 'inventory_manager' ? <InventoryListPage currentRole={viewProps.currentRole} />
-    : role === 'owner' || role === 'admin' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode />
-    : role === 'production_manager' ? <InventoryListPage currentRole={viewProps.currentRole} readOnly />
+    : role === 'owner' || role === 'admin' ? <InventoryListPage currentRole={viewProps.currentRole} ownerMode canArchive={role === 'owner'} />
+    : role === 'production_manager' || role === 'store_manager' ? <InventoryListPage currentRole={viewProps.currentRole} readOnly />
     : <InventoryView />;
   if (activeView === 'Reconciliations') return <InventoryView />;
   if (activeView === 'Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
