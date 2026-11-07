@@ -54,14 +54,18 @@ const formatDue = (value) => new Date(`${value}T00:00:00`).toLocaleDateString('e
 export default function MyTasksPage({ compact = false, currentRole, productionJobs = [], onUpdateJob }) {
   const departmentDirectory = useDepartments();
   const tailorName = currentRole?.name?.split(' (')[0] || '';
-  const tailorDepartment = currentRole?.tailorDepartment;
+  const tailorDepartments = [...new Set([
+    ...(Array.isArray(currentRole?.tailorDepartments) ? currentRole.tailorDepartments : []),
+    currentRole?.tailorDepartment,
+  ].filter(Boolean))];
+  const tailorDepartment = tailorDepartments[0];
   const itemBelongsToTailor = (item) => {
     const departments = Array.isArray(item?.departments) ? item.departments : [];
     // A real multi-item sheet carries an array even when nobody is assigned;
     // an absent array is the legacy, single-item shape whose top-level tailor
     // was already checked by worksOnJob above.
     const assigned = Array.isArray(item?.tailors) ? item.tailors.includes(tailorName) : true;
-    return assigned && (!departments.length || departments.includes(tailorDepartment));
+    return assigned && (!departments.length || departments.some((department) => tailorDepartments.includes(department)));
   };
   const allAssigned = productionJobs.filter((order) => (
     worksOnJob(order, tailorName)
@@ -91,7 +95,10 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
   // they've already finished just because someone else's hasn't.
   const myDepartmentReady = (order) => {
     const items = order.items?.length ? order.items.filter(itemBelongsToTailor) : (itemBelongsToTailor(order) ? [order] : []);
-    return items.length > 0 && items.every((item) => item.departmentReady?.[tailorDepartment]);
+    return items.length > 0 && items.every((item) => {
+      const owned = (item.departments || []).filter((department) => tailorDepartments.includes(department));
+      return owned.length ? owned.every((department) => item.departmentReady?.[department]) : true;
+    });
   };
 
   const getStatus = (order) => {
@@ -196,7 +203,9 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
           const scopedItems = order.items?.length ? order.items.filter(itemBelongsToTailor) : [];
           const itemsLabel = scopedItems.length ? itemsLabelFor({ ...order, items: scopedItems }) : itemsLabelFor(order);
           const scopedDueDate = scopedItems.map((item) => item.tailorDueDate).filter(Boolean).sort()[0] || order.tailorDueDate;
-          const fabricLabelFor = (item) => itemFabricLabelFor(item, order, tailorDepartment);
+          const fabricLabelFor = (item) => [...new Set(tailorDepartments
+            .map((department) => itemFabricLabelFor(item, order, department))
+            .filter(Boolean))].join(', ') || itemFabricLabelFor(item, order, tailorDepartment);
           const orderFabricLabel = [...new Set((scopedItems.length ? scopedItems : [order])
             .map(fabricLabelFor).filter(Boolean))].join(', ');
 
@@ -438,9 +447,9 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                             item doesn't carry their department at all. */}
                         {(() => {
                           const allDepartments = Array.isArray(item.departments) ? item.departments : [];
-                          const myDepartment = currentRole?.tailorDepartment;
-                          const visibleDepartments = myDepartment && allDepartments.includes(myDepartment)
-                            ? [myDepartment]
+                          const myDepartments = [...new Set([...(currentRole?.tailorDepartments || []), currentRole?.tailorDepartment].filter(Boolean))];
+                          const visibleDepartments = myDepartments.length
+                            ? allDepartments.filter((department) => myDepartments.includes(department))
                             : allDepartments;
                           if (!visibleDepartments.length) return null;
                           return (

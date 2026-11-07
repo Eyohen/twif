@@ -13,6 +13,13 @@ import { downloadCsv, csvStamp } from '../../utils/csv';
 
 const READY = ['Ready', 'Ready for Collection'];
 
+const departmentsOf = (person = {}) => [...new Set([
+  ...(Array.isArray(person.tailorDepartments) ? person.tailorDepartments : []),
+  person.tailorDepartment,
+].filter(Boolean))];
+
+const departmentLabel = (person) => departmentsOf(person).join(', ') || 'No department';
+
 // How a tailor did over one window: what they finished, how it was marked, and
 // whether it landed by the date Production gave them.
 const measure = (jobs, tailorName) => {
@@ -70,8 +77,10 @@ export default function TailorReportsPage({ mode = 'list', productionJobs = [] }
   })).sort((a, b) => b.now.finished - a.now.finished);
 
   const byDepartment = rows.reduce((groups, row) => {
-    const department = row.person.tailorDepartment || 'No department';
-    groups[department] = [...(groups[department] || []), row];
+    const departments = departmentsOf(row.person);
+    (departments.length ? departments : ['No department']).forEach((department) => {
+      groups[department] = [...(groups[department] || []), row];
+    });
     return groups;
   }, {});
 
@@ -81,7 +90,7 @@ export default function TailorReportsPage({ mode = 'list', productionJobs = [] }
     `twif-tailor-${mode}-${csvStamp()}.csv`,
     ['Tailor', 'Department', 'Grade', 'Finished', 'Still in hand', 'Average score', 'Pieces scored', 'On time %'],
     rows.map(({ person, now }) => [
-      person.displayName, person.tailorDepartment || '', person.tailorGrade || '',
+      person.displayName, departmentLabel(person), person.tailorGrade || '',
       now.finished, now.inHand,
       now.average === null ? 'Not scored' : now.average.toFixed(1),
       now.scored,
@@ -112,7 +121,7 @@ export default function TailorReportsPage({ mode = 'list', productionJobs = [] }
             <Scissors size={22} strokeWidth={1.6} style={{ color: '#c97b08' }} />
             <div>
               <h2>{openTailor.displayName}</h2>
-              <p>{openTailor.tailorDepartment || 'No department'} · Grade {openTailor.tailorGrade || '—'}</p>
+              <p>{departmentLabel(openTailor)} · Grade {openTailor.tailorGrade || '—'}</p>
             </div>
           </div>
         </div>
@@ -286,7 +295,7 @@ function TailorTable({ rows, onOpen }) {
             return (
               <tr key={person.id}>
                 <td><strong>{person.displayName}</strong></td>
-                <td>{person.tailorDepartment || '—'}</td>
+                <td>{departmentLabel(person)}</td>
                 <td>{person.tailorGrade || '—'}</td>
                 <td>
                   {now.finished}

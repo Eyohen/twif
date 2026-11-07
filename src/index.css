@@ -2096,6 +2096,7 @@ dd {
 .customer-action-menu button { min-height: 36px; display: flex; align-items: center; gap: 11px; border: 0; border-radius: 4px; background: #fff; color: #181818; padding: 0 10px; font-size: 9px; text-align: left; }
 .customer-action-menu button:hover { background: #faf6ef; }
 .invoice-action-menu { max-height: min(420px, calc(100dvh - 24px)); overflow-y: auto; }
+.invoice-menu-backdrop { position: fixed; inset: 0; z-index: 2999; border: 0; background: transparent; cursor: default; }
 .customer-action-menu button i { width: 16px; color: #242424; font-size: 13px; font-style: normal; text-align: center; }
 .customer-action-menu button.danger { margin-top: 4px; border-top: 1px solid #eee7de; border-radius: 0 0 4px 4px; color: #d83228; }
 .customer-action-menu button.danger i { color: #d83228; }
@@ -7432,6 +7433,7 @@ dd {
   input, select, textarea { font-size: 16px !important; }
   button, .primary-action { min-height: 44px; }
   .customer-action-menu, .order-action-dropdown { position: fixed; z-index: 80; right: 12px; bottom: calc(82px + env(safe-area-inset-bottom)); top: auto; width: min(86vw, 330px); max-height: 58dvh; overflow-y: auto; border-radius: 16px; box-shadow: 0 24px 70px rgba(0,0,0,.42); }
+  .invoice-menu-backdrop { z-index: 79; }
   .customer-action-menu::before { display: none; }
   .receive-stock-backdrop { align-items: flex-end; padding: 0; }
   .receive-stock-backdrop > form { width: 100%; max-height: 90dvh; overflow-y: auto; border-radius: 22px 22px 0 0; padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
@@ -10764,6 +10766,19 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 }
 
 .tailor-detail-table tbody td.empty { color: #b0a090; font-weight: 500; }
+
+@keyframes invoice-download-spin { to { transform: rotate(360deg); } }
+
+.invoice-download-spinner {
+  animation: invoice-download-spin 0.8s linear infinite;
+  flex: 0 0 auto;
+}
+
+.mobile-invoice-actions button:disabled,
+.store-detail-toolbar button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
 
 /* Recording what a customer actually paid. */
 .record-payment { display: grid; gap: 10px; }

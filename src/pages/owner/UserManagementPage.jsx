@@ -32,7 +32,7 @@ const roleStyle = {
 
 const blankForm = {
   displayName: '', fullName: '', phone: '', email: '', dateOfBirth: '',
-  role: 'tailor', store: 'all', tailorDepartment: 'native',
+  role: 'tailor', store: 'all', tailorDepartment: 'native', tailorDepartments: ['native'],
   tailorGrade: '1', pin: '', confirmPin: '',
 };
 
@@ -145,7 +145,8 @@ export default function UserManagementPage({ currentRole }) {
     }
     setMessage('');
     setMessageTone('error');
-    setForm({ ...blankForm, ...selected, fullName: selected.fullName || selected.displayName || '' });
+    const departments = selected.tailorDepartments?.length ? selected.tailorDepartments : [selected.tailorDepartment].filter(Boolean);
+    setForm({ ...blankForm, ...selected, tailorDepartments: departments, tailorDepartment: departments[0] || '', fullName: selected.fullName || selected.displayName || '' });
     setScreen('edit');
   };
 
@@ -177,6 +178,7 @@ export default function UserManagementPage({ currentRole }) {
       delete payload.store;
       delete payload.status;
       delete payload.tailorDepartment;
+      delete payload.tailorDepartments;
       delete payload.tailorGrade;
     }
     setSaving(true);
@@ -542,9 +544,28 @@ export default function UserManagementPage({ currentRole }) {
 function StaffForm({ mode, form, update, canAssignOwner, onCancel, onSubmit, message, messageTone, confirmEdit, saving, onConfirmEdit, onCancelEdit }) {
   const assignableStores = useStores();
   const departments = useDepartments();
+  const selectedDepartments = form.tailorDepartments?.length ? form.tailorDepartments : [form.tailorDepartment].filter(Boolean);
   const activeDepartments = departments.filter((department) => (
-    department.status === 'active' || department.key === form.tailorDepartment
+    department.status === 'active' || selectedDepartments.includes(department.key)
   ));
+  const updateDepartment = (index, value) => {
+    const next = selectedDepartments.map((department, position) => (position === index ? value : department));
+    update('tailorDepartments', next);
+    update('tailorDepartment', next[0] || '');
+  };
+  const addDepartment = () => {
+    const available = activeDepartments.find((department) => !selectedDepartments.includes(department.key));
+    if (!available) return;
+    const next = [...selectedDepartments, available.key];
+    update('tailorDepartments', next);
+    update('tailorDepartment', next[0]);
+  };
+  const removeDepartment = (index) => {
+    if (selectedDepartments.length === 1) return;
+    const next = selectedDepartments.filter((_, position) => position !== index);
+    update('tailorDepartments', next);
+    update('tailorDepartment', next[0]);
+  };
   return (
     <div className="os-page">
       {/* Breadcrumb */}
@@ -645,14 +666,22 @@ function StaffForm({ mode, form, update, canAssignOwner, onCancel, onSubmit, mes
                 </label>
                 {form.role === 'tailor' && (
                   <>
-                    <label className="os-field">
-                      <span>Department <span style={{ color: '#e05252' }}>*</span></span>
-                      <select value={form.tailorDepartment} onChange={(e) => update('tailorDepartment', e.target.value)}>
-                        {activeDepartments.map((department) => (
-                          <option key={department.id || department.key} value={department.key}>{department.name}</option>
+                    <div className="os-field">
+                      <span>Departments <span style={{ color: '#e05252' }}>*</span></span>
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {selectedDepartments.map((selectedDepartment, index) => (
+                          <div key={`${selectedDepartment}-${index}`} style={{ display: 'flex', gap: 8 }}>
+                            <select value={selectedDepartment} onChange={(event) => updateDepartment(index, event.target.value)} aria-label={`Tailor department ${index + 1}`}>
+                              {activeDepartments.filter((department) => department.key === selectedDepartment || !selectedDepartments.includes(department.key)).map((department) => (
+                                <option key={department.id || department.key} value={department.key}>{department.name}</option>
+                              ))}
+                            </select>
+                            {selectedDepartments.length > 1 ? <button type="button" onClick={() => removeDepartment(index)} aria-label={`Remove department ${index + 1}`} style={{ border: '1px solid #e2d8ca', borderRadius: 8, background: '#fff', color: '#8a3520', padding: '0 12px', cursor: 'pointer' }}>×</button> : null}
+                          </div>
                         ))}
-                      </select>
-                    </label>
+                        <button type="button" onClick={addDepartment} disabled={!activeDepartments.some((department) => !selectedDepartments.includes(department.key))} style={{ justifySelf: 'start', border: '1px dashed #c9b99f', borderRadius: 8, background: '#fffbf0', color: '#8a5a00', padding: '7px 11px', fontWeight: 600, cursor: 'pointer' }}><Plus size={13} /> Add Department</button>
+                      </div>
+                    </div>
                     <label className="os-field">
                       <span>Tailor Grade <span style={{ color: '#e05252' }}>*</span></span>
                       <select value={form.tailorGrade} onChange={(e) => update('tailorGrade', e.target.value)}>
@@ -923,7 +952,7 @@ function StaffProfile({ person, isOwner, onBack, onEdit, onHistory, onModal, mod
               {[
                 ['Role', roleLabel(person.role)],
                 ['Store', storeLabel(person.store)],
-                ...(person.role === 'tailor' ? [['Department', person.tailorDepartment || 'Native'], ['Tailor Grade', `Grade ${person.tailorGrade || 1}`]] : []),
+                ...(person.role === 'tailor' ? [['Departments', (person.tailorDepartments?.length ? person.tailorDepartments : [person.tailorDepartment]).filter(Boolean).join(', ') || 'Not assigned'], ['Tailor Grade', `Grade ${person.tailorGrade || 1}`]] : []),
                 ['Account Status', person.status],
                 ...(person.role === 'admin' ? [['Two-factor sign-in', person.twoFactorRequired ? (person.twoFactorEnabledAt ? 'On' : 'Required at next sign-in') : 'Optional / off']] : []),
                 // Was fixed at "22 May 2024" for every member of staff.

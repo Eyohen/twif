@@ -1,5 +1,5 @@
-import { When, Then } from '@cucumber/cucumber';
-import { expect } from '@playwright/test';
+import { Given, When, Then } from '@cucumber/cucumber';
+import { expect, request } from '@playwright/test';
 import { API_URL } from '../support/world.js';
 
 When('I start creating a customer', async function () {
@@ -72,6 +72,155 @@ Then('no measurement should be filled in', async function () {
   // The invented defaults that used to arrive with every new customer.
   for (const invented of ['16"', '42"', '34"', '16 in', '42 in']) {
     expect(text, `a measurement of ${invented} appears without anyone taking it`).not.toContain(invented);
+  }
+});
+
+When('the Store Manager creates a customer from the Customers tab', async function () {
+  const owner = await this.api('Owner');
+  // A previously interrupted local run must not leave its disposable record
+  // in later reports or make the phone uniqueness check fail.
+  const existingResponse = await owner.get(`${API_URL}/oms/customers`);
+  const existingCustomers = (await existingResponse.json())?.data?.customers || [];
+  for (const customer of existingCustomers.filter((entry) => entry.fullName?.startsWith('Store Assignment Customer '))) {
+    if (!String(customer.id).startsWith('sent-')) await owner.delete(`${API_URL}/oms/customers/${customer.id}`);
+  }
+  const storesResponse = await owner.get(`${API_URL}/oms/stores`);
+  const stores = (await storesResponse.json())?.data?.stores || [];
+  const store = stores.find((entry) => entry.status === 'active');
+  expect(store, 'there is no active store for the temporary Store Manager').toBeTruthy();
+  this.expectedCustomerStore = String(store.name).replace(/\s+Store$/i, '');
+
+  const tag = Date.now().toString().slice(-7);
+  this.storeManagerPhone = `0841${tag}`;
+  const staffResponse = await owner.post(`${API_URL}/oms/staff`, {
+    data: {
+      fullName: `Store Assignment Manager ${tag}`,
+      displayName: `Store Assignment Manager ${tag}`,
+      phone: this.storeManagerPhone,
+      pin: 'probe26',
+      role: 'store_manager',
+      store: store.key,
+    },
+  });
+  const staffBody = await staffResponse.json();
+  expect(staffResponse.status(), staffBody?.message).toBe(201);
+  this.storeManagerId = staffBody?.data?.staffUser?.id;
+
+  const anonymous = await request.newContext();
+  const login = await anonymous.post(`${API_URL}/oms/auth/login`, {
+    data: { phone: this.storeManagerPhone, pin: 'probe26' },
+  });
+  const token = (await login.json())?.data?.token;
+  await anonymous.dispose();
+  expect(token, 'the temporary Store Manager could not sign in').toBeTruthy();
+  const manager = await request.newContext({ extraHTTPHeaders: { Authorization: `Bearer ${token}` } });
+  const response = await manager.post(`${API_URL}/oms/customers`, {
+    data: {
+      fullName: `Store Assignment Customer ${tag}`,
+      phone: `0831${tag}`,
+      category: 'New',
+    },
+  });
+  const body = await response.json();
+  await manager.dispose();
+  await owner.dispose();
+  expect(response.status(), body?.message).toBe(201);
+  this.storeCustomerId = body?.data?.customer?.id;
+  expect(body?.data?.customer?.stores).toContain(this.expectedCustomerStore);
+});
+
+Then("the new customer should show the Store Manager's assigned store", async function () {
+  const owner = await this.api('Owner');
+  try {
+    const response = await owner.get(`${API_URL}/oms/customers?refreshedAt=${Date.now()}`);
+    const body = await response.json();
+    const customer = body?.data?.customers?.find((entry) => entry.id === this.storeCustomerId);
+    expect(customer?.stores).toContain(this.expectedCustomerStore);
+  } finally {
+    if (this.storeCustomerId) await owner.delete(`${API_URL}/oms/customers/${this.storeCustomerId}`);
+    if (this.storeManagerId) await owner.delete(`${API_URL}/oms/staff/${this.storeManagerId}`);
+    await owner.dispose();
+  }
+});
+
+Given('an invoice-only customer with no email address', async function () {
+  // Keep interrupted local runs from leaving disposable invoices or active
+  // customer profiles in later reports.
+  const owner = await this.api('Owner');
+  const [oldInvoicesResponse, oldCustomersResponse] = await Promise.all([
+    owner.get(`${API_URL}/oms/invoices/sent`),
+    owner.get(`${API_URL}/oms/customers`),
+  ]);
+  const oldInvoices = (await oldInvoicesResponse.json())?.data?.invoices || [];
+  const oldCustomers = (await oldCustomersResponse.json())?.data?.customers || [];
+  for (const invoice of oldInvoices.filter((entry) => entry.customer?.startsWith('Invoice Measurement Customer '))) {
+    await owner.delete(`${API_URL}/oms/invoices/${invoice.invoiceNumber}`);
+  }
+  for (const customer of oldCustomers.filter((entry) => entry.fullName?.startsWith('Invoice Measurement Customer ') && !String(entry.id).startsWith('sent-'))) {
+    await owner.delete(`${API_URL}/oms/customers/${customer.id}`);
+  }
+  await owner.dispose();
+
+  const tag = Date.now().toString().slice(-7);
+  this.invoiceOnlyCustomerName = `Invoice Measurement Customer ${tag}`;
+  this.invoiceOnlyCustomerPhone = `0851${tag}`;
+  this.invoiceOnlyNumber = `INVMEASURE${tag}`;
+  const manager = await this.api('Store Manager');
+  const response = await manager.post(`${API_URL}/oms/invoices/send-email`, {
+    data: {
+      skipEmail: true,
+      store: 'lekki',
+      invoiceNumber: this.invoiceOnlyNumber,
+      paymentStatus: 'unpaid',
+      customer: { name: this.invoiceOnlyCustomerName, phone: this.invoiceOnlyCustomerPhone },
+      items: [{ description: 'Measurement test garment', quantity: 1, rate: 10000, amount: 10000 }],
+      subtotal: 10000,
+      balanceDue: 10000,
+    },
+  });
+  const body = await response.json();
+  expect(response.status(), body?.message).toBe(201);
+
+  const listResponse = await manager.get(`${API_URL}/oms/customers?refreshedAt=${Date.now()}`);
+  const listBody = await listResponse.json();
+  await manager.dispose();
+  const generated = listBody?.data?.customers?.find((customer) => customer.fullName === this.invoiceOnlyCustomerName);
+  expect(generated, 'the saved invoice did not generate a customer-list entry').toBeTruthy();
+  expect(String(generated.id)).toMatch(/^sent-/);
+  await this.page.goto(this.rolePath('Customers'));
+  const search = this.page.getByPlaceholder(/search customers/i);
+  await expect(search).toBeVisible({ timeout: 20000 });
+  await search.fill(this.invoiceOnlyCustomerName);
+  const row = this.page.locator('tbody tr').filter({ hasText: this.invoiceOnlyCustomerName }).first();
+  await expect(row, 'the invoice-only customer did not appear in Customers').toBeVisible({ timeout: 20000 });
+  await row.getByRole('button', { name: /view profile/i }).click();
+});
+
+When('I add measurements to that generated customer profile', async function () {
+  await this.page.getByRole('button', { name: /^edit$/i }).first().click();
+  await this.page.getByRole('button', { name: /add measurements/i }).click();
+  await this.page.getByRole('button', { name: /add measurements/i }).click();
+  await this.page.getByLabel('Chest').fill('42');
+  await this.page.getByLabel('Waist').fill('36');
+  await this.page.getByRole('button', { name: /save measurements/i }).click();
+  await expect(this.page.getByRole('button', { name: /edit measurements/i })).toBeVisible({ timeout: 15000 });
+});
+
+Then("the generated customer's measurements should remain saved", async function () {
+  const owner = await this.api('Owner');
+  try {
+    const response = await owner.get(`${API_URL}/oms/customers?refreshedAt=${Date.now()}`);
+    const body = await response.json();
+    const customer = body?.data?.customers?.find((entry) => entry.fullName === this.invoiceOnlyCustomerName);
+    expect(customer, 'the generated customer was not converted to a real profile').toBeTruthy();
+    expect(String(customer.id)).not.toMatch(/^sent-/);
+    expect(customer.measurements?.top_chest).toBe('42');
+    expect(customer.measurements?.bottom_waist).toBe('36');
+    this.invoiceMeasurementCustomerId = customer.id;
+  } finally {
+    if (this.invoiceMeasurementCustomerId) await owner.delete(`${API_URL}/oms/customers/${this.invoiceMeasurementCustomerId}`);
+    if (this.invoiceOnlyNumber) await owner.delete(`${API_URL}/oms/invoices/${this.invoiceOnlyNumber}`);
+    await owner.dispose();
   }
 });
 

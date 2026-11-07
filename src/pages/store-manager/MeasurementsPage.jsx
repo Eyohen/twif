@@ -84,39 +84,37 @@ export default function MeasurementsPage({ customer, currentRole, onBack, onSave
     setSaving(true);
     setMessage('');
     try {
+      const attributedAt = new Date().toISOString();
+      const attributedBy = currentRole?.name || 'Store Manager';
+      const nextMeasurements = { ...draft, measuredBy: attributedBy, measuredAt: attributedAt };
+
       // Most people in the customer list exist only because an invoice was
       // raised for them — they have no profile, and measurements have nowhere
-      // to be stored. Rather than refusing, the profile is created from what
-      // the invoice already knows and the measurements saved against it.
+      // to be stored. Create the real profile with its measurements in one
+      // request: a former create-then-patch sequence could create the profile,
+      // fail before storing the figures, then reject every retry as a duplicate.
       let customerId = customer.id;
       if (String(customerId || '').startsWith('sent-')) {
-        if (!String(customer.email || '').trim()) {
-          setMessage('This customer has no email address. Add one with Edit Customer, then save their measurements.');
-          setSaving(false);
-          return;
-        }
         const created = await api.post('/oms/customers', {
           fullName: customer.fullName,
           phone: customer.phone || '',
           email: customer.email,
           category: 'Active',
+          measurements: nextMeasurements,
         });
         customerId = created.data?.data?.customer?.id;
         if (!customerId) throw new Error('The customer profile could not be created.');
+      } else {
+        // Only the profile block is carried over; the rest of `measurements`
+        // holds unrelated profile fields that must not be flattened away.
+        await api.patch(`/oms/customers/${customerId}`, {
+          fullName: customer.fullName,
+          phone: customer.phone,
+          email: customer.email,
+          ...(stored.profile || {}),
+          measurements: nextMeasurements,
+        });
       }
-
-      // Only the profile block is carried over; the rest of `measurements`
-      // holds unrelated profile fields that must not be flattened away.
-      const attributedAt = new Date().toISOString();
-      const attributedBy = currentRole?.name || 'Store Manager';
-      const nextMeasurements = { ...draft, measuredBy: attributedBy, measuredAt: attributedAt };
-      await api.patch(`/oms/customers/${customerId}`, {
-        fullName: customer.fullName,
-        phone: customer.phone,
-        email: customer.email,
-        ...(stored.profile || {}),
-        measurements: nextMeasurements,
-      });
       setValues(draft);
       setMeasuredBy(attributedBy);
       setMeasuredAt(attributedAt);

@@ -23,6 +23,15 @@ Feature: Customer records
     When I open the first customer's measurements
     Then no measurement should be filled in
 
+  Scenario: A customer created by a Store Manager inherits that manager's store
+    When the Store Manager creates a customer from the Customers tab
+    Then the new customer should show the Store Manager's assigned store
+
+  Scenario: Measurements save for a customer generated from an invoice
+    Given an invoice-only customer with no email address
+    When I add measurements to that generated customer profile
+    Then the generated customer's measurements should remain saved
+
   # An elite member gets a discount on every invoice they are sent. The tag was
   # saving and then showing nowhere — the list and the profile both worked the
   # label out from the order count and ignored the tier — which is

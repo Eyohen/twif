@@ -91,6 +91,64 @@ Then('the Owner should be able to remove it again', async function () {
   expect(response.status()).toBe(200);
 });
 
+When('the Owner creates a tailor in two departments', async function () {
+  const owner = await this.api('Owner');
+  const departmentsResponse = await owner.get(`${API_URL}/oms/departments`);
+  const departmentsBody = await departmentsResponse.json();
+  const active = (departmentsBody?.data?.departments || [])
+    .filter((department) => department.status === 'active')
+    .map((department) => department.key);
+  expect(active.length, 'at least two active departments are needed for this check').toBeGreaterThanOrEqual(2);
+  const tag = Date.now().toString().slice(-7);
+  this.tailorDepartments = active.slice(0, 2);
+  const response = await owner.post(`${API_URL}/oms/staff`, {
+    data: {
+      displayName: `Multi Department Tailor ${tag}`,
+      fullName: `Multi Department Tailor ${tag}`,
+      phone: `0821${tag}`,
+      pin: 'probe26',
+      role: 'tailor',
+      store: 'production',
+      tailorDepartments: this.tailorDepartments,
+      tailorGrade: '2',
+    },
+  });
+  const body = await response.json();
+  await owner.dispose();
+  expect(response.status(), body?.message).toBe(201);
+  this.multiTailorId = body?.data?.staffUser?.id;
+  expect(body?.data?.staffUser?.tailorDepartments).toEqual(this.tailorDepartments);
+});
+
+When("the Admin changes that tailor's departments", async function () {
+  const admin = await this.api('Administrator');
+  this.updatedTailorDepartments = [...this.tailorDepartments].reverse();
+  const response = await admin.patch(`${API_URL}/oms/staff/${this.multiTailorId}`, {
+    data: {
+      tailorDepartments: this.updatedTailorDepartments,
+      tailorDepartment: this.updatedTailorDepartments[0],
+    },
+  });
+  const body = await response.json();
+  await admin.dispose();
+  expect(response.status(), body?.message).toBe(200);
+  expect(body?.data?.staffUser?.tailorDepartments).toEqual(this.updatedTailorDepartments);
+});
+
+Then('both updated tailor departments should remain saved', async function () {
+  const owner = await this.api('Owner');
+  try {
+    const response = await owner.get(`${API_URL}/oms/staff?refreshedAt=${Date.now()}`);
+    const body = await response.json();
+    const saved = body?.data?.staffUsers?.find((person) => person.id === this.multiTailorId);
+    expect(saved?.tailorDepartments).toEqual(this.updatedTailorDepartments);
+    expect(saved?.tailorDepartment).toBe(this.updatedTailorDepartments[0]);
+  } finally {
+    if (this.multiTailorId) await owner.delete(`${API_URL}/oms/staff/${this.multiTailorId}`);
+    await owner.dispose();
+  }
+});
+
 When('the Owner opens the actions for a non-owner staff account', async function () {
   const row = this.page.locator('tbody tr').filter({ hasText: 'Accountant' }).first();
   await expect(row, 'no non-owner staff row was available').toBeVisible();

@@ -79,7 +79,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
     try {
       const response = await api.post('/oms/customers', createForm);
       const saved = response.data?.data?.customer;
-      setCustomers((current) => [{ ...saved, totalOrders: 0, measurementsAdded: false, stores: [] }, ...current]);
+      setCustomers((current) => [{ ...saved, totalOrders: 0, measurementsAdded: false, stores: saved?.stores || [] }, ...current]);
       setCreateForm({ fullName: '', phone: '', email: '', category: 'New' });
       setCreating(false);
       showSuccess(`${saved?.fullName || 'Customer'} was created.`);

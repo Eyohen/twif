@@ -36,6 +36,11 @@ Feature: Who may reach the shop's records
       Then the account should be created
       And the Owner should be able to remove it again
 
+    Scenario: A tailor keeps multiple departments when Owner and Admin edit the account
+      When the Owner creates a tailor in two departments
+      And the Admin changes that tailor's departments
+      Then both updated tailor departments should remain saved
+
     Scenario: The Owner can find the permanent delete action
       Given I am signed in as the Owner
       And I open the User Management page

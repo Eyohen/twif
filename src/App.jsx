@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors, Ruler, Award, Camera, Image, Layers, ListChecks, Save } from 'lucide-react';
+import { LayoutDashboard, Package, Users, FileText, CreditCard, Factory, Boxes, Bell, BarChart2, Settings as Settings2, ClipboardList, CheckSquare, Calendar, Users2, UserCog, Building2, Star, Download, LoaderCircle, TrendingUp, TrendingDown, ArrowRight, PieChart, AlertTriangle, AlertCircle, CheckCircle, Clock, DollarSign, BarChart, Activity, Filter, RefreshCw, MessageCircle, MapPin, Phone, Edit2, Trash2, Plus, Store, ShoppingCart, MoreHorizontal, Search, Eye, ArrowLeft, ChevronRight, Tag, Scissors, Ruler, Award, Camera, Image, Layers, ListChecks, Save } from 'lucide-react';
 import { api, getStoredAccessToken, setStoredAccessToken } from './lib/api';
 import LoginPage from './pages/auth/LoginPage';
 import MyTasksPage from './pages/tailor/MyTasksPage';
@@ -63,6 +63,10 @@ const OMS_SESSION_KEY = 'twif_oms_session';
 const canApproveInvoice = (invoice, releasePercent = DEFAULT_RELEASE_PERCENT) => (
   isFullyPaid(invoice) || paidPercent(invoice) >= releasePercent
 );
+const tailorDepartmentsOf = (person = {}) => [...new Set([
+  ...(Array.isArray(person.tailorDepartments) ? person.tailorDepartments : []),
+  person.tailorDepartment,
+].filter(Boolean))];
 
 const roleSlug = (value = '') => String(value || '').replaceAll('_', '-');
 const viewSlug = (value = '') => String(value || '').toLowerCase().replaceAll('&', 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -2115,7 +2119,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   // download an invoice, resend it, edit it or delete it.
   const invoiceActions = (invoice) => [
     ['View Invoice', <Eye size={12} strokeWidth={2} />, () => { window.scrollTo(0, 0); setSelectedInvoice(invoice); }],
-    ['Download PDF', <Download size={12} strokeWidth={2} />, () => downloadInvoicePdf(invoice)],
+    [downloadingInvoiceNumber === invoice.invoiceNumber ? 'Preparing PDF…' : 'Download PDF', downloadingInvoiceNumber === invoice.invoiceNumber ? <LoaderCircle className="invoice-download-spinner" size={12} strokeWidth={2} /> : <Download size={12} strokeWidth={2} />, () => downloadInvoicePdf(invoice)],
     ['Resend Email', <RefreshCw size={12} strokeWidth={2} />, () => resendInvoiceEmail(invoice)],
     ...(currentRole?.id === 'store_manager' && invoiceApprovalStatus(invoice) === 'Flagged'
       ? [['Review Flag', <AlertCircle size={12} strokeWidth={2} />, () => setEditingInvoice(invoice)]]
@@ -2191,7 +2195,45 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   const [openMenu, setOpenMenu] = useState(null);
   const [invoiceMenuAnchor, setInvoiceMenuAnchor] = useState(null);
   const [rowNotice, setRowNotice] = useState('');
+  const [downloadingInvoiceNumber, setDownloadingInvoiceNumber] = useState(null);
   const invoiceKpiRef = useRef(null);
+  const invoiceMenuHistoryActive = useRef(false);
+
+  const openInvoiceMenu = (menuId, anchor = null) => {
+    if (!invoiceMenuHistoryActive.current) {
+      window.history.pushState({ ...window.history.state, invoiceMenuOpen: true }, '', window.location.href);
+      invoiceMenuHistoryActive.current = true;
+    }
+    setInvoiceMenuAnchor(anchor);
+    setOpenMenu(menuId);
+  };
+
+  const closeInvoiceMenu = ({ consumeHistory = true } = {}) => {
+    setOpenMenu(null);
+    setInvoiceMenuAnchor(null);
+    if (consumeHistory && invoiceMenuHistoryActive.current) {
+      invoiceMenuHistoryActive.current = false;
+      window.history.back();
+    }
+  };
+
+  useEffect(() => {
+    const dismissOnBack = () => {
+      if (!invoiceMenuHistoryActive.current) return;
+      invoiceMenuHistoryActive.current = false;
+      setOpenMenu(null);
+      setInvoiceMenuAnchor(null);
+    };
+    const dismissOnEscape = (event) => {
+      if (event.key === 'Escape' && invoiceMenuHistoryActive.current) closeInvoiceMenu();
+    };
+    window.addEventListener('popstate', dismissOnBack);
+    window.addEventListener('keydown', dismissOnEscape);
+    return () => {
+      window.removeEventListener('popstate', dismissOnBack);
+      window.removeEventListener('keydown', dismissOnEscape);
+    };
+  }, []);
 
   // A dashboard tile can arrive with ?status= to preset the tab, or ?invoice=
   // to open one invoice directly. The parameter is consumed so a later manual
@@ -2235,12 +2277,16 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   }, [requestedNew, searchParams, setSearchParams]);
 
   const downloadInvoicePdf = async (invoice) => {
+    if (downloadingInvoiceNumber) return;
+    setDownloadingInvoiceNumber(invoice.invoiceNumber);
     setRowNotice('');
     try {
       const response = await api.post('/oms/invoices/html-preview', invoiceDocumentPayload(invoice), { responseType: 'text' });
       await saveInvoicePdf(response.data, invoice.invoiceNumber);
     } catch (error) {
       setRowNotice(error.response?.data?.message || 'Could not prepare that invoice PDF.');
+    } finally {
+      setDownloadingInvoiceNumber(null);
     }
   };
 
@@ -2324,7 +2370,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
     const dueDate = invoice.dueDate || invoice.deliveryDate || job.delivery;
     return (
       <div className="store-order-detail">
-        <div className="store-detail-toolbar"><button type="button" onClick={() => setSelectedInvoice(null)}>← &nbsp; Back to Invoices</button><div><button type="button" onClick={() => downloadInvoicePdf(invoice)}>▣ &nbsp; Print</button></div></div>
+        <div className="store-detail-toolbar"><button type="button" onClick={() => setSelectedInvoice(null)}>← &nbsp; Back to Invoices</button><div><button type="button" disabled={Boolean(downloadingInvoiceNumber)} aria-busy={downloadingInvoiceNumber === invoice.invoiceNumber} onClick={() => downloadInvoicePdf(invoice)}>{downloadingInvoiceNumber === invoice.invoiceNumber ? <><LoaderCircle className="invoice-download-spinner" size={14} /> &nbsp; Preparing…</> : <>▣ &nbsp; Print</>}</button></div></div>
         <section className="store-order-hero">
           <div><span>{invoice.invoiceNumber}</span><h2>{invoice.customer}</h2><p>{invoice.item || 'Custom Order'} · {invoice.pieces || job.pieces || 1} {(invoice.pieces || job.pieces || 1) === 1 ? 'piece' : 'pieces'} · {invoice.store}</p></div>
           <Status>{invoice.paymentStatus}</Status>
@@ -2368,7 +2414,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                 invoice can be produced on demand; an order sheet only exists
                 once production has raised one. */}
             <section className="store-detail-panel detail-documents"><h3>Documents</h3>
-              <article role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => downloadInvoicePdf(invoice)} onKeyDown={(event) => { if (event.key === 'Enter') downloadInvoicePdf(invoice); }}><i>▤</i><span><strong>Invoice PDF</strong><small>Open to print or save</small></span></article>
+              <article role="button" tabIndex={downloadingInvoiceNumber ? -1 : 0} aria-disabled={Boolean(downloadingInvoiceNumber)} aria-busy={downloadingInvoiceNumber === invoice.invoiceNumber} style={{ cursor: downloadingInvoiceNumber ? 'wait' : 'pointer', opacity: downloadingInvoiceNumber && downloadingInvoiceNumber !== invoice.invoiceNumber ? 0.6 : 1 }} onClick={() => downloadInvoicePdf(invoice)} onKeyDown={(event) => { if (event.key === 'Enter') downloadInvoicePdf(invoice); }}><i>{downloadingInvoiceNumber === invoice.invoiceNumber ? <LoaderCircle className="invoice-download-spinner" size={15} /> : '▤'}</i><span><strong>{downloadingInvoiceNumber === invoice.invoiceNumber ? 'Preparing Invoice PDF…' : 'Invoice PDF'}</strong><small>{downloadingInvoiceNumber === invoice.invoiceNumber ? 'Please wait; your download will open shortly' : 'Open to print or save'}</small></span></article>
               {invoice.orderSheet
                 ? <article role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => setShowOrderSheet(true)} onKeyDown={(event) => { if (event.key === 'Enter') setShowOrderSheet(true); }}><i>▤</i><span><strong>Order Sheet</strong><small>View and download</small></span></article>
                 : <article><i>▤</i><span><strong>Order Sheet</strong><small>Not raised yet</small></span></article>}
@@ -2578,16 +2624,14 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                           onClick={(event) => {
                             event.stopPropagation();
                             if (openMenu === invoice.invoiceNumber) {
-                              setOpenMenu(null);
-                              setInvoiceMenuAnchor(null);
+                              closeInvoiceMenu();
                               return;
                             }
                             const rect = event.currentTarget.getBoundingClientRect();
-                            setInvoiceMenuAnchor({
+                            openInvoiceMenu(invoice.invoiceNumber, {
                               top: rect.bottom + 6,
                               left: Math.max(8, Math.min(window.innerWidth - 184, rect.right - 176)),
                             });
-                            setOpenMenu(invoice.invoiceNumber);
                           }}
                           style={{
                             border: '1px solid #ddd5c8', borderRadius: 6,
@@ -2599,27 +2643,30 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                           <MoreHorizontal size={14} strokeWidth={2} />
                         </button>
                         {openMenu === invoice.invoiceNumber && (
-                          <div
-                            className="customer-action-menu invoice-action-menu"
-                            style={{
-                              position: 'fixed',
-                              top: invoiceMenuAnchor?.top ?? 0,
-                              left: invoiceMenuAnchor?.left ?? 0,
-                              right: 'auto',
-                              zIndex: 3000,
-                            }}
-                          >
-                            {invoiceActions(invoice).map(([label, icon, action]) => (
-                              <button
-                                key={label}
-                                type="button"
-                                onClick={(event) => { event.stopPropagation(); setOpenMenu(null); setInvoiceMenuAnchor(null); action(); }}
-                              >
-                                <i style={{ display: 'flex' }}>{icon}</i>
-                                {label}
-                              </button>
-                            ))}
-                          </div>
+                          <>
+                            <button type="button" className="invoice-menu-backdrop" aria-label="Close invoice actions" onClick={(event) => { event.stopPropagation(); closeInvoiceMenu(); }} />
+                            <div
+                              className="customer-action-menu invoice-action-menu"
+                              style={{
+                                position: 'fixed',
+                                top: invoiceMenuAnchor?.top ?? 0,
+                                left: invoiceMenuAnchor?.left ?? 0,
+                                right: 'auto',
+                                zIndex: 3000,
+                              }}
+                            >
+                              {invoiceActions(invoice).map(([label, icon, action]) => (
+                                <button
+                                  key={label}
+                                  type="button"
+                                  onClick={(event) => { event.stopPropagation(); closeInvoiceMenu(); action(); }}
+                                >
+                                  <i style={{ display: 'flex' }}>{icon}</i>
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </>
                         )}
                       </div>
                     </td>
@@ -2663,7 +2710,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                         type="button"
                         aria-label={`Actions for ${invoice.invoiceNumber}`}
                         aria-expanded={openMenu === `m-${invoice.invoiceNumber}`}
-                        onClick={() => { setInvoiceMenuAnchor(null); setOpenMenu(openMenu === `m-${invoice.invoiceNumber}` ? null : `m-${invoice.invoiceNumber}`); }}
+                        onClick={() => { if (openMenu === `m-${invoice.invoiceNumber}`) closeInvoiceMenu(); else openInvoiceMenu(`m-${invoice.invoiceNumber}`); }}
                         style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           width: 34, height: 34, border: '1px solid #ddd5c8', borderRadius: 8,
@@ -2673,14 +2720,17 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                         <MoreHorizontal size={15} strokeWidth={2} />
                       </button>
                       {openMenu === `m-${invoice.invoiceNumber}` && (
-                        <div className="customer-action-menu" style={{ right: 0, left: 'auto' }}>
-                          {invoiceActions(invoice).map(([label, icon, action]) => (
-                            <button key={label} type="button" onClick={() => { setOpenMenu(null); action(); }}>
-                              <i style={{ display: 'flex' }}>{icon}</i>
-                              {label}
-                            </button>
-                          ))}
-                        </div>
+                        <>
+                          <button type="button" className="invoice-menu-backdrop" aria-label="Close invoice actions" onClick={(event) => { event.stopPropagation(); closeInvoiceMenu(); }} />
+                          <div className="customer-action-menu" style={{ right: 0, left: 'auto' }}>
+                            {invoiceActions(invoice).map(([label, icon, action]) => (
+                              <button key={label} type="button" onClick={() => { closeInvoiceMenu(); action(); }}>
+                                <i style={{ display: 'flex' }}>{icon}</i>
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
@@ -2705,8 +2755,8 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
                   </div>
                 </div>
                 <div className="mobile-invoice-actions" onClick={(event) => event.stopPropagation()}>
-                  <button type="button" onClick={() => downloadInvoicePdf(invoice)}>
-                    <Download size={14} strokeWidth={2} /> Download
+                  <button type="button" disabled={Boolean(downloadingInvoiceNumber)} aria-busy={downloadingInvoiceNumber === invoice.invoiceNumber} onClick={() => downloadInvoicePdf(invoice)}>
+                    {downloadingInvoiceNumber === invoice.invoiceNumber ? <LoaderCircle className="invoice-download-spinner" size={14} strokeWidth={2} /> : <Download size={14} strokeWidth={2} />} {downloadingInvoiceNumber === invoice.invoiceNumber ? 'Preparing…' : 'Download'}
                   </button>
                   {currentRole?.id === 'store_manager' && invoiceApprovalStatus(invoice) === 'Flagged' ? (
                     <button type="button" onClick={() => setEditingInvoice(invoice)}>
@@ -3245,9 +3295,11 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
     if (!form.customerName.trim()) return 'Select a customer.';
     if (!isValidPhone(form.customerPhone)) return PHONE_ERROR;
     if (!items.some((item) => item.description.trim())) return 'Add at least one invoice item.';
+    if (!form.paymentStatus) return 'Select a payment status.';
     const requestedCredit = toNumber(form.storeCreditApplied);
     if (requestedCredit > 0 && !chosenCustomer?.id) return 'Select a registered customer before applying store credit.';
     if (requestedCredit > availableStoreCredit) return `This customer only has ${money.format(availableStoreCredit)} in store credit.`;
+    if (form.paymentStatus !== 'unpaid' && !form.paymentMethod) return 'Select a payment method for this payment.';
     if (evidenceRequired && !paymentEvidence) return 'Upload payment evidence for a partially or fully paid invoice.';
     // A part paid invoice with no figure is what left Accounts unable to
     // reconcile and production unable to tell whether it may start.
@@ -3554,8 +3606,8 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
                   (in full or in part) — same rule as Amount Received below. */}
               {form.paymentStatus && form.paymentStatus !== 'unpaid' ? (
                 <label className="os-field">
-                  <span>Payment Method</span>
-                  <select value={form.paymentMethod} onChange={(event) => updateForm('paymentMethod', event.target.value)}>
+                  <span>Payment Method <span style={{ color: '#d62828' }}>*</span></span>
+                  <select required value={form.paymentMethod} onChange={(event) => updateForm('paymentMethod', event.target.value)}>
                     <option value="" disabled>— Select method —</option>
                     <option value="transfer">Transfer</option>
                     <option value="card">Card</option>
@@ -5093,7 +5145,7 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
     const item = allItems[index];
     const current = item.tailors || [];
     const departmentTailorNames = new Set(tailors
-      .filter((person) => person.tailorDepartment === departmentKey)
+      .filter((person) => tailorDepartmentsOf(person).includes(departmentKey))
       .map((person) => person.displayName));
     // An item keeps one clear owner per selected department. Assignments from
     // the other departments (and legacy names no longer on the staff list)
@@ -5156,7 +5208,7 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
           <div className="tailor-assign-departments">
             {itemDepartments.map((departmentKey) => {
               const department = departments.find((entry) => entry.key === departmentKey);
-              const eligibleTailors = tailors.filter((person) => person.tailorDepartment === departmentKey);
+              const eligibleTailors = tailors.filter((person) => tailorDepartmentsOf(person).includes(departmentKey));
               const selected = eligibleTailors.find((person) => (item.tailors || []).includes(person.displayName))?.displayName || '';
               return (
                 <div className="tailor-department-group" key={departmentKey}>
@@ -8563,6 +8615,7 @@ function App() {
           name: staff.displayName,
           store: staff.store,
           tailorDepartment: staff.tailorDepartment,
+          tailorDepartments: staff.tailorDepartments || (staff.tailorDepartment ? [staff.tailorDepartment] : []),
           tailorGrade: staff.tailorGrade,
           profileImageUrl: staff.profileImageUrl || current?.profileImageUrl,
         }));
@@ -8596,6 +8649,7 @@ function App() {
       // matters — a display name is not unique enough to decide that.
       staffId: staffProfile?.id || signedInAccount?.id || null,
       tailorDepartment: staffProfile?.tailorDepartment || signedInAccount?.tailorDepartment || null,
+      tailorDepartments: staffProfile?.tailorDepartments || signedInAccount?.tailorDepartments || [],
       tailorGrade: staffProfile?.tailorGrade || signedInAccount?.tailorGrade || null,
     };
   }, [role, signedInAccount, staffProfile]);

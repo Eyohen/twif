@@ -28,6 +28,7 @@ export default function LoginPage({ onLogin, notice = '' }) {
       store: staff.store,
       profileImageUrl: staff.profileImageUrl,
       tailorDepartment: staff.tailorDepartment,
+      tailorDepartments: staff.tailorDepartments || (staff.tailorDepartment ? [staff.tailorDepartment] : []),
       tailorGrade: staff.tailorGrade,
     });
   };
