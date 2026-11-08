@@ -148,6 +148,22 @@ Given('the Store Manager raises an order sheet with fabric and measurements', as
     if (values.length) await fabricPicker.selectOption(values[0]);
   }
 
+  // An order sheet can no longer be saved without a department and that
+  // department's required (*) details, so the garment is given both.
+  const departmentPicker = this.page.locator('.department-picker select').first();
+  if (await departmentPicker.count()) {
+    const departmentKeys = await departmentPicker.locator('option').evaluateAll((options) => options
+      .map((option) => option.value).filter(Boolean));
+    if (departmentKeys.length) {
+      await departmentPicker.selectOption(departmentKeys[0]);
+      await this.page.waitForSelector('.os-department-fields input', { timeout: 5000 });
+      const detailBoxes = this.page.locator('.os-department-fields input');
+      for (let index = 0; index < await detailBoxes.count(); index += 1) {
+        await detailBoxes.nth(index).fill('Test');
+      }
+    }
+  }
+
   await this.page.getByRole('button', { name: /save order sheet|create order sheet|release/i }).first().click();
   await expect(this.page.getByText(/order sheet saved/i)).toBeVisible({ timeout: 20000 });
 });

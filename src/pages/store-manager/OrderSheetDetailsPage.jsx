@@ -16,7 +16,7 @@ const outlineButton = {
 // what was actually written down for Production to cut and sew from — every
 // garment's own fabric, construction choices and style references, not just
 // its name and a price.
-export default function OrderSheetDetailsPage({ order, onBack, onEdit, backLabel = 'Back to Order Sheets', currentRole, role = 'store_manager' }) {
+export default function OrderSheetDetailsPage({ order, onBack, onEdit, onArchive, backLabel = 'Back to Order Sheets', currentRole, role = 'store_manager' }) {
   const departmentDirectory = useDepartments();
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -102,6 +102,11 @@ export default function OrderSheetDetailsPage({ order, onBack, onEdit, backLabel
           {mayEdit ? (
             <button type="button" onClick={() => onEdit?.(order.invoiceNumber)} style={{ ...outlineButton, background: '#1a1611', color: '#fff', borderColor: '#1a1611' }}>
               Edit Order Sheet
+            </button>
+          ) : null}
+          {onArchive ? (
+            <button type="button" onClick={onArchive} style={outlineButton}>
+              Archive Order Sheet
             </button>
           ) : null}
         </div>

@@ -131,3 +131,28 @@ export const departmentConfig = (departments, key) => {
   }
   return DEPARTMENT_FIELDS[key] || { label: saved?.name || key, note: '', fields: [] };
 };
+
+// Names what is still missing on each garment before an order sheet is saved
+// or sent: no department chosen, or a required (*) department field left
+// blank. Returns a single message, or null when everything is complete. The
+// server applies the same rule, so this is a convenience, not the only gate.
+export const missingDepartmentDetails = (items, departments) => {
+  const problems = [];
+  (items || []).forEach((item, index) => {
+    const label = (item.item || '').trim() || `Item ${index + 1}`;
+    const keys = Array.isArray(item.departments) ? item.departments : [];
+    if (!keys.length) {
+      problems.push(`${label} has no department selected`);
+      return;
+    }
+    keys.forEach((key) => {
+      const config = departmentConfig(departments, key);
+      const values = item.departmentFields?.[key] || {};
+      const missing = (config.fields || [])
+        .filter((field) => field.required && !String(values[field.key] ?? '').trim())
+        .map((field) => field.label);
+      if (missing.length) problems.push(`${label} (${config.label}) is missing: ${missing.join(', ')}`);
+    });
+  });
+  return problems.length ? problems.join('; ') : null;
+};

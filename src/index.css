@@ -2589,6 +2589,12 @@ dd {
   line-height: 1.45;
 }
 
+.invoice-message-error {
+  border-color: #efb4b4;
+  background: #fdecec;
+  color: #9b1c1c;
+}
+
 .inventory-form {
   margin-bottom: 24px;
   border: 1px solid #e7ded1;
@@ -9859,6 +9865,11 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   cursor: pointer;
   transition: background .15s, border-color .15s, color .15s;
 }
+.sidebar-logout.sidebar-changepin:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
 .sidebar-logout:hover {
   background: rgba(216, 76, 62, 0.16);
   border-color: rgba(216, 76, 62, 0.4);
@@ -10696,7 +10707,15 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   font-size: 12px;
 }
 
-.job-comments form { display: grid; gap: 8px; }
+/* The job modal sits inside .receive-stock-backdrop, whose generic dialog-form
+   rules (fixed width, padding, white card, and an absolutely positioned
+   corner button) were also catching this form — leaving the textarea narrow
+   and Post comment floating on top of it. */
+.job-comments form {
+  display: grid; gap: 8px;
+  position: static; width: 100%; padding: 0; border-radius: 0; background: transparent;
+}
+.job-comments form > button { position: static; }
 .job-comments textarea {
   min-height: 62px;
   border: 1px solid #ddd5c8;
@@ -11169,6 +11188,11 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 @media (max-width: 620px) {
   .fabric-chosen li { grid-template-columns: minmax(0, 1fr) 32px; }
   .fabric-chosen label { grid-column: 1 / -1; justify-content: flex-start; }
+  /* The remove button stays beside the name, and the "Customer's own" tag gets
+     a row of its own — left to auto-placement it fell into the 32px column,
+     ran out of the card, and pushed the button onto a line below. */
+  .fabric-chosen li > button { grid-column: 2; grid-row: 1; }
+  .fabric-chosen .fabric-supplied { grid-column: 1 / -1; white-space: normal; }
 }
 
 /* An elite member gets a discount on every invoice, so the tag is worth seeing
@@ -11189,3 +11213,13 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 .tailor-style-download { font-size: 11px; font-weight: 700; color: #a76900; text-align: center; text-decoration: none; padding: 4px 0; border: 1px solid #e8d9a0; border-radius: 6px; background: #fffbf0; }
 .tailor-style-download:hover { background: #fff3d1; }
 .tailor-style-download-large { padding: 8px 16px; font-size: 13px; }
+
+
+/* Production job modal header: on a phone the status pill and close button took
+   most of the width and squeezed the customer's name into a narrow column.
+   They drop to a row of their own instead. */
+@media (max-width: 620px) {
+  .job-modal-header { flex-wrap: wrap; }
+  .job-modal-header-main { flex: 1 1 0; min-width: 150px !important; }
+  .job-modal-header-actions { flex: 1 1 100%; justify-content: space-between; }
+}

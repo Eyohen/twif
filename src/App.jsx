@@ -17,6 +17,7 @@ import AccountsInventoryReconciliationPage from './pages/accounts/InventoryRecon
 import UserManagementPage from './pages/owner/UserManagementPage';
 import MembershipsPage from './pages/owner/MembershipsPage';
 import SettingsPage from './pages/owner/SettingsPage';
+import ChangePinDialog from './components/oms/ChangePinDialog';
 import ShopifySyncPage from './pages/owner/ShopifySyncPage';
 import DepartmentsPage from './pages/owner/DepartmentsPage';
 import InventoryManagerOverviewPage from './pages/inventory/OverviewPage';
@@ -45,7 +46,7 @@ import {
   useStores,
   useDepartments,
 } from './utils/oms';
-import { DEPARTMENT_FIELDS, departmentConfig } from './config/departmentFields';
+import { DEPARTMENT_FIELDS, departmentConfig, missingDepartmentDetails } from './config/departmentFields';
 import { isValidPhone, phoneDigits, PHONE_ERROR, PHONE_MAX_LENGTH, PHONE_PATTERN } from './utils/phone';
 
 const trackingBaseUrl = (
@@ -2095,7 +2096,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   );
 }
 
-function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onApproveInvoice, onInvoiceChanged, onInvoiceDeleted, releasePercent, onNavigate, onOverrideHold }) {
+function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onApproveInvoice, onInvoiceChanged, onInvoiceDeleted, onOrderSheetArchived, releasePercent, onNavigate, onOverrideHold }) {
   const [editingInvoice, setEditingInvoice] = useState(null);
   // An invoice belongs to whoever raised it and to the people who run the shop.
   // Removing one is the Owner's and Admin's alone — a store manager cannot
@@ -2108,6 +2109,9 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   // no longer be deleted by anyone — the server refuses it either way.
   const mayDelete = (invoice) => ['owner', 'admin'].includes(currentRole?.id)
     && invoiceApprovalStatus(invoice) !== 'Approved';
+  // Archiving removes nothing, so unlike deleting it is still allowed once
+  // Accounts have approved the invoice.
+  const mayArchive = ['owner', 'admin'].includes(currentRole?.id);
   // Approving is Accounts', Owner's and Admin's decision — a store manager can
   // raise and edit their own invoices, but not sign off on their own payment.
   // The server already refuses this for anyone else; the button shouldn't
@@ -2151,8 +2155,38 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
       if (!reason || /measurements/i.test(reason)) return [];
       return [['Send to Production Anyway', <ArrowRight size={12} strokeWidth={2} />, () => onOverrideHold(job, reason)]];
     })(),
+    ...(mayArchive && invoice.orderSheet ? [['Archive Order Sheet', <ClipboardList size={12} strokeWidth={2} />, () => archiveOrderSheet(invoice)]] : []),
+    ...(mayArchive ? [['Archive Invoice', <Package size={12} strokeWidth={2} />, () => archiveInvoice(invoice)]] : []),
     ...(mayDelete(invoice) ? [['Delete Invoice', <Trash2 size={12} strokeWidth={2} />, () => removeInvoice(invoice)]] : []),
   ];
+
+  const archiveInvoice = async (invoice) => {
+    if (!window.confirm(`Archive invoice ${invoice.invoiceNumber} for ${invoice.customer}? It, and its order sheet, will be hidden from every list. Nothing is deleted.`)) return;
+    try {
+      await api.patch(`/oms/invoices/${invoice.invoiceNumber}/archive`, { archived: true });
+      onInvoiceDeleted?.(invoice.invoiceNumber);
+      setSelectedInvoice(null);
+      setShowOrderSheet(false);
+      setRowNotice(`${invoice.invoiceNumber} was archived.`);
+    } catch (error) {
+      setRowNotice(error.response?.data?.message || 'That invoice could not be archived.');
+    }
+  };
+
+  const archiveOrderSheet = async (invoice) => {
+    if (!window.confirm(`Archive the order sheet for ${invoice.invoiceNumber}? It will be hidden from Production and every list. Nothing is deleted.`)) return;
+    try {
+      const response = await api.patch(`/oms/invoices/${invoice.invoiceNumber}/order-sheet/archive`, { archived: true });
+      const updated = response.data?.data?.invoice;
+      if (updated) onInvoiceChanged?.(updated);
+      onOrderSheetArchived?.(invoice.invoiceNumber);
+      setShowOrderSheet(false);
+      if (updated) setSelectedInvoice(updated);
+      setRowNotice(`The order sheet for ${invoice.invoiceNumber} was archived.`);
+    } catch (error) {
+      setRowNotice(error.response?.data?.message || 'That order sheet could not be archived.');
+    }
+  };
 
   const removeInvoice = async (invoice) => {
     if (!window.confirm(`Delete invoice ${invoice.invoiceNumber} for ${invoice.customer}? This cannot be undone.`)) return;
@@ -2339,10 +2373,13 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   if (creating) {
     return (
       <div className="store-invoice-create">
-        <NewInvoiceView currentRole={currentRole} prefillCustomer={prefillCustomer} onCancel={() => setCreating(false)} onInvoiceSent={(invoice) => {
+        <NewInvoiceView currentRole={currentRole} prefillCustomer={prefillCustomer} onCancel={() => setCreating(false)} onInvoiceSent={(invoice, extra) => {
           onInvoiceSent?.(invoice);
           setCreating(false);
           setPrefillCustomer(null);
+          // The form is closing, so a problem it wants to report (the invoice
+          // saved but its email did not go) is shown here, where it stays visible.
+          if (extra?.notice) setRowNotice(extra.notice);
         }} />
       </div>
     );
@@ -2355,6 +2392,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
         backLabel="Back to Invoice"
         onBack={() => setShowOrderSheet(false)}
         onEdit={(invoiceNumber) => onNavigate?.('Order Sheet', { edit: invoiceNumber })}
+        onArchive={mayArchive ? () => archiveOrderSheet(selectedInvoice) : undefined}
       />
     );
   }
@@ -3144,6 +3182,8 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
   const [evidenceNote, setEvidenceNote] = useState('');
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
+  // A failure is shown as one, rather than in the same notice as a success.
+  const [messageIsError, setMessageIsError] = useState(false);
 
   // Only lines that reach the invoice count toward it. A row with a rate but no
   // description was adding to the total while never appearing on the document,
@@ -3347,8 +3387,9 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
   const sendInvoice = async (skipEmail = false) => {
     setSending(true);
     setMessage('');
+    setMessageIsError(false);
     const validationMessage = validateInvoice();
-    if (validationMessage) { setMessage(validationMessage); setSending(false); return; }
+    if (validationMessage) { setMessage(validationMessage); setMessageIsError(true); setSending(false); return; }
 
     try {
       const payload = invoicePayload();
@@ -3379,7 +3420,18 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
       });
       setMessage(response.data.message || (skipEmail ? 'Invoice saved' : 'Invoice email sent'));
     } catch (error) {
-      setMessage(error.response?.data?.message || error.response?.data?.error || error.message || (skipEmail ? 'Unable to save invoice' : 'Unable to send invoice email'));
+      const failure = error.response?.data;
+      setMessageIsError(true);
+      // The invoice was saved and only the email failed: list it, and say
+      // what actually went wrong and what to do next.
+      if (error.response?.status === 502 && failure?.data?.sentInvoice) {
+        const reason = typeof failure.error === 'string' && failure.error.trim() ? ` Reason: ${failure.error.trim().replace(/[.\s]+$/, '')}.` : '';
+        const notice = `${failure.message}.${reason} Use Resend Email on ${failure.data.invoiceNumber || 'the invoice'} to try again.`;
+        onInvoiceSent(failure.data.sentInvoice, { notice });
+        setMessage(notice);
+      } else {
+        setMessage(failure?.message || failure?.error || error.message || (skipEmail ? 'Unable to save invoice' : 'Unable to send invoice email'));
+      }
     } finally {
       setSending(false);
     }
@@ -3409,7 +3461,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
       <header><button type="button" onClick={() => setPreviewMode(false)}>← &nbsp; Back to Invoice</button><div><small>INVOICE</small><strong>{form.invoiceNumber}</strong><Status>{previewLoading ? 'Preparing…' : 'Not Sent Yet'}</Status></div></header>
       <section className="invoice-preview-title"><div><h2>{previewTab === 'invoice' ? 'Invoice Preview' : 'Email Preview'}</h2><p>This is how your {previewTab === 'invoice' ? 'invoice' : 'email'} will appear to the customer.</p></div><nav><button className={previewTab === 'invoice' ? 'active' : ''} onClick={() => setPreviewTab('invoice')}>Invoice Preview</button><button className={previewTab === 'email' ? 'active' : ''} onClick={() => setPreviewTab('email')}>Email Preview</button></nav></section>
       {previewTab === 'invoice' ? <InvoiceDocumentPreview html={previewHtml} invoiceNumber={form.invoiceNumber} /> : <section className="email-preview-layout"><main><dl><dt>From:</dt><dd>The Way It Fits &lt;info@twif.com&gt;</dd><dt>To:</dt><dd>{form.customerEmail}</dd><dt>Subject:</dt><dd>Your twif Invoice {form.invoiceNumber}</dd></dl><article><div className="email-logo">twif</div><h2>Your Invoice is Ready</h2><p>Hello {form.customerName.split(' ')[0] || 'Customer'},</p><p>Thank you for choosing The Way It Fits. Your invoice has been prepared and is attached below.</p><section>{[['Invoice Number', form.invoiceNumber], [outstanding > 0 ? 'Amount Due' : 'Paid In Full', money.format(outstanding > 0 ? outstanding : balanceDue)], ['Due Date', new Date(`${form.dueDate}T00:00:00`).toLocaleDateString('en-GB')], ['Status', paymentStatusLabels[form.paymentStatus]]].map(([label,value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}</section><div>{/* These two are part of the picture of the email, not controls on this screen — clicking them here did nothing. */}<span>Download Invoice PDF</span><span>Track Your Order</span></div><h3>Order Summary</h3>{items.filter((item) => item.description).map((item) => <p className="email-order-line" key={item.id}><span>{item.description} × {item.quantity}</span><strong>{money.format(item.amount)}</strong></p>)}<p className="email-balance"><span>{outstanding > 0 ? 'Balance Due' : 'Paid In Full'}</span><strong>{money.format(outstanding > 0 ? outstanding : balanceDue)}</strong></p></article></main><aside><h3>Email Details</h3><dl><dt>Recipient</dt><dd>{form.customerEmail}</dd><dt>Subject</dt><dd>Your twif Invoice {form.invoiceNumber}</dd><dt>Attachment</dt><dd>{form.invoiceNumber}.pdf</dd><dt>Tracking Link</dt><dd>✓ Will be included</dd><dt>Payment Evidence</dt><dd>{paymentEvidence?.name || 'Not required'}</dd></dl></aside></section>}
-      {message ? <div className="invoice-message">{message}</div> : null}
+      {message ? <div className={`invoice-message${messageIsError ? ' invoice-message-error' : ''}`}>{message}</div> : null}
       <footer><button type="button" onClick={() => setPreviewMode(false)}>Back</button><div><button disabled={previewLoading || !previewHtml} onClick={() => saveInvoicePdf(previewHtml, form.invoiceNumber)}>⇩ &nbsp; Download PDF</button><button onClick={() => setPreviewTab('email')}>✉ &nbsp; Preview Email</button><button className="primary-action" onClick={() => sendInvoice(false)} disabled={sending}>{sending ? 'Sending…' : '➤  Send Invoice'}</button></div></footer>
     </div>;
   }
@@ -4488,6 +4540,15 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
       return;
     }
 
+    // Every department detail marked * has to be filled in before the sheet
+    // is saved or sent — an incomplete one reaches Production with missing
+    // measurements and style choices.
+    const departmentProblem = missingDepartmentDetails(items, departments);
+    if (departmentProblem) {
+      setMessage(`Complete the required department details before saving: ${departmentProblem}.`);
+      return;
+    }
+
     // A fabric chosen with no quantity against it tells Inventory nothing.
     const missingQuantity = items.findIndex((item) => (item.fabrics || [])
       .some((entry) => !entry.clientSupplied && !(Number(entry.quantity) > 0)));
@@ -4868,6 +4929,8 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
                           <label className="os-field" key={field.key}>
                             <span>{field.label}{field.required ? <span style={{ color: '#d62828' }}> *</span> : null}</span>
                             <input
+                              required={Boolean(field.required)}
+                              aria-required={Boolean(field.required)}
                               value={orderItem.departmentFields?.[departmentKey]?.[field.key] || ''}
                               onChange={(event) => updateDepartmentField(index, departmentKey, field.key, event.target.value)}
                             />
@@ -6073,16 +6136,16 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
         <div className="receive-stock-backdrop" onClick={(e) => e.target === e.currentTarget && setJobModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(26,22,17,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,0.22)' }}>
             {/* Modal Header */}
-            <div style={{ background: '#1a1611', borderRadius: '16px 16px 0 0', padding: '20px 22px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="job-modal-header" style={{ background: '#1a1611', borderRadius: '16px 16px 0 0', padding: '20px 22px', display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#c97b08', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
                 {jobModal.customer.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="job-modal-header-main" style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{jobModal.invoiceNumber}</div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{jobModal.customer}</div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{jobModal.item} · {jobModal.pieces} {jobModal.pieces === 1 ? 'piece' : 'pieces'}</div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="job-modal-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Status>{jobModal.status === 'Order Sheet Confirmed' ? 'Ready to Assign' : jobModal.status === 'Ready' ? 'Ready for Collection' : jobModal.status}</Status>
                 <button type="button" onClick={() => setJobModal(null)} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
               </div>
@@ -8521,6 +8584,7 @@ function renderView(activeView, role, viewProps = {}) {
           onApproveInvoice={viewProps.onApproveInvoice}
           onInvoiceChanged={viewProps.onInvoiceUpdated}
           onInvoiceDeleted={viewProps.onInvoiceDeleted}
+          onOrderSheetArchived={viewProps.onOrderSheetArchived}
           releasePercent={viewProps.releasePercent}
           onNavigate={viewProps.onNavigate}
           onOverrideHold={viewProps.onOverrideHold}
@@ -8931,6 +8995,7 @@ function App() {
     navigate(`/${roleSlug(account.role)}/${viewSlug(navByRole[account.role][0])}`, { replace: true });
   };
 
+  const [changingPin, setChangingPin] = useState(false);
   const handleLogout = (reason = '') => {
     clearSessionStorage();
     setRole(null);
@@ -9049,11 +9114,20 @@ function App() {
               <small>{accountTypeByRole[role]?.short || currentRole?.label}</small>
             </span>
           </div>
+          <button type="button" className="sidebar-logout sidebar-changepin" onClick={() => setChangingPin(true)}>
+            Change PIN
+          </button>
           <button type="button" className="sidebar-logout" onClick={() => handleLogout()}>
             Logout
           </button>
         </div>
       </aside>
+      {changingPin ? (
+        <ChangePinDialog
+          onClose={() => setChangingPin(false)}
+          onChanged={(reason) => { setChangingPin(false); handleLogout(reason); }}
+        />
+      ) : null}
 
       <main className="workspace">
         <header className="topbar">
@@ -9114,6 +9188,9 @@ function App() {
                 onInvoiceUpdated: applyInvoiceUpdate,
                 onInvoiceDeleted: (invoiceNumber) => {
                   setSentInvoices((current) => current.filter((item) => item.invoiceNumber !== invoiceNumber));
+                  setProductionJobs((current) => current.filter((job) => job.invoiceNumber !== invoiceNumber));
+                },
+                onOrderSheetArchived: (invoiceNumber) => {
                   setProductionJobs((current) => current.filter((job) => job.invoiceNumber !== invoiceNumber));
                 },
                 sentInvoices,
