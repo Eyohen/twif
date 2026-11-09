@@ -97,7 +97,13 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
     const items = order.items?.length ? order.items.filter(itemBelongsToTailor) : (itemBelongsToTailor(order) ? [order] : []);
     return items.length > 0 && items.every((item) => {
       const owned = (item.departments || []).filter((department) => tailorDepartments.includes(department));
-      return owned.length ? owned.every((department) => item.departmentReady?.[department]) : true;
+      // A job that carries no department of this tailor's — an older or single-item
+      // sheet — is only ready once their own department has been marked ready. It
+      // used to count as ready, so every such job showed "Work completed" before
+      // anyone had started it and Start Work never appeared.
+      return owned.length
+        ? owned.every((department) => item.departmentReady?.[department])
+        : tailorDepartments.some((department) => item.departmentReady?.[department]);
     });
   };
 
