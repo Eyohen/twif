@@ -163,7 +163,7 @@ export default function MeasurementsPage({ customer, currentRole, onBack, onSave
             <p>View and manage customer body measurements</p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="measurement-actions">
           {/* Print / PDF, Edit Measurements and Use for New Order were all
               inert, and there was no way to record a measurement at all. */}
           <button
@@ -212,7 +212,7 @@ export default function MeasurementsPage({ customer, currentRole, onBack, onSave
             fontSize: 18, fontWeight: 700, flexShrink: 0,
           }}>{initials}</span>
           <div style={{ flex: 1, minWidth: 180 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <div className="measurement-name-row" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <h3 style={{ margin: 0, fontSize: 16, color: '#1a1611' }}>{customer.fullName}</h3>
               <span style={{
                 padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
@@ -241,7 +241,7 @@ export default function MeasurementsPage({ customer, currentRole, onBack, onSave
           </div>
 
           {/* Meta Chips */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div className="measurement-chips">
             {[
               // "Measurement Set #3" stood here against every customer alike.
               // One set is kept per customer, so there is no set number.

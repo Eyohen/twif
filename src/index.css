@@ -10267,6 +10267,27 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   font-weight: 600;
   cursor: pointer;
 }
+/* Labels stay on one line; the button row wraps instead of running off the
+   screen. Kept here, on the shared class, so every place that uses it behaves
+   the same. */
+.measurement-action { white-space: nowrap; justify-content: center; }
+.measurement-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.measurement-chips { display: flex; flex-wrap: wrap; gap: 12px; }
+
+@media (max-width: 640px) {
+  /* The buttons share the width of the row, and the main action (Save / Edit /
+     Add) takes a full row of its own underneath. */
+  .measurement-actions { width: 100%; }
+  .measurement-actions .measurement-action { flex: 1 1 120px; }
+  .measurement-actions .measurement-action.is-primary { flex: 1 1 100%; }
+  /* The "New Customer" tag drops below the name rather than squeezing beside it. */
+  .measurement-name-row { flex-wrap: wrap; }
+  /* The three chips form an even grid instead of a loose, wrapping row. */
+  .measurement-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); width: 100%; }
+  /* Three chips in two columns would leave the last one half-width on a row of
+     its own, so it takes the whole row instead. */
+  .measurement-chips > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
 .measurement-action:hover { background: #faf8f5; }
 .measurement-action.is-primary { border-color: #1a1611; background: #1a1611; color: #fff; }
 .measurement-action.is-primary:hover { background: #2b241c; }
@@ -11222,4 +11243,53 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   .job-modal-header { flex-wrap: wrap; }
   .job-modal-header-main { flex: 1 1 0; min-width: 150px !important; }
   .job-modal-header-actions { flex: 1 1 100%; justify-content: space-between; }
+}
+
+
+/* Phones: invoice action menu and result notice.
+   1) The list is an .os-card, and a card being pressed picks up a transform
+      (press feedback). A transform makes the card the positioning reference for
+      position:fixed children, so touching the open action menu made it jump
+      about 100px between the finger lifting and the click, and the tap landed
+      on a different item (Approve fired Download PDF). No press transform while
+      one of these menus is open inside the card.
+   2) The notice that says what an action did sat at the top of the page, out of
+      sight once scrolled down to an invoice. It is pinned above the bottom bar. */
+@media (max-width: 900px) {
+  .os-card:has(.customer-action-menu),
+  .os-card:has(.order-action-dropdown) { transition: none; }
+  .os-card:has(.customer-action-menu):active,
+  .os-card:has(.order-action-dropdown):active { transform: none; }
+
+  .os-row-notice {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    z-index: 3000;
+    box-shadow: 0 12px 32px rgba(25, 18, 7, 0.24);
+  }
+}
+
+
+/* Reports: Payment Breakdown and Approval Status sit side by side on a wide
+   screen and stack on a phone, where each was squeezed to about 150px. */
+.report-charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) {
+  .report-charts-row { grid-template-columns: 1fr; }
+}
+
+
+/* Staff profile cards: side by side on a wide screen, stacked on a phone, where
+   each was squeezed to about 150px and values broke mid-word. */
+.um-profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.um-info-row {
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  gap: 4px 12px; font-size: 13px; padding-bottom: 10px; border-bottom: 1px solid #f3ede5;
+}
+.um-info-row dt { color: #8a7a6a; font-weight: 400; }
+.um-info-row dd { margin: 0 0 0 auto; min-width: 0; color: #1a1611; font-weight: 500; text-align: right; }
+.um-info-row dd.is-anywhere { overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .um-profile-grid { grid-template-columns: 1fr; }
 }

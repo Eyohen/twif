@@ -12,6 +12,41 @@ import { isValidPhone, phoneDigits, PHONE_ERROR, PHONE_MAX_LENGTH, PHONE_PATTERN
 import { Status } from '../../components/oms/Common';
 import { roles as staffRoles } from '../../config/oms';
 
+// "Chrome on Android" from the raw browser string the server stored, so the
+// summary reads like a person wrote it. Anything it cannot place stays unknown
+// rather than being guessed.
+const describeDevice = (userAgent) => {
+  const agent = String(userAgent || '');
+  if (!agent.trim()) return 'Unknown device';
+  const browser = /Edg\//.test(agent) ? 'Edge'
+    : /OPR\/|Opera/.test(agent) ? 'Opera'
+      : /SamsungBrowser/.test(agent) ? 'Samsung Internet'
+        : /Firefox\//.test(agent) ? 'Firefox'
+          : /Chrome\/|CriOS/.test(agent) ? 'Chrome'
+            : /Safari\//.test(agent) ? 'Safari'
+              : null;
+  const system = /Android/.test(agent) ? 'Android'
+    : /iPhone|iPad|iPod/.test(agent) ? 'iOS'
+      : /Windows/.test(agent) ? 'Windows'
+        : /Mac OS X|Macintosh/.test(agent) ? 'macOS'
+          : /Linux/.test(agent) ? 'Linux'
+            : null;
+  if (browser && system) return `${browser} on ${system}`;
+  return browser || system || 'Unknown device';
+};
+
+// One label and value line on the profile cards. The value is right-aligned and
+// the row wraps rather than squeezing, so nothing breaks mid-word on a phone;
+// phone numbers and email addresses may break anywhere, as they have no spaces.
+function InfoRow({ label, children, tone, breakAnywhere = false }) {
+  return (
+    <div className="um-info-row">
+      <dt>{label}</dt>
+      <dd className={breakAnywhere ? 'is-anywhere' : undefined} style={tone ? { color: tone, fontWeight: 600 } : undefined}>{children}</dd>
+    </div>
+  );
+}
+
 const roleLabel = (role) => ({
   admin: 'Admin',
   accounts: 'Accountant',
@@ -430,7 +465,7 @@ export default function UserManagementPage({ currentRole }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((person, index) => (
+                  {filtered.map((person) => (
                     <tr
                       key={person.id}
                       style={{ borderBottom: '1px solid #f3ede5', cursor: 'pointer' }}
@@ -464,9 +499,10 @@ export default function UserManagementPage({ currentRole }) {
                         <span style={{ display: 'block', fontSize: 13, color: '#5a4e42' }}>
                           {person.lastLoginAt ? new Date(person.lastLoginAt).toLocaleDateString('en-GB') : 'Never'}
                         </span>
-                        <small style={{ fontSize: 11, color: '#8a7a6a' }}>
-                          {person.device || ['Chrome on Windows', 'Safari on iPhone', 'Android App'][index % 3]}
-                        </small>
+                        {/* A made-up device used to be shown here for every row. */}
+                        {person.lastLoginAt ? (
+                          <small style={{ fontSize: 11, color: '#8a7a6a' }}>{formatMoment(person.lastLoginAt)}</small>
+                        ) : null}
                       </td>
                       <td data-label="Status" style={{ padding: '12px 14px' }}><Status>{person.status}</Status></td>
                       <td data-label="Actions" style={{ padding: '12px 14px' }} onClick={(e) => e.stopPropagation()}>
@@ -788,6 +824,28 @@ function StaffProfile({ person, isOwner, onBack, onEdit, onHistory, onModal, mod
   const storeLabel = useStoreLabel();
   const roleS = roleStyle[person.role] || { bg: '#f5f0e8', color: '#5a4e42' };
   const mayManage = isOwner || person.role !== 'owner';
+  const departmentDirectory = useDepartments();
+  const departmentName = (key) => departmentDirectory.find((department) => department.key === key)?.name || key;
+  // The sign-in summary comes from what the server actually recorded, never from
+  // sample values: an Owner reading this to judge whether an account has been
+  // misused must not be told "12 successful, 1 failed" about a login that never happened.
+  const [signins, setSignins] = useState({ loading: true, events: [], summary: null, error: '' });
+  useEffect(() => {
+    let cancelled = false;
+    setSignins({ loading: true, events: [], summary: null, error: '' });
+    api.get(`/oms/staff/${person.id}/logins`)
+      .then((response) => {
+        if (cancelled) return;
+        const data = response.data?.data || {};
+        setSignins({ loading: false, events: data.events || [], summary: data.summary || null, error: '' });
+      })
+      .catch((requestError) => {
+        if (cancelled) return;
+        setSignins({ loading: false, events: [], summary: null, error: requestError.response?.data?.message || 'The sign-in record could not be loaded.' });
+      });
+    return () => { cancelled = true; };
+  }, [person.id, person.pinChangedAt, person.lastLoginAt]);
+  const outcomeLabel = { success: 'Success', wrong_credentials: 'Failed', inactive_account: 'Blocked' };
   const [twoFactorBusy, setTwoFactorBusy] = useState(false);
   const setAdminTwoFactor = async (enabled) => {
     setTwoFactorBusy(true);
@@ -889,7 +947,9 @@ function StaffProfile({ person, isOwner, onBack, onEdit, onHistory, onModal, mod
                     {person.status === 'active' ? <XCircle size={13} /> : <CheckCircle size={13} />}
                     {person.status === 'active' ? 'Deactivate' : 'Reactivate'}
                   </button>
-                  <button
+                  {/* Only the Owner may delete an account — the server refuses an
+                      Admin — so the button is not offered to anyone else. */}
+                  {isOwner ? <button
                     type="button"
                     onClick={() => onModal('delete')}
                     style={{
@@ -897,7 +957,7 @@ function StaffProfile({ person, isOwner, onBack, onEdit, onHistory, onModal, mod
                       border: '1px solid #f0c8b8', cursor: 'pointer', fontSize: 13, fontWeight: 600,
                       background: '#fff', color: '#b02a2a',
                     }}
-                  ><Trash2 size={13} /> Delete</button>
+                  ><Trash2 size={13} /> Delete</button> : null}
                 </>
               )}
             </div>
@@ -927,42 +987,38 @@ function StaffProfile({ person, isOwner, onBack, onEdit, onHistory, onModal, mod
         </div>
       </div>
 
-      {/* Profile Info Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      {/* Profile Info Grid — side by side on a wide screen, stacked on a phone. */}
+      <div className="um-profile-grid">
         <div className="os-card">
           <div className="os-card-head">
             <div><strong>Personal Information</strong><p>Identity and contact details</p></div>
           </div>
           <div className="os-card-body">
             <dl style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                ['Full Name', person.fullName || person.displayName],
-                ['Phone', person.phone],
-                ['Email', person.email || 'Not provided'],
-                ['Date of Birth', person.dateOfBirth ? formatMoment(person.dateOfBirth) : 'Not provided'],
-              ].map(([dt, dd]) => (
-                <div key={dt} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingBottom: 10, borderBottom: '1px solid #f3ede5' }}>
-                  <dt style={{ color: '#8a7a6a', fontWeight: 400 }}>{dt}</dt>
-                  <dd style={{ margin: 0, color: '#1a1611', fontWeight: 500 }}>{dd}</dd>
-                </div>
-              ))}
+              {/* The heading above shows the display name; the full name is a
+                  separate field, so both are listed and neither looks missing. */}
+              <InfoRow label="Display Name">{person.displayName}</InfoRow>
+              <InfoRow label="Full Name">{person.fullName || person.displayName}</InfoRow>
+              <InfoRow label="Phone" breakAnywhere>{person.phone}</InfoRow>
+              <InfoRow label="Email" breakAnywhere>{person.email || 'Not provided'}</InfoRow>
+              <InfoRow label="Date of Birth">{person.dateOfBirth ? formatMoment(person.dateOfBirth) : 'Not provided'}</InfoRow>
               <div style={{ paddingTop: 4 }}>
                 <strong style={{ display: 'block', fontSize: 12, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Work Information</strong>
               </div>
-              {[
-                ['Role', roleLabel(person.role)],
-                ['Store', storeLabel(person.store)],
-                ...(person.role === 'tailor' ? [['Departments', (person.tailorDepartments?.length ? person.tailorDepartments : [person.tailorDepartment]).filter(Boolean).join(', ') || 'Not assigned'], ['Tailor Grade', `Grade ${person.tailorGrade || 1}`]] : []),
-                ['Account Status', person.status],
-                ...(person.role === 'admin' ? [['Two-factor sign-in', person.twoFactorRequired ? (person.twoFactorEnabledAt ? 'On' : 'Required at next sign-in') : 'Optional / off']] : []),
-                // Was fixed at "22 May 2024" for every member of staff.
-                ['Date Created', person.createdAt ? formatMoment(person.createdAt) : 'Not recorded'],
-              ].map(([dt, dd]) => (
-                <div key={dt} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingBottom: 10, borderBottom: '1px solid #f3ede5' }}>
-                  <dt style={{ color: '#8a7a6a', fontWeight: 400 }}>{dt}</dt>
-                  <dd style={{ margin: 0, color: '#1a1611', fontWeight: 500 }}>{dd}</dd>
-                </div>
-              ))}
+              <InfoRow label="Role">{roleLabel(person.role)}</InfoRow>
+              <InfoRow label="Store">{storeLabel(person.store)}</InfoRow>
+              {person.role === 'tailor' ? (
+                <>
+                  <InfoRow label="Departments">{(person.tailorDepartments?.length ? person.tailorDepartments : [person.tailorDepartment]).filter(Boolean).map(departmentName).join(', ') || 'Not assigned'}</InfoRow>
+                  <InfoRow label="Tailor Grade">{`Grade ${person.tailorGrade || 1}`}</InfoRow>
+                </>
+              ) : null}
+              <InfoRow label="Account Status">{person.status}</InfoRow>
+              {person.role === 'admin' ? (
+                <InfoRow label="Two-factor sign-in">{person.twoFactorRequired ? (person.twoFactorEnabledAt ? 'On' : 'Required at next sign-in') : 'Optional / off'}</InfoRow>
+              ) : null}
+              {/* Was fixed at "22 May 2024" for every member of staff. */}
+              <InfoRow label="Date Created">{person.createdAt ? formatMoment(person.createdAt) : 'Not recorded'}</InfoRow>
             </dl>
           </div>
         </div>
@@ -973,35 +1029,30 @@ function StaffProfile({ person, isOwner, onBack, onEdit, onHistory, onModal, mod
           </div>
           <div className="os-card-body">
             <dl style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                ['Last Login', 'Today, 09:25 AM'],
-                ['Last PIN Reset', '18 May 2024'],
-              ].map(([dt, dd]) => (
-                <div key={dt} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingBottom: 10, borderBottom: '1px solid #f3ede5' }}>
-                  <dt style={{ color: '#8a7a6a', fontWeight: 400 }}>{dt}</dt>
-                  <dd style={{ margin: 0, color: '#1a1611', fontWeight: 500 }}>{dd}</dd>
-                </div>
-              ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingBottom: 10, borderBottom: '1px solid #f3ede5' }}>
-                <dt style={{ color: '#8a7a6a', fontWeight: 400 }}>Successful Logins</dt>
-                <dd style={{ margin: 0, color: '#2a7d4f', fontWeight: 600 }}>12 in last 30 days</dd>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingBottom: 10, borderBottom: '1px solid #f3ede5' }}>
-                <dt style={{ color: '#8a7a6a', fontWeight: 400 }}>Failed Attempts</dt>
-                <dd style={{ margin: 0, color: '#b02a2a', fontWeight: 600 }}>1 in last 30 days</dd>
-              </div>
+              <InfoRow label="Last Login">{person.lastLoginAt ? formatMoment(person.lastLoginAt) : 'No logins recorded'}</InfoRow>
+              <InfoRow label="Last PIN Reset">{person.pinChangedAt ? formatMoment(person.pinChangedAt) : 'Not recorded'}</InfoRow>
+              <InfoRow label="Successful Logins" tone="#2a7d4f">
+                {signins.loading ? 'Loading…' : signins.summary ? `${signins.summary.successful30d} in last ${signins.summary.days} days` : 'Not available'}
+              </InfoRow>
+              <InfoRow label="Failed Attempts" tone="#b02a2a">
+                {signins.loading ? 'Loading…' : signins.summary ? `${signins.summary.failed30d} in last ${signins.summary.days} days` : 'Not available'}
+              </InfoRow>
             </dl>
 
             <div style={{ marginTop: 16 }}>
               <strong style={{ display: 'block', fontSize: 12, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Recent Logins</strong>
+              {signins.error ? <p style={{ margin: 0, fontSize: 13, color: '#b02a2a' }}>{signins.error}</p> : null}
+              {!signins.error && !signins.loading && !signins.events.length ? (
+                <p style={{ margin: 0, fontSize: 13, color: '#8a7a6a' }}>No logins recorded</p>
+              ) : null}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {['Chrome on Windows', 'Android App', 'Chrome on Windows', 'iPhone (Safari)'].map((device, i) => (
-                  <div key={`${device}-${i}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f3ede5' }}>
-                    <div>
-                      <strong style={{ display: 'block', fontSize: 13, color: '#1a1611' }}>{22 - i} May 2024</strong>
-                      <small style={{ fontSize: 11, color: '#8a7a6a' }}>{device}</small>
+                {signins.events.slice(0, 5).map((event) => (
+                  <div key={event.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 0', borderBottom: '1px solid #f3ede5' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <strong style={{ display: 'block', fontSize: 13, color: '#1a1611' }}>{formatMoment(event.createdAt)}</strong>
+                      <small style={{ fontSize: 11, color: '#8a7a6a' }}>{describeDevice(event.userAgent)}</small>
                     </div>
-                    <Status>{i === 2 ? 'Failed' : 'Success'}</Status>
+                    <Status>{outcomeLabel[event.outcome] || event.outcome}</Status>
                   </div>
                 ))}
               </div>

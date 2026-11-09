@@ -2200,6 +2200,8 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   };
 
   const approveInvoice = async (invoice) => {
+    // Shown at once, so a slow connection does not look like a button that did nothing.
+    setRowNotice(`Approving ${invoice.invoiceNumber}…`);
     try {
       await onApproveInvoice(invoice.invoiceNumber, 'Approved');
       setRowNotice(`${invoice.invoiceNumber} was approved.`);
@@ -2210,6 +2212,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
 
   const undoApproval = async (invoice) => {
     if (!window.confirm(`Withdraw the approval on ${invoice.invoiceNumber}? It goes back to Pending Accounts, and any order already in production is held again until it's approved a second time.`)) return;
+    setRowNotice(`Withdrawing the approval on ${invoice.invoiceNumber}…`);
     try {
       await onApproveInvoice(invoice.invoiceNumber, 'Pending Accounts');
       setRowNotice(`${invoice.invoiceNumber}'s approval was withdrawn.`);
@@ -2229,6 +2232,12 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   const [openMenu, setOpenMenu] = useState(null);
   const [invoiceMenuAnchor, setInvoiceMenuAnchor] = useState(null);
   const [rowNotice, setRowNotice] = useState('');
+  // A confirmation clears itself; a problem stays until it is dismissed.
+  useEffect(() => {
+    if (!rowNotice || /could not|couldn't|cannot|can't|unable|failed|refus|no longer|only \d+%|is unpaid|not verified|already|…$/i.test(rowNotice)) return undefined;
+    const timer = setTimeout(() => setRowNotice(''), 6000);
+    return () => clearTimeout(timer);
+  }, [rowNotice]);
   const [downloadingInvoiceNumber, setDownloadingInvoiceNumber] = useState(null);
   const invoiceKpiRef = useRef(null);
   const invoiceMenuHistoryActive = useRef(false);
@@ -2515,7 +2524,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
       </div>
 
       {rowNotice ? (
-        <div className="os-row-notice" role="status">
+        <div className={`os-row-notice${/could not|couldn't|cannot|can't|unable|failed|refus|no longer|only \d+%|is unpaid|not verified|already/i.test(rowNotice) ? ' is-error' : ''}`} role="status">
           <span>{rowNotice}</span>
           <button type="button" onClick={() => setRowNotice('')} aria-label="Dismiss">×</button>
         </div>
@@ -7165,7 +7174,7 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
   const kpiCards = [
     { label: 'Total Revenue', value: money.format(summary.totalInvoiced), detail: `${summary.invoiceCount} invoices`, color: '#c97b08', bg: '#fffbf0', icon: <TrendingUp size={17} strokeWidth={1.5} />, trending: true },
     { label: 'Paid Invoices', value: summary.fullyPaidCount, detail: money.format(paidTotal), color: '#2a7d4f', bg: '#f0faf4', icon: <CheckCircle size={17} strokeWidth={1.5} />, trending: true },
-    { label: 'Pending Approval', value: summary.pendingApprovalCount, detail: money.format(pending.reduce((s, i) => s + toNumber(i.total), 0)), color: summary.pendingApprovalCount ? '#7a6030' : '#2a7d4f', bg: summary.pendingApprovalCount ? '#fffbf0' : '#f0faf4', icon: <Clock size={17} strokeWidth={1.5} />, trending: false },
+    { label: 'Pending Approval', value: pending.length, detail: money.format(pending.reduce((s, i) => s + toNumber(i.total), 0)), color: pending.length ? '#7a6030' : '#2a7d4f', bg: pending.length ? '#fffbf0' : '#f0faf4', icon: <Clock size={17} strokeWidth={1.5} />, trending: false },
     { label: 'Rejected / Flagged', value: flagged.length, detail: money.format(flagged.reduce((s, i) => s + toNumber(i.total), 0)), color: flagged.length ? '#8a3520' : '#2a7d4f', bg: flagged.length ? '#fff5f0' : '#f0faf4', icon: <AlertCircle size={17} strokeWidth={1.5} />, trending: false },
     { label: 'Partial Paid', value: partial.length, detail: `of ${summary.invoiceCount} invoices`, color: '#7a5230', bg: '#fdf6ee', icon: <CreditCard size={17} strokeWidth={1.5} />, trending: false },
     { label: 'Inventory Alerts', value: summary.lowStockCount, detail: 'Low or out of stock', color: summary.lowStockCount ? '#8a3520' : '#2a7d4f', bg: summary.lowStockCount ? '#fff5f0' : '#f0faf4', icon: <Boxes size={17} strokeWidth={1.5} />, trending: false },
@@ -7246,7 +7255,7 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
       </div>
 
       {/* Charts row: Payment Breakdown + Approval Status */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="report-charts-row">
         {/* Payment Breakdown */}
         <div className="os-card">
           <div className="os-card-head">
@@ -7254,20 +7263,24 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
             <div><strong>Payment Breakdown</strong><p>Distribution across payment states</p></div>
           </div>
           <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Every invoice is in exactly one payment state, counted straight from
+                the invoices, so the rows always add up to the total. Flagged /
+                Rejected is an approval state, not a payment one — it is in the
+                Approval Status card — and listing it here counted an invoice twice
+                whenever it was both flagged and part paid. */}
             {[
-              { label: 'Paid in Full', value: summary.fullyPaidCount, color: '#2a7d4f', bg: '#f0faf4' },
+              { label: 'Paid in Full', value: report.invoices.filter((invoice) => invoice.paymentStatus === 'Fully Paid').length, color: '#2a7d4f', bg: '#f0faf4' },
               { label: 'Partial Paid', value: partial.length, color: '#7a6030', bg: '#fffbf0' },
-              { label: 'Unpaid', value: Math.max(0, summary.invoiceCount - summary.fullyPaidCount - partial.length), color: '#4a6fa5', bg: '#f0f4ff' },
-              { label: 'Flagged / Rejected', value: flagged.length, color: '#8a3520', bg: '#fff5f0' },
+              { label: 'Unpaid', value: report.invoices.filter((invoice) => invoice.paymentStatus === 'Unpaid').length, color: '#4a6fa5', bg: '#f0f4ff' },
             ].map(({ label, value, color, bg }) => {
               const pct = summary.invoiceCount > 0 ? Math.round((value / summary.invoiceCount) * 100) : 0;
               return (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#5a4e42', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, color: '#5a4e42', marginBottom: 4 }}>
                       <span>{label}</span>
-                      <strong style={{ color: '#1a1611' }}>{value} <span style={{ fontWeight: 400, color: '#8a7a6a' }}>({pct}%)</span></strong>
+                      <strong style={{ color: '#1a1611', whiteSpace: 'nowrap' }}>{value} <span style={{ fontWeight: 400, color: '#8a7a6a' }}>({pct}%)</span></strong>
                     </div>
                     <div style={{ height: 6, background: '#f3ede5', borderRadius: 4, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 4, transition: 'width 0.4s' }} />
@@ -7291,8 +7304,11 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
           </div>
           <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
+              // summary.pendingApprovalCount is "everything not approved", which
+              // includes the flagged and rejected ones shown on the next row, so
+              // using it counted those invoices twice.
               { label: 'Approved', value: summary.approvedCount, color: '#2a7d4f', bg: '#f0faf4' },
-              { label: 'Pending Accounts', value: summary.pendingApprovalCount, color: '#7a6030', bg: '#fffbf0' },
+              { label: 'Pending Accounts', value: pending.length, color: '#7a6030', bg: '#fffbf0' },
               { label: 'Flagged / Rejected', value: flagged.length, color: '#8a3520', bg: '#fff5f0' },
             ].map(({ label, value, color }) => {
               const pct = summary.invoiceCount > 0 ? Math.round((value / summary.invoiceCount) * 100) : 0;
@@ -7300,9 +7316,9 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
                 <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#5a4e42', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, color: '#5a4e42', marginBottom: 4 }}>
                       <span>{label}</span>
-                      <strong style={{ color: '#1a1611' }}>{value} <span style={{ fontWeight: 400, color: '#8a7a6a' }}>({pct}%)</span></strong>
+                      <strong style={{ color: '#1a1611', whiteSpace: 'nowrap' }}>{value} <span style={{ fontWeight: 400, color: '#8a7a6a' }}>({pct}%)</span></strong>
                     </div>
                     <div style={{ height: 6, background: '#f3ede5', borderRadius: 4, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 4, transition: 'width 0.4s' }} />
