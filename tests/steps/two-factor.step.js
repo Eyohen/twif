@@ -25,6 +25,15 @@ Given('the Admin has no authenticator set up', async function () {
   expect(this.admin, 'there is no Admin on the staff list').toBeTruthy();
 });
 
+// Two-factor is the Owner's choice for each Admin (it used to be forced on), so
+// the scenarios that test the second step begin by the Owner switching it on.
+Given('the Owner requires the Admin to use an authenticator', async function () {
+  const owner = await this.api('Owner');
+  const response = await owner.patch(`${API_URL}/oms/staff/${this.admin.id}/two-factor`, { data: { enabled: true } });
+  await owner.dispose();
+  expect(response.status(), 'the Owner could not require two-factor for the Admin').toBe(200);
+});
+
 Given('the Admin has an authenticator set up', async function () {
   const client = await anon();
   const login = await client.post(`${API_URL}/oms/auth/login`, {

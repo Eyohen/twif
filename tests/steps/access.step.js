@@ -420,6 +420,8 @@ When('the Owner edits both names from the staff profile', async function () {
   await fullName.fill(this.editedFullName);
   await displayName.fill(this.editedDisplayName);
   await this.page.getByRole('button', { name: /save changes/i }).click();
+  // Saving staff changes asks for a second confirmation.
+  await this.page.getByRole('button', { name: /yes, save changes/i }).click();
 });
 
 Then('the profile should show both edited names independently', async function () {

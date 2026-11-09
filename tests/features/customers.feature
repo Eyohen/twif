@@ -1,15 +1,17 @@
 Feature: Customer records
-  The invoice and the tracking link both go to the customer's email address, so
-  a record without one is of little use and two customers cannot share one.
+  The invoice and the tracking link go to the customer's email address when there
+  is one, and two customers cannot share an address.
 
   Background:
     Given I am signed in as the Store Manager
     And I open the Customers page
 
-  Scenario: The email address is not offered as optional
+  # Optional since 25 September: a customer can be added at the counter without
+  # one. If an address is given, though, no two customers may share it (below).
+  Scenario: The email address is offered as optional
     When I start creating a customer
-    Then the email field should be required
-    And I should not see "optional"
+    Then the email field should not be required
+    And I should see "optional"
 
   Scenario: An address already on file is refused
     When I start creating a customer

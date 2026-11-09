@@ -9,15 +9,19 @@ When('I add an inventory item named {string}', async function (name) {
   const form = this.page.locator('.receive-stock-backdrop form');
   await form.waitFor();
 
-  const fields = form.locator('input:not([type="file"])');
-  await fields.nth(0).fill(`TST-${Date.now().toString().slice(-6)}`);
-  await fields.nth(1).fill(this.itemName);
-  await form.locator('select').first().selectOption({ index: 1 });
-  await fields.nth(2).fill('Navy');
-  await fields.nth(3).fill('12');
-  await fields.nth(4).fill('7500');
-  await fields.nth(5).fill('Lekki store, rack 1');
-  await fields.nth(6).fill('4');
+  // Filled by label rather than by position: the form has gained and moved
+  // fields before (a receiving store and a supplier replaced a free-text
+  // location), and a positional fill typed into the wrong box.
+  const field = (label) => form.locator('label').filter({ hasText: new RegExp(`^\\s*${label}`, 'i') });
+  await field('SKU').locator('input').fill(`TST-${Date.now().toString().slice(-6)}`);
+  await field('Name').locator('input').fill(this.itemName);
+  await field('Type').locator('select').selectOption({ index: 1 });
+  await field('Colour').locator('input').fill('Navy');
+  await field('Quantity').locator('input').fill('12');
+  await field('Cost per').locator('input').fill('7500');
+  await field('Receiving store').locator('select').selectOption({ index: 1 });
+  await field('Low stock').locator('input').fill('4');
+  await field('Supplier').locator('input').fill('Test Supplier Ltd');
 
   await form.getByRole('button', { name: /^add item$/i }).click();
   await this.page.waitForSelector('.receive-stock-backdrop', { state: 'detached', timeout: 15000 });

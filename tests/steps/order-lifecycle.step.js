@@ -105,7 +105,8 @@ Given('the Store Manager invoices that customer', async function () {
   });
   await this.page.waitForTimeout(500);
 
-  await this.page.getByRole('button', { name: /send invoice/i }).click();
+  // The form's own button is labelled just "Send" (the preview screen says "Send Invoice").
+  await this.page.getByRole('button', { name: /^send( invoice)?$/i }).click();
 
   // The invoice number is assigned by the form, so it is read back from the
   // server against the customer we just created.
@@ -155,7 +156,9 @@ Given('the Store Manager raises an order sheet with fabric and measurements', as
     const departmentKeys = await departmentPicker.locator('option').evaluateAll((options) => options
       .map((option) => option.value).filter(Boolean));
     if (departmentKeys.length) {
-      await departmentPicker.selectOption(departmentKeys[0]);
+      // The seeded tailor works in Suit, and the Production Manager can only
+      // assign someone from the department the garment is in.
+      await departmentPicker.selectOption(departmentKeys.includes('suit') ? 'suit' : departmentKeys[0]);
       await this.page.waitForSelector('.os-department-fields input', { timeout: 5000 });
       const detailBoxes = this.page.locator('.os-department-fields input');
       for (let index = 0; index < await detailBoxes.count(); index += 1) {
@@ -165,7 +168,8 @@ Given('the Store Manager raises an order sheet with fabric and measurements', as
   }
 
   await this.page.getByRole('button', { name: /save order sheet|create order sheet|release/i }).first().click();
-  await expect(this.page.getByText(/order sheet saved/i)).toBeVisible({ timeout: 20000 });
+  // The confirmation is shown in more than one place on the page.
+  await expect(this.page.getByText(/order sheet saved/i).first()).toBeVisible({ timeout: 20000 });
 });
 
 Then('the order should be waiting on Accounts', async function () {
@@ -184,7 +188,9 @@ When('the Accountant approves the invoice', async function () {
   await this.page.locator('.accounts-invoice-table tbody button').first().click();
   await this.page.waitForSelector('.review-invoice-grid', { timeout: 15000 });
 
-  await this.page.getByRole('button', { name: /^approve$/i }).first().click();
+  // There are two approve buttons — one for a completed payment, one for a part
+  // payment — and only the one that fits this invoice is enabled.
+  await this.page.locator('button:not([disabled])', { hasText: /^\s*Approve/ }).first().click();
   // Approving releases the job to production, so it asks first.
   await this.page.getByRole('button', { name: /confirm|yes|approve/i }).last().click();
 
@@ -214,16 +220,19 @@ When('the Production Manager assigns the job to a tailor', async function () {
 
   // Assigned to the tailor this suite can sign in as, so the next step is
   // taken by the person the job was actually given to. Assignment is per item
-  // now — an order item can be shared between as many as four tailors — so the
-  // tailor is picked from the item's own list rather than a single select.
+  // and per department: each department of the garment has its own Tailor
+  // select, listing the tailors who work in that department.
   this.tailorName = ACCOUNTS.Tailor.name;
   const panel = this.page.locator('.tailor-assign-item').first();
   await expect(panel, 'the assignment panel did not open').toBeVisible({ timeout: 15000 });
 
-  const pick = panel.locator('.tailor-assign-picks button', { hasText: this.tailorName }).first();
-  await expect(pick, `${this.tailorName} is not on the tailor list`).toBeVisible({ timeout: 15000 });
-  await pick.click();
-  await expect(pick).toHaveClass(/is-chosen/, { timeout: 15000 });
+  // Each department also has a fabric picker, so the select is found by its label.
+  const select = panel.locator('.tailor-department-group label').filter({ hasText: /^\s*Tailor/ }).locator('select').first();
+  await expect(select, 'the garment has no department to choose a tailor for').toBeVisible({ timeout: 15000 });
+  await expect(select.locator('option', { hasText: this.tailorName }), `${this.tailorName} is not on the tailor list`)
+    .toHaveCount(1, { timeout: 15000 });
+  await select.selectOption(this.tailorName);
+  await expect(select).toHaveValue(this.tailorName, { timeout: 15000 });
 });
 
 Then('the job should be assigned to that tailor', async function () {
@@ -283,8 +292,10 @@ When('the customer opens their tracking link', async function () {
 });
 
 Then('the customer should be told the order is ready for collection', async function () {
-  const current = this.page.locator('.tracking-step.active');
-  await expect(current).toContainText('Ready for Collection');
+  // The last step is shown ticked (done) rather than highlighted as "current",
+  // since reaching it means the order is complete.
+  const finalStep = this.page.locator('.tracking-step.done').filter({ hasText: 'Ready for Collection' });
+  await expect(finalStep).toBeVisible();
 });
 
 When('the order is read back from the server', async function () {

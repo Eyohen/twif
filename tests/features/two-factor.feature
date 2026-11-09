@@ -1,10 +1,12 @@
 Feature: Two-factor sign-in for the Admin account
   The Admin can reach every part of the shop's records, and a phone number with
-  a short PIN is not enough to protect that. Admin sign-in takes a code from an
-  authenticator app as well. Every other role signs in with phone and PIN.
+  a short PIN is not enough to protect that. Once the Owner requires it, Admin
+  sign-in takes a code from an authenticator app as well. Every other role signs
+  in with phone and PIN.
 
   Background:
     Given the Admin has no authenticator set up
+    And the Owner requires the Admin to use an authenticator
 
   Scenario: An Admin's PIN alone does not sign them in
     When the Admin signs in with their PIN

@@ -7,23 +7,23 @@ When('I start creating a customer', async function () {
   await this.page.waitForSelector('input[type="email"]', { timeout: 15000 });
 });
 
-Then('the email field should be required', async function () {
-  await expect(this.page.locator('input[type="email"]').first()).toHaveAttribute('required', '');
+Then('the email field should not be required', async function () {
+  await expect(this.page.locator('input[type="email"]').first()).not.toHaveAttribute('required', /.*/);
 });
 
 When('I try to save a customer using an address already on file', async function () {
   // Whichever customer is first on the list is the one whose address is reused.
   // A real customer record, not one the list synthesises from an invoice —
   // only the first kind is checked for a duplicate address.
-  const existing = await this.page.evaluate(async () => {
+  const existing = await this.page.evaluate(async (apiUrl) => {
     // The API is staff-only now, so the page's own token goes with the request.
-    const response = await fetch('http://localhost:8084/api/oms/customers', {
+    const response = await fetch(`${apiUrl}/oms/customers`, {
       headers: { Authorization: `Bearer ${window.localStorage.getItem('twif_access_token')}` },
     });
     const body = await response.json();
     return (body?.data?.customers || [])
       .find((customer) => customer.email && !String(customer.id).startsWith('sent-'))?.email || '';
-  });
+  }, API_URL);
   if (!existing) throw new Error('No customer with an email address to duplicate');
   this.duplicateEmail = existing;
 

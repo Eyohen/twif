@@ -21,14 +21,19 @@ Feature: The rules production runs on
   # for 80% upfront, which leaves a little room above the gate.
   Rule: An order is held until enough of it has been paid
 
-    Scenario: An unpaid order is kept out of production even once approved
-      Given an approved order whose invoice is unpaid
+    # An invoice with nothing paid cannot be approved at all (since 3 September),
+    # so an order on one never reaches the stage where production could hold it.
+    Scenario: An unpaid invoice cannot be approved
+      Given an order raised on an unpaid invoice
+      Then approving it should be refused because nothing has been paid
+
+    Scenario: An unpaid order is not listed as a production job
+      Given an order raised on an unpaid invoice
       When the Production Manager opens Production
-      Then that order should be held with the reason "Invoice unpaid"
-      And that order should not be listed as a production job
+      Then that order should not be listed as a production job
 
     Scenario: An unpaid order cannot be given to a tailor
-      Given an approved order whose invoice is unpaid
+      Given an order raised on an unpaid invoice
       Then assigning a tailor to it should be refused
 
     Scenario: A part payment below the threshold is not enough
@@ -55,9 +60,11 @@ Feature: The rules production runs on
   # A tailor cannot cut without measurements, so the job waits until it has them.
   Rule: An order with no measurements is held
 
+    # The Held list is shown to the Owner and Admin, who are the ones who can
+    # release a held order; the Production Manager just does not see it in their queue.
     Scenario: An order with no measurements is held out of the queue
       Given an approved and paid order with no measurements
-      When the Production Manager opens Production
+      When the Owner opens Production
       Then that order should be held with the reason "Measurements missing"
       And that order should not be listed as a production job
 

@@ -48,6 +48,24 @@ const readInvoice = async (world) => {
   return (body?.data?.invoices || []).find((invoice) => invoice.invoiceNumber === world.invoiceNumber);
 };
 
+// A payment now has to carry a receipt, on every payment: this is the smallest
+// real image, so the server's image check passes and nothing else is needed.
+const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const evidenceFile = () => ({ name: 'receipt.png', mimeType: 'image/png', buffer: Buffer.from(TINY_PNG, 'base64') });
+
+const recordPaymentThroughApi = async (world, amount) => {
+  const client = await world.api('Accountant');
+  const response = await client.patch(`${API_URL}/oms/invoices/${world.invoiceNumber}/payment`, {
+    data: {
+      amountReceived: amount,
+      method: 'transfer',
+      paymentEvidence: [{ name: 'receipt.png', type: 'image/png', size: 70, dataUrl: `data:image/png;base64,${TINY_PNG}` }],
+    },
+  });
+  await client.dispose();
+  expect(response.status(), 'the payment could not be recorded').toBe(200);
+};
+
 // Recorded the way Accounts would: on the payment's own page, behind View.
 When('the Accountant records {int} received on it', async function (amount) {
   if (!this.onPaymentsPage) {
@@ -61,6 +79,10 @@ When('the Accountant records {int} received on it', async function (amount) {
   const form = this.page.locator('form.record-payment');
   await expect(form).toBeVisible({ timeout: 15000 });
   await form.locator('input[type="number"]').fill(String(amount));
+  // The button stays disabled until a receipt is attached.
+  await form.locator('.evidence-picker label').filter({ hasText: 'Choose a file' })
+    .locator('input[type="file"]').setInputFiles(evidenceFile());
+  await expect(form.getByAltText('Payment evidence preview')).toBeVisible({ timeout: 10000 });
   await form.getByRole('button', { name: /record payment/i }).click();
   await expect(form.locator('input[type="number"]')).toHaveValue('', { timeout: 15000 });
 });
@@ -128,16 +150,28 @@ When('the Owner renames the first line to {string}', async function (description
   await editInvoice.call(this, { items: [{ description }] });
 });
 
-When('the Owner tries to change the rate while renaming the line', async function () {
-  await editInvoice.call(this, {
-    items: [{ description: 'Renamed', rate: 1, quantity: 1, discountPercent: 99 }],
-  });
+// Lines are the source of truth for what an invoice comes to, so correcting
+// them recomputes the total (changed on 3 September; the older rule that
+// figures were fixed no longer applies). The first line keeps whatever the
+// request leaves out.
+When('the Owner changes the rate of the first line to {int}', async function (rate) {
+  await editInvoice.call(this, { items: [{ rate }] });
 });
 
-When('the Owner tries to add a second line', async function () {
-  await editInvoice.call(this, {
-    items: [{ description: 'One' }, { description: 'Two' }],
-  });
+When('the Owner adds a second line {string} at {int}', async function (description, rate) {
+  await editInvoice.call(this, { items: [{}, { description, rate, quantity: 1 }] });
+});
+
+When('the Owner tries to bring the first line below what has been paid', async function () {
+  await editInvoice.call(this, { items: [{ rate: 10000 }] });
+});
+
+Given('{int} has been recorded against it', async function (amount) {
+  await recordPaymentThroughApi(this, amount);
+});
+
+Given('the invoice has been paid in full', async function () {
+  await recordPaymentThroughApi(this, this.invoiceTotal);
 });
 
 Then('the line should read {string}', async function (description) {
@@ -145,10 +179,12 @@ Then('the line should read {string}', async function (description) {
   expect(invoice?.items?.[0]?.description).toBe(description);
 });
 
-Then('the invoice should still come to {int}', async function (total) {
+const invoiceComesTo = async function (total) {
   const invoice = await readInvoice(this);
-  expect(Number(invoice?.total), 'the total moved when only the wording should have').toBe(total);
-});
+  expect(Number(invoice?.total), `the invoice does not come to ${total}`).toBe(total);
+};
+Then('the invoice should still come to {int}', invoiceComesTo);
+Then('the invoice should now come to {int}', invoiceComesTo);
 
 Then('the change should be refused', function () {
   expect(this.response.status()).toBe(409);

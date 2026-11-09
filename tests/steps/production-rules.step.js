@@ -76,12 +76,14 @@ Given('an order sheet has been raised and Accounts have approved it', async func
   this.order = await anOrderWith(this, { approval: 'Approved' });
 });
 
-When('the Production Manager opens Production', async function () {
-  await this.signInAs('Production Manager');
+const openProductionAs = async function (roleName) {
+  await this.signInAs(roleName);
   await this.page.goto(this.rolePath('Production'));
   await this.page.waitForLoadState('networkidle');
   await this.page.waitForTimeout(1200);
-});
+};
+When('the Production Manager opens Production', async function () { await openProductionAs.call(this, 'Production Manager'); });
+When('the Owner opens Production', async function () { await openProductionAs.call(this, 'Owner'); });
 
 // "A production job" means one that can actually be worked, so the active queue
 // is what is checked — a held order appears on the board, but under Held.
@@ -188,10 +190,23 @@ async function makeOrder(world, { paymentStatus, measurements, percentPaid }) {
   return { ...invoice, contact: { name: customer, email: `rule.${stamp}@twif.test`, phone: `0819${stamp}0` } };
 }
 
-Given('an approved order whose invoice is unpaid', async function () {
+// Raised on an invoice nothing has been paid against. makeOrder tries to approve
+// it, and the server refuses, so the order stays waiting on Accounts.
+Given('an order raised on an unpaid invoice', async function () {
   this.order = await makeOrder(this, { paymentStatus: 'unpaid', measurements: 'Chest 40, Waist 34' });
   expect(this.order.paymentStatus).toBe('Unpaid');
-  expect(this.order.accountApprovalStatus).toBe('Approved');
+  expect(this.order.accountApprovalStatus, 'an unpaid invoice was approved').toBe('Pending Accounts');
+});
+
+Then('approving it should be refused because nothing has been paid', async function () {
+  const client = await this.api('Accountant');
+  const response = await client.patch(`${API_URL}/oms/invoices/${this.order.invoiceNumber}/account-approval`, {
+    data: { status: 'Approved' },
+  });
+  const body = await response.json().catch(() => null);
+  await client.dispose();
+  expect(response.status(), `an unpaid invoice was approved: ${JSON.stringify(body)}`).toBe(409);
+  expect(String(body?.message)).toMatch(/unpaid/i);
 });
 
 Given('an approved and paid order with no measurements', async function () {
@@ -278,7 +293,9 @@ Then('the Accountant should not be able to release it', async function () {
     data: { status: 'Assigned', tailor: ACCOUNTS.Tailor.name, overrideProductionHold: true },
   });
   await client.dispose();
-  expect(response.status(), 'Accounts released an order the payment gate was holding').toBe(409);
+  // Refused either way: 403 when the account may not change the order sheet at
+  // all, 409 when the payment gate itself holds it. Anything else is a release.
+  expect([403, 409], `Accounts released an order the payment gate was holding (${response.status()})`).toContain(response.status());
 });
 
 Then('the Owner should be able to release it', async function () {

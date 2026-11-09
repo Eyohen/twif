@@ -12,7 +12,8 @@ Feature: Recording what a customer actually paid
   Scenario: The rest of the money settles the invoice
     Given an invoice for 50000 that nothing has been paid against
     When the Accountant records 20000 received on it
-    And the Accountant records 50000 received on it
+    # Each payment adds to what has come in, so the rest of 50000 is 30000.
+    And the Accountant records 30000 received on it
     Then the invoice should be fully paid with 50000 recorded
 
   Scenario: More than the invoice is owed cannot be recorded
@@ -27,9 +28,11 @@ Feature: Recording what a customer actually paid
     When the Tailor tries to record 20000 received on it
     Then the API should refuse the payment as not theirs to record
 
-  # Settled with Henry on 13 August: what an invoice is for can be corrected,
-  # what it comes to cannot, and once Accounts have approved it, it stays.
-  Rule: An invoice's figures are fixed once it has been sent
+  # An invoice's lines can be corrected — wording, rate, quantity, discount, and
+  # lines added or removed — and what it comes to follows them. It cannot be
+  # corrected to less than what has already been paid against it. (This replaced
+  # the August rule that figures were fixed once sent.)
+  Rule: An invoice's lines can be corrected and the total follows them
 
     Scenario: The wording of a line can be corrected
       Given an invoice for 50000 that nothing has been paid against
@@ -37,15 +40,22 @@ Feature: Recording what a customer actually paid
       Then the line should read "Three-piece suit (navy)"
       And the invoice should still come to 50000
 
-    Scenario: Figures sent with the correction are ignored
+    Scenario: Correcting a rate changes what the invoice comes to
       Given an invoice for 50000 that nothing has been paid against
-      When the Owner tries to change the rate while renaming the line
-      Then the invoice should still come to 50000
+      When the Owner changes the rate of the first line to 40000
+      Then the invoice should now come to 40000
 
-    Scenario: Lines cannot be added or removed
+    Scenario: A line can be added and the total follows
       Given an invoice for 50000 that nothing has been paid against
-      When the Owner tries to add a second line
+      When the Owner adds a second line "Alterations" at 5000
+      Then the invoice should now come to 55000
+
+    Scenario: An invoice cannot be corrected to less than has been paid
+      Given an invoice for 50000 that nothing has been paid against
+      And 20000 has been recorded against it
+      When the Owner tries to bring the first line below what has been paid
       Then the change should be refused
+      And the invoice should still come to 50000
 
   Rule: An approved invoice cannot be deleted
 
@@ -55,6 +65,7 @@ Feature: Recording what a customer actually paid
 
     Scenario: An approved invoice cannot be deleted, even by the Owner
       Given an invoice for 50000 that nothing has been paid against
+      And the invoice has been paid in full
       And the Accountant approves it
       Then deleting it should be refused
       And the timeline should record who approved it and when
