@@ -155,6 +155,10 @@ export const daysUntilDue = (value) => {
   return Math.round((due.getTime() - today.getTime()) / 86400000);
 };
 
+// An order is an invoice somebody has paid for, in full or in part. An invoice
+// nobody has paid anything on is only a quote until then.
+export const isOrder = (invoice) => ['Fully Paid', 'Paid', 'Partial Paid'].includes(invoice?.paymentStatus);
+
 // Work that is done has nothing left to count down to.
 export const isFinishedStatus = (status) => ['Ready', 'Ready for Collection', 'Completed'].includes(status);
 
@@ -557,6 +561,9 @@ export const productionJobFromInvoice = (invoice, customers = []) => {
     // the fabrics an order needs, what has already been allocated, and an
     // Owner's decision to release a held order — which was silently re-held.
     tailorDueDate: sheet.tailorDueDate || '',
+    // When Production marked it ready, so completed work can be counted in the
+    // period it was finished rather than whenever it last changed.
+    readyAt: sheet.readyAt || '',
     fabrics: Array.isArray(sheet.fabrics) ? sheet.fabrics : [],
     fabricAllocations: Array.isArray(sheet.fabricAllocations) ? sheet.fabricAllocations : [],
     tailors: Array.isArray(sheet.tailors) ? sheet.tailors : [],

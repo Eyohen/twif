@@ -45,7 +45,7 @@ import {
   openDocumentTab, presentInvoiceDocument, downloadInvoicePdf as saveInvoicePdf,
   useStores,
   useDepartments,
-  daysUntilDue, dueDateLabel, isFinishedStatus,
+  daysUntilDue, dueDateLabel, isFinishedStatus, isOrder,
 } from './utils/oms';
 import { DEPARTMENT_FIELDS, departmentConfig, missingDepartmentDetails } from './config/departmentFields';
 import { isValidPhone, phoneDigits, PHONE_ERROR, PHONE_MAX_LENGTH, PHONE_PATTERN } from './utils/phone';
@@ -481,10 +481,10 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
 
   const salesRevenue = salesInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
   const salesTrend = periodTrend(salesInvoices, salesPeriod);
-  const periodCompleted = periodJobs.filter((job) => job.status === 'Ready');
+  const periodCompleted = periodJobs.filter((job) => isFinishedStatus(job.status));
   const periodInProgress = periodJobs.filter((job) => ['Assigned', 'In Progress'].includes(job.status));
   const periodPending = periodJobs.filter((job) => job.status === 'Order Sheet Confirmed');
-  const periodDelayed = periodJobs.filter((job) => job.delivery && new Date(`${job.delivery}T23:59:59`) < new Date() && job.status !== 'Ready');
+  const periodDelayed = periodJobs.filter((job) => job.delivery && new Date(`${job.delivery}T23:59:59`) < new Date() && !isFinishedStatus(job.status));
 
   const totalRevenue = filteredInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
 
@@ -494,8 +494,14 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
   const lastWindow = previousWindow(thisWindow);
   const priorInvoices = withinWindow(sentInvoices, (invoice) => invoice.createdAt, lastWindow);
   const priorRevenue = priorInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
-  const priorCompleted = withinWindow(productionJobs, (job) => job.updatedAt, lastWindow).filter((job) => job.status === 'Ready');
-  const nowCompleted = withinWindow(productionJobs, (job) => job.updatedAt, thisWindow).filter((job) => job.status === 'Ready');
+  // Completed jobs are counted in the period they were finished in, like every
+  // other figure on this page, not as one fixed total of everything ever done.
+  const finishedAt = (job) => job.readyAt || job.updatedAt;
+  const priorCompleted = withinWindow(productionJobs.filter((job) => isFinishedStatus(job.status)), finishedAt, lastWindow);
+  const nowCompleted = withinWindow(productionJobs.filter((job) => isFinishedStatus(job.status)), finishedAt, thisWindow);
+  // Orders are paid or part-paid invoices; the rest are not orders yet.
+  const periodOrders = filteredInvoices.filter(isOrder);
+  const priorOrders = priorInvoices.filter(isOrder);
   const revenueChange = changeAgainst(totalRevenue, priorRevenue);
   // Revenue is money that has actually come in. What was invoiced in the period
   // is a different figure (an invoice nobody has paid yet is not revenue), so
@@ -503,16 +509,15 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
   const receivedRevenue = paymentsRecordedIn(sentInvoices, thisWindow);
   const priorReceived = paymentsRecordedIn(sentInvoices, lastWindow);
   const receivedChange = changeAgainst(receivedRevenue, priorReceived);
-  const completed = productionJobs.filter((job) => job.status === 'Ready');
   // Overdue jobs are a standing concern, so this one is measured across the
   // whole board rather than the selected period.
-  const delayed = productionJobs.filter((job) => job.delivery && new Date(`${job.delivery}T23:59:59`) < new Date() && job.status !== 'Ready');
+  const delayed = productionJobs.filter((job) => job.delivery && new Date(`${job.delivery}T23:59:59`) < new Date() && !isFinishedStatus(job.status));
   const lowStock = inventory.filter((item) => toNumber(item.quantity) <= toNumber(item.lowStockThreshold || 5));
   const outstanding = filteredInvoices.filter((invoice) => invoice.paymentStatus !== 'Fully Paid').reduce((sum, invoice) => sum + Math.max(0, toNumber(invoice.total) - toNumber(invoice.paid)), 0);
   const storeRows = stores.filter((store) => store.status === 'active').map((store) => {
     const storeName = String(store.name || store.key || '').replace(/\s+Store$/i, '').trim();
     const rowInvoices = storeInvoices.filter((invoice) => String(invoice.store || '').toLowerCase() === storeName.toLowerCase());
-    return { store: storeName, revenue: rowInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), orders: rowInvoices.length };
+    return { store: storeName, revenue: rowInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0), orders: rowInvoices.filter(isOrder).length };
   });
   const storeRevenue = storeRows.reduce((sum, row) => sum + row.revenue, 0);
   // Ranked on what they actually spent in the period on screen, from the
@@ -562,8 +567,8 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
           // nothing in the period before them speaks to.
           ['Total Revenue', money.format(receivedRevenue), changeLabel(receivedChange) || 'Payments recorded in this period', 'green', '▣'],
           ['Total Invoice', money.format(totalRevenue), changeLabel(revenueChange) || 'No earlier period to compare', 'gold', '▣'],
-          ['Total Orders', filteredInvoices.length, changeLabel(changeAgainst(filteredInvoices.length, priorInvoices.length)) || 'No earlier period to compare', 'gold', '▤'],
-          ['Completed Jobs', completed.length, changeLabel(changeAgainst(nowCompleted.length, priorCompleted.length)) || `${nowCompleted.length} in this period`, 'green', '▥'],
+          ['Total Orders', periodOrders.length, changeLabel(changeAgainst(periodOrders.length, priorOrders.length)) || 'Paid or part-paid invoices', 'gold', '▤'],
+          ['Completed Jobs', nowCompleted.length, changeLabel(changeAgainst(nowCompleted.length, priorCompleted.length)) || 'Finished in this period', 'green', '▥'],
           ['Active Customers', customers.length, 'On the books now', 'blue', '♙'],
           ['Low Stock Items', lowStock.length, lowStock.length ? 'At or below threshold' : 'Nothing below threshold', 'red', '△'],
           ['Outstanding Payments', money.format(outstanding), `${filteredInvoices.filter((invoice) => invoice.paymentStatus !== 'Fully Paid').length} invoices not settled`, 'red', '▣'],
@@ -604,7 +609,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
           </div>
           <footer>{[
             [money.format(salesRevenue), 'Total Invoice'],
-            [salesInvoices.length, 'Total Orders'],
+            [salesInvoices.filter(isOrder).length, 'Total Orders'],
             [salesInvoices.length ? money.format(salesRevenue / salesInvoices.length) : money.format(0), 'Avg. Order Value'],
             [`${salesInvoices.filter((invoice) => isFullyPaid(invoice)).length}/${salesInvoices.length}`, 'Fully Paid'],
           ].map(([value, label]) => <div key={label}><strong>{value}</strong><small>{label}</small></div>)}</footer>
@@ -5333,7 +5338,7 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
 // `itemIndex` renders just that one item (used from inside each item's own
 // card) rather than every item on the job; the index passed to every write
 // below is offset to match so it still patches the right item on the server.
-function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDepartmentDetails, renderDepartmentFabric, onSaved, onNotify, relatedSavePending = false, assignmentsLocked = false }) {
+function TailorAssignmentPanel({ job, itemIndex, tailors, tailorsStatus = 'ready', onReloadTailors, departments, renderDepartmentDetails, renderDepartmentFabric, onSaved, onNotify, relatedSavePending = false, assignmentsLocked = false }) {
   // Older sheets kept fabric on the order itself. When the first assignment
   // creates item 0, carry that fabric into the item instead of replacing it
   // with an assignment-only object and making the selection disappear.
@@ -5459,13 +5464,22 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
                     disabled={saving || relatedSavePending || assignmentsLocked || !eligibleTailors.length}
                     onChange={(event) => setDepartmentTailor(index, departmentKey, event.target.value)}
                   >
-                    <option value="">{eligibleTailors.length ? 'Select tailor…' : 'No tailor available'}</option>
+                    <option value="">{eligibleTailors.length
+                      ? 'Select tailor…'
+                      : tailorsStatus === 'loading' ? 'Loading tailors…'
+                        : tailorsStatus === 'error' ? 'Could not load tailors'
+                          : `No ${department?.name || department?.label || DEPARTMENT_FIELDS[departmentKey]?.label || departmentKey} tailor available`}</option>
                     {eligibleTailors.map((person) => (
                       <option key={person.id} value={person.displayName}>
                         {person.displayName}{person.tailorGrade ? ` · Grade ${person.tailorGrade}` : ''}
                       </option>
                     ))}
                   </select>
+                  {!eligibleTailors.length && tailorsStatus !== 'loading' && onReloadTailors ? (
+                    <button type="button" onClick={onReloadTailors} style={{ marginTop: 6, padding: 0, border: 'none', background: 'none', color: '#c97b08', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      Refresh tailor list
+                    </button>
+                  ) : null}
                   </label>
                 </div>
               );
@@ -5589,6 +5603,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   const [toast, setToast] = useState(null);
   const [inventory, setInventory] = useState([]);
   const [tailors, setTailors] = useState([]);
+  const [tailorsStatus, setTailorsStatus] = useState('loading');
   const [pendingFabricSaves, setPendingFabricSaves] = useState(0);
   const [sendingFabricFor, setSendingFabricFor] = useState(null);
   const [fabricSendFailed, setFabricSendFailed] = useState(null);
@@ -5660,10 +5675,26 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
     api.get('/oms/fabrics')
       .then((response) => setInventory(response.data?.data?.fabrics || []))
       .catch(() => notify('Unable to load current inventory'));
-    api.get('/oms/staff')
-      .then((response) => setTailors((response.data?.data?.staffUsers || []).filter((person) => person.role === 'tailor')))
-      .catch(() => notify('Unable to load tailors'));
+    loadTailors();
   }, []);
+
+  // The tailor list used to be read once, when the board opened. A load that
+  // failed or went stale left every dropdown on "No tailor available" with no
+  // way back short of reloading the page, so it is read again whenever a job
+  // is opened, and can be refreshed from the dropdown itself.
+  const loadTailors = () => {
+    setTailorsStatus((current) => (current === 'ready' ? current : 'loading'));
+    return api.get('/oms/staff')
+      .then((response) => {
+        setTailors((response.data?.data?.staffUsers || []).filter((person) => person.role === 'tailor'));
+        setTailorsStatus('ready');
+      })
+      .catch(() => { setTailorsStatus('error'); });
+  };
+  useEffect(() => {
+    if (jobModal?.invoiceNumber) loadTailors();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobModal?.invoiceNumber]);
 
   const notify = (message, type = 'success') => {
     setToast({ message, type });
@@ -6539,6 +6570,8 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       job={jobModal}
                       itemIndex={itemIndex}
                       tailors={tailors}
+                      tailorsStatus={tailorsStatus}
+                      onReloadTailors={loadTailors}
                       departments={departments}
                       // Fabric remains selectable while production is under
                       // way and locks only after completion. A fabric already
@@ -7479,8 +7512,12 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
       entry.orders += 1;
       byCustomer.set(name, entry);
     });
-    return [...byCustomer.values()].sort((a, b) => b.paid - a.paid).slice(0, 5);
+    return [...byCustomer.values()].sort((a, b) => b.paid - a.paid);
   }, [report.invoices]);
+  // Five to a page; the list used to stop at five with no way to see the rest.
+  const [topCustomerPage, setTopCustomerPage] = useState(1);
+  const TOP_CUSTOMER_PAGE_SIZE = 5;
+  const topCustomerPageNow = Math.min(topCustomerPage, Math.max(1, Math.ceil(reportTopCustomers.length / TOP_CUSTOMER_PAGE_SIZE)));
   const paidTotal = report.invoices.filter((invoice) => invoice.paymentStatus === 'Fully Paid').reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
   const pending = report.invoices.filter((invoice) => invoice.approvalStatus === 'Pending Accounts');
   const flagged = report.invoices.filter((invoice) => ['Flagged', 'Rejected'].includes(invoice.approvalStatus));
@@ -8033,7 +8070,7 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
             <div><strong style={{ fontSize: 13 }}>Top Customers</strong></div>
           </div>
           <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {reportTopCustomers.map((customer) => (
+            {reportTopCustomers.slice((topCustomerPageNow - 1) * TOP_CUSTOMER_PAGE_SIZE, topCustomerPageNow * TOP_CUSTOMER_PAGE_SIZE).map((customer) => (
               <div key={customer.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1a1611', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
                   {customer.name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()}
@@ -8046,6 +8083,11 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
             ))}
             {!reportTopCustomers.length && <div style={{ fontSize: 12, color: '#8a7a6a', padding: '8px 0' }}>No paid invoices in this period.</div>}
           </div>
+          {reportTopCustomers.length > TOP_CUSTOMER_PAGE_SIZE ? (
+            <div style={{ padding: '0 16px 12px' }}>
+              <Pagination page={topCustomerPageNow} pageSize={TOP_CUSTOMER_PAGE_SIZE} total={reportTopCustomers.length} onPage={setTopCustomerPage} noun="customers" />
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
