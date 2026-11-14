@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, FileText, Package, Bell, TrendingUp, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { FileText, Package, Bell, TrendingUp, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { isOrder, invoiceApprovalStatus, isFullyPaid, filterByPeriod, addDaysIso, todayIso, money, toNumber } from '../../utils/oms';
 import { api } from '../../lib/api';
 import PeriodFilter, { initialCustomRange } from '../../components/oms/PeriodFilter';
@@ -27,17 +27,18 @@ export default function StoreManagerOverviewPage({ sentInvoices = [], production
   const periodName = PERIOD_NAMES[period] || 'Today';
   // Only paid or part-paid invoices are orders.
   const periodOrders = periodInvoices.filter(isOrder);
-  const periodCustomers = new Set(periodOrders.map((invoice) => invoice.customer)).size;
+  const periodInvoiced = periodInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
   const periodValue = periodOrders.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
   // Standing figure, for the Pending Actions list.
   const awaitingPayment = sentInvoices.filter((invoice) => !isFullyPaid(invoice));
   const readyJobs = productionJobs.filter((job) => READY_STATES.includes(job.status));
   // The tiles read over the period picked above, like everything else here, so
   // they move with it. Awaiting payment is what was raised in the period and is
-  // still owed; Ready for Pickup is what Production finished in the period.
+  // still owed; Ready for Pickup is finished work the customer is due to collect
+  // in the period (its delivery date falls in it).
   const owedInPeriod = periodInvoices.filter((invoice) => !isFullyPaid(invoice) && toNumber(invoice.total) > 0);
   const owedAmount = owedInPeriod.reduce((sum, invoice) => sum + Math.max(0, toNumber(invoice.total) - toNumber(invoice.paid)), 0);
-  const readyInPeriod = filterByPeriod(readyJobs, (job) => job.readyAt || job.updatedAt, period, range.from, range.to);
+  const readyInPeriod = filterByPeriod(readyJobs, (job) => (String(job.delivery || '').slice(0, 10) ? `${String(job.delivery).slice(0, 10)}T12:00:00` : null), period, range.from, range.to);
   const pendingApproval = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts');
   // Counted against the customer register, since this tile links there.
   const customersWithoutMeasurements = customers.filter((customer) => !customer.measurementsAdded).length;
@@ -62,8 +63,8 @@ export default function StoreManagerOverviewPage({ sentInvoices = [], production
   const kpis = [
     { Icon: FileText, label: `Orders ${periodName}`, value: periodOrders.length, detail: money.format(periodValue), tone: 'blue', dest: 'Orders' },
     { Icon: TrendingUp, label: `Awaiting Payment ${periodName}`, value: owedInPeriod.length, detail: `${money.format(owedAmount)} still owed`, tone: 'gold', dest: 'Invoices', params: { status: 'AwaitingPayment' } },
-    { Icon: Package, label: `Ready for Pickup ${periodName}`, value: readyInPeriod.length, detail: 'Marked ready in this period', tone: 'green', dest: 'Orders', params: { filter: 'Ready for Collection' } },
-    { Icon: Users, label: `Customers ${periodName}`, value: periodCustomers, detail: 'Customers with an order', tone: 'purple', dest: 'Customers' },
+    { Icon: Package, label: `Ready for Pickup ${periodName}`, value: readyInPeriod.length, detail: 'Ready and due for collection', tone: 'green', dest: 'Orders', params: { filter: 'Ready for Collection' } },
+    { Icon: FileText, label: `Invoices ${periodName}`, value: periodInvoices.length, detail: `${money.format(periodInvoiced)} invoiced`, tone: 'purple', dest: 'Invoices' },
   ];
 
   const pendingItems = [
