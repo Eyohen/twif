@@ -16,8 +16,8 @@ export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavig
   const [selectedSheet, setSelectedSheet] = useState(null);
   const [sortOrder, setSortOrder] = useState('Newest First');
   const [deleteNotice, setDeleteNotice] = useState('');
-  // Deleting is the Owner's and Admin's, as archiving is.
-  const mayDelete = ['owner', 'admin'].includes(role);
+  // Deleting an order sheet is the Owner's alone.
+  const mayDelete = role === 'owner';
   const deleteSheet = async (order) => {
     if (!window.confirm(`Delete the order sheet for ${order.invoiceNumber}? This cannot be undone. The invoice stays and a new sheet can be raised.`)) return;
     try {
@@ -72,7 +72,7 @@ export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavig
         order={selectedSheet}
         onBack={() => { setSelectedSheet(null); window.scrollTo(0, 0); }}
         onEdit={(invoiceNumber) => onNavigate?.('Order Sheet', { edit: invoiceNumber })}
-        onDelete={mayDelete && (selectedSheet.sheet || selectedSheet.orderSheet)?.status === 'Order Sheet Confirmed' ? () => deleteSheet(selectedSheet) : undefined}
+        onDelete={mayDelete ? () => deleteSheet(selectedSheet) : undefined}
         currentRole={currentRole}
         role={role}
       />

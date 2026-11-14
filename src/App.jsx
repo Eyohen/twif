@@ -2226,7 +2226,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
       return [['Send to Production Anyway', <ArrowRight size={12} strokeWidth={2} />, () => onOverrideHold(job, reason)]];
     })(),
     ...(mayArchive && invoice.orderSheet ? [['Archive Order Sheet', <ClipboardList size={12} strokeWidth={2} />, () => archiveOrderSheet(invoice)]] : []),
-    ...(mayArchive && invoice.orderSheet?.status === 'Order Sheet Confirmed' ? [['Delete Order Sheet', <Trash2 size={12} strokeWidth={2} />, () => deleteOrderSheet(invoice)]] : []),
+    ...(currentRole?.id === 'owner' && invoice.orderSheet?.status ? [['Delete Order Sheet', <Trash2 size={12} strokeWidth={2} />, () => deleteOrderSheet(invoice)]] : []),
     ...(mayArchive ? [['Archive Invoice', <Package size={12} strokeWidth={2} />, () => archiveInvoice(invoice)]] : []),
     ...(mayDelete(invoice) ? [['Delete Invoice', <Trash2 size={12} strokeWidth={2} />, () => removeInvoice(invoice)]] : []),
   ];
@@ -2493,7 +2493,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
         onBack={() => setShowOrderSheet(false)}
         onEdit={(invoiceNumber) => onNavigate?.('Order Sheet', { edit: invoiceNumber })}
         onArchive={mayArchive ? () => archiveOrderSheet(selectedInvoice) : undefined}
-        onDelete={mayArchive && selectedInvoice.orderSheet?.status === 'Order Sheet Confirmed' ? () => deleteOrderSheet(selectedInvoice) : undefined}
+        onDelete={currentRole?.id === 'owner' && selectedInvoice.orderSheet?.status ? () => deleteOrderSheet(selectedInvoice) : undefined}
       />
     );
   }
