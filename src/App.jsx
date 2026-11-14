@@ -45,6 +45,7 @@ import {
   openDocumentTab, presentInvoiceDocument, downloadInvoicePdf as saveInvoicePdf,
   useStores,
   useDepartments,
+  daysUntilDue, dueDateLabel,
 } from './utils/oms';
 import { DEPARTMENT_FIELDS, departmentConfig, missingDepartmentDetails } from './config/departmentFields';
 import { isValidPhone, phoneDigits, PHONE_ERROR, PHONE_MAX_LENGTH, PHONE_PATTERN } from './utils/phone';
@@ -1165,6 +1166,8 @@ function TailorOverview({ currentRole, productionJobs = [], onUpdateJob }) {
 }
 
 function ProductionOverview({ productionJobs = [], onNavigate }) {
+  const [queuePage, setQueuePage] = useState(1);
+  const QUEUE_PAGE_SIZE = 6;
   const readyJobs = productionJobs.filter((job) => job.status === 'Ready');
   const unassignedJobs = productionJobs.filter((job) => !job.tailor || job.tailor === 'Unassigned');
   const fabricPending = productionJobs.filter((job) => !job.fabricConfirmed);
@@ -1225,7 +1228,7 @@ function ProductionOverview({ productionJobs = [], onNavigate }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {priorityJobs.slice(0, 10).map((job) => {
+                  {priorityJobs.slice((Math.min(queuePage, Math.max(1, Math.ceil(priorityJobs.length / QUEUE_PAGE_SIZE))) - 1) * QUEUE_PAGE_SIZE, Math.min(queuePage, Math.max(1, Math.ceil(priorityJobs.length / QUEUE_PAGE_SIZE))) * QUEUE_PAGE_SIZE).map((job) => {
                     const isOverdue = job.delivery && new Date(job.delivery) < new Date();
                     return (
                       <tr key={job.id} className={isOverdue ? 'row-overdue' : ''} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Production')}>
@@ -1234,6 +1237,9 @@ function ProductionOverview({ productionJobs = [], onNavigate }) {
                             {isOverdue && <AlertTriangle size={11} />}
                             {job.delivery || 'Not set'}
                           </span>
+                          {dueDateLabel(job.delivery) ? (
+                            <small style={{ display: 'block', marginTop: 2, fontWeight: 600, color: daysUntilDue(job.delivery) < 0 ? '#8a3520' : '#2a7d4f' }}>{dueDateLabel(job.delivery)}</small>
+                          ) : null}
                         </td>
                         <td data-label="Customer">
                           <div className="table-customer-cell">
@@ -1255,6 +1261,13 @@ function ProductionOverview({ productionJobs = [], onNavigate }) {
                 </tbody>
               </table>
             </div>
+            <Pagination
+              page={Math.min(queuePage, Math.max(1, Math.ceil(priorityJobs.length / QUEUE_PAGE_SIZE)))}
+              pageSize={QUEUE_PAGE_SIZE}
+              total={priorityJobs.length}
+              onPage={setQueuePage}
+              noun="orders"
+            />
             </>
           ) : <div className="invoice-preview-empty">No active production jobs.</div>}
         </div>
@@ -5150,14 +5163,9 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
                         ? 'Loading inventory...'
                         : (orderItem.fabrics || []).length ? 'Add another fabric…' : 'Nil — Production will choose'}
                     </option>
+                    {/* Choosing fabric from stock is Production's and Inventory's
+                        job. The store only says when the customer brings their own. */}
                     <option value="client-supplied">Client supplied</option>
-                    {inventory
-                      .filter((fabric) => !(orderItem.fabrics || []).some((entry) => entry.fabricId === fabric.id))
-                      .map((fabric) => (
-                        <option key={fabric.id} value={fabric.id} disabled={toNumber(fabric.quantity) <= 0}>
-                          {fabric.name} ({toNumber(fabric.quantity)} {fabric.unit}){toNumber(fabric.quantity) <= 0 ? ' · Out of stock' : ''}
-                        </option>
-                      ))}
                   </select>
 
                   <span className="os-fabric-hint">
@@ -5481,6 +5489,10 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
   );
 }
 
+// What identifies a fabric line when the same list holds stock fabric, the
+// customer's own and privately sourced fabric, the last two having no id.
+const fabricKeyOf = (entry) => (entry.privateSupplied ? 'private-supplied' : entry.clientSupplied ? 'client-supplied' : entry.fabricId);
+
 function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = false, departmentLabel, storeKey, onQuantity, onRemove, onAdd }) {
   // Typing narrows the list by SKU, name or type, so a code like 0002 finds
   // its fabric without scrolling through everything held.
@@ -5498,12 +5510,12 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = fals
             const available = availableAtStore(stock);
             const short = Boolean(entry.fabricId) && toNumber(entry.quantity) > available;
             return (
-              <li key={entry.fabricId || 'client-supplied'}>
-                <div><strong>{stock?.sku ? `${stock.sku} · ` : ''}{entry.name}</strong><small>{entry.clientSupplied ? 'The customer is bringing this' : `${available} ${stock?.unit || entry.unit} in stock`}</small></div>
-                {entry.clientSupplied ? <span className="fabric-supplied">Customer&apos;s own</span> : (
+              <li key={fabricKeyOf(entry)}>
+                <div><strong>{stock?.sku ? `${stock.sku} · ` : ''}{entry.name}</strong><small>{entry.privateSupplied ? 'Sourced privately, not from inventory' : entry.clientSupplied ? 'The customer is bringing this' : `${available} ${stock?.unit || entry.unit} in stock`}</small></div>
+                {entry.clientSupplied ? <span className="fabric-supplied">{entry.privateSupplied ? 'Private' : 'Customer\'s own'}</span> : (
                   <label><input type="number" min="0" step="0.01" value={entry.quantity ?? ''} disabled={allocated || readOnly} onChange={(event) => onQuantity(entry.fabricId, event.target.value)} aria-label={`How much ${entry.name} this department needs`} /><span>{entry.unit || 'units'}</span></label>
                 )}
-                <button type="button" disabled={allocated || readOnly} onClick={() => onRemove(entry.fabricId)} aria-label={`Remove ${entry.name}`}>×</button>
+                <button type="button" disabled={allocated || readOnly} onClick={() => onRemove(fabricKeyOf(entry))} aria-label={`Remove ${entry.name}`}>×</button>
                 {short ? <p>Only {available} {stock?.unit} left.</p> : null}
               </li>
             );
@@ -5521,6 +5533,7 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = fals
       <select value="" disabled={allocated || readOnly} onChange={(event) => { onAdd(event.target.value); event.target.value = ''; setSearch(''); }}>
         <option value="">{fabrics.length ? 'Add another fabric…' : 'Select inventory fabric'}</option>
         <option value="client-supplied">Client supplied</option>
+        <option value="private-supplied">Private supplied</option>
         {/* Choosing is a request to Inventory, who confirm what is on the
             shelf when they approve it, so nothing is greyed out here. */}
         {inventory
@@ -5556,6 +5569,8 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   const [tailors, setTailors] = useState([]);
   const [pendingFabricSaves, setPendingFabricSaves] = useState(0);
   const [sendingFabricFor, setSendingFabricFor] = useState(null);
+  const [fabricSendFailed, setFabricSendFailed] = useState(null);
+  const autoSentRef = useRef('');
   const [allocatingJobId, setAllocatingJobId] = useState(null);
   const [settingInProgress, setSettingInProgress] = useState(false);
   const [confirmReady, setConfirmReady] = useState(null);
@@ -5761,7 +5776,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
     const [first] = fabrics;
     const changes = {
       fabrics,
-      fabric: first?.clientSupplied ? 'Client supplied' : first?.name || '',
+      fabric: first?.clientSupplied ? (first.privateSupplied ? 'Private supplied' : 'Client supplied') : first?.name || '',
       fabricId: first?.fabricId || '',
       fabricUnit: first?.unit || '',
       fabricUsage: first?.quantity || '',
@@ -5777,11 +5792,11 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   const addItemFabric = (itemIndex, departmentKey, fabricId) => {
     const all = itemFabricsFor(itemIndex);
     const current = itemFabricsFor(itemIndex, departmentKey);
-    if (!fabricId || current.some((entry) => (
-      fabricId === 'client-supplied' ? entry.clientSupplied : entry.fabricId === fabricId
-    ))) return;
+    if (!fabricId || current.some((entry) => fabricKeyOf(entry) === fabricId)) return;
     const chosen = fabricId === 'client-supplied'
       ? { fabricId: '', name: 'Client supplied', unit: '', quantity: '', clientSupplied: true, departmentKey }
+      : fabricId === 'private-supplied'
+      ? { fabricId: '', name: 'Private supplied', unit: '', quantity: '', clientSupplied: true, privateSupplied: true, departmentKey }
       : (() => {
         const item = inventory.find((fabric) => fabric.id === fabricId);
         return item ? { fabricId: item.id, name: item.name, unit: item.unit, quantity: '', departmentKey } : null;
@@ -5798,7 +5813,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
 
   const removeItemFabric = (itemIndex, departmentKey, fabricId) => saveItemFabrics(
     itemIndex, itemFabricsFor(itemIndex).filter((entry) => !(
-      entry.fabricId === fabricId && (entry.departmentKey === departmentKey || (!entry.departmentKey && departmentKey === (itemIndex !== undefined ? jobModal.items?.[itemIndex] : jobModal)?.departments?.[0]))
+      fabricKeyOf(entry) === fabricId && (entry.departmentKey === departmentKey || (!entry.departmentKey && departmentKey === (itemIndex !== undefined ? jobModal.items?.[itemIndex] : jobModal)?.departments?.[0]))
     ))
   );
 
@@ -5875,16 +5890,17 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
       return { state: 'pending', text: `Sent to Inventory${request.requestedBy ? ` by ${request.requestedBy}` : ''} — waiting for their approval.`, canSend: false };
     }
     if (request?.status === 'Pending') {
-      return { state: 'changed', ready, text: 'You changed the fabric after sending it. Send the updated choice so Inventory approve the right one.', canSend: true };
+      return { state: 'changed', ready, text: ready ? 'Sending your updated choice to Inventory…' : 'Say how much of each fabric is needed. It goes to Inventory for approval by itself.', canSend: true };
     }
-    return { state: 'draft', ready, text: ready ? 'Inventory must approve this fabric before the job can be set In Progress.' : 'Say how much of each fabric is needed, then send it to Inventory for approval.', canSend: true };
+    return { state: 'draft', ready, text: ready ? 'Sending to Inventory for approval…' : 'Say how much of each fabric is needed. It goes to Inventory for approval by itself.', canSend: true };
   };
 
   const sendFabricForApproval = async (itemIndex) => {
     const lines = itemFabricsFor(itemIndex).map((entry) => (entry.clientSupplied
-      ? { clientSupplied: true, ...(entry.departmentKey ? { departmentKey: entry.departmentKey } : {}) }
+      ? { clientSupplied: true, ...(entry.privateSupplied ? { privateSupplied: true } : {}), ...(entry.departmentKey ? { departmentKey: entry.departmentKey } : {}) }
       : { fabricId: entry.fabricId, quantity: Number(entry.quantity), ...(entry.departmentKey ? { departmentKey: entry.departmentKey } : {}) }));
     setSendingFabricFor(itemIndex);
+    setFabricSendFailed(null);
     try {
       const response = await api.patch(`/oms/jobs/${jobModal.invoiceNumber}/fabrics`, { submit: true, items: [{ index: itemIndex, fabrics: lines }] });
       const sheet = response.data?.data?.orderSheet;
@@ -5895,11 +5911,33 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
       }
       notify('Sent to Inventory for approval', 'success');
     } catch (error) {
+      setFabricSendFailed(itemIndex);
       notify(error.response?.data?.message || 'Unable to send the fabric to Inventory', 'error');
     } finally {
       setSendingFabricFor(null);
     }
   };
+
+  // Nobody should have to remember to send it. Once the fabric and its
+  // quantity are saved and sit still for a moment, it goes to Inventory. Each
+  // choice is tried once automatically; a failure leaves a button to retry.
+  useEffect(() => {
+    if (!jobModal?.items?.length || pendingFabricSaves > 0 || sendingFabricFor !== null) return undefined;
+    if (['Ready', 'Ready for Collection'].includes(jobModal.status)) return undefined;
+    const index = jobModal.items.findIndex((_, at) => {
+      const status = fabricApprovalFor(at);
+      return status?.canSend && status.ready;
+    });
+    if (index < 0) return undefined;
+    const key = `${jobModal.invoiceNumber}:${index}:${fabricSnapshot(stockLinesOf(index))}`;
+    if (autoSentRef.current === key) return undefined;
+    const timer = window.setTimeout(() => {
+      autoSentRef.current = key;
+      sendFabricForApproval(index);
+    }, 1200);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobModal, pendingFabricSaves, sendingFabricFor]);
 
   // Allocates stock for one garment — `item`/`itemIndex` undefined for a
   // legacy sheet with no real items array, same fallback as elsewhere. Pure:
@@ -6210,6 +6248,10 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                           <Calendar size={12} style={{ color: '#b0a090' }} />
                           {order.delivery ? new Date(`${order.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No date'}
                         </div>
+                        {/* Nothing left to count down once the work is done. */}
+                        {order.delivery && !['Ready', 'Ready for Collection'].includes(order.status) ? (
+                          <div style={{ marginTop: 2, fontSize: 11, fontWeight: 600, color: daysUntilDue(order.delivery) < 0 ? '#8a3520' : '#2a7d4f' }}>{dueDateLabel(order.delivery)}</div>
+                        ) : null}
                       </td>
                       <td data-label="Tailor" style={{ padding: '12px 14px' }}>
                         <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: (!order.tailor || order.tailor === 'Unassigned') ? '#fffbf0' : '#f0faf4', color: (!order.tailor || order.tailor === 'Unassigned') ? '#7a6030' : '#2a7d4f', border: '1px solid', borderColor: (!order.tailor || order.tailor === 'Unassigned') ? '#e8d9a0' : '#c3e8d4' }}>
@@ -6537,15 +6579,13 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       return (
                         <div className="fabric-approval" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '10px 12px', borderRadius: 8, background: tone[0], border: `1px solid ${tone[1]}`, color: tone[2], fontSize: 13, fontWeight: 600 }}>
                           <span style={{ flex: 1, minWidth: 200 }}>{status.text}</span>
-                          {status.canSend ? (
+                          {status.canSend && status.ready && fabricSendFailed === itemIndex ? (
                             <button
                               type="button"
-                              disabled={pendingFabricSaves > 0 || sendingFabricFor === itemIndex || !status.ready}
+                              disabled={pendingFabricSaves > 0 || sendingFabricFor === itemIndex}
                               onClick={() => sendFabricForApproval(itemIndex)}
-                              style={{ padding: '7px 14px', border: 'none', borderRadius: 8, background: '#1a1611', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: status.ready ? 1 : 0.5 }}
-                            >
-                              {sendingFabricFor === itemIndex ? 'Sending…' : status.state === 'changed' ? 'Send updated choice to Inventory' : 'Send to Inventory for approval'}
-                            </button>
+                              style={{ padding: '7px 14px', border: 'none', borderRadius: 8, background: '#1a1611', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                            >Try sending again</button>
                           ) : null}
                         </div>
                       );

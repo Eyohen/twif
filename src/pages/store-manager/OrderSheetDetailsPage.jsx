@@ -80,7 +80,7 @@ export default function OrderSheetDetailsPage({ order, onBack, onEdit, onArchive
   ];
 
   const fabricLine = (fabric) => (fabric.clientSupplied
-    ? `${fabric.name || 'Customer supplied'} — customer's own`
+    ? (fabric.privateSupplied ? 'Private supplied — not from inventory' : `${fabric.name || 'Customer supplied'} — customer's own`)
     : `${fabric.name || 'Fabric'}${fabric.quantity ? ` · ${fabric.quantity} ${fabric.unit || ''}`.trim() : ''}`);
 
   return (

@@ -129,7 +129,7 @@ const selectedFabricsFor = (invoice) => {
     .flatMap((item) => Array.isArray(item.fabrics) ? item.fabrics : []);
   const fallback = Array.isArray(sheet.fabrics) ? sheet.fabrics : [];
   const names = [...new Set((entries.length ? entries : fallback)
-    .map((fabric) => fabric?.clientSupplied ? 'Client supplied' : fabric?.name)
+    .map((fabric) => fabric?.clientSupplied ? (fabric.privateSupplied ? 'Private supplied' : 'Client supplied') : fabric?.name)
     .filter(Boolean))];
   return names.length ? names : (sheet.fabric ? [sheet.fabric] : []);
 };

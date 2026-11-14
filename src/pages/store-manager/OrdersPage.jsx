@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Clock, Package, CheckCircle, AlertCircle, Search, ChevronRight, Eye, Plus, FileText } from 'lucide-react';
-import { money, invoiceApprovalStatus, amountReceived, formatMoment, daysUntilDue, dueDateLabel, toNumber, filterByPeriod } from '../../utils/oms';
+import { useStores, money, invoiceApprovalStatus, amountReceived, formatMoment, daysUntilDue, dueDateLabel, toNumber, filterByPeriod } from '../../utils/oms';
 import PeriodFilter, { ALL_TIME, DEFAULT_PERIODS, initialCustomRange } from '../../components/oms/PeriodFilter';
 import { Status } from '../../components/oms/Common';
 import OrderDetailsPage from './OrderDetailsPage';
@@ -32,6 +32,9 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [activeKpiDot, setActiveKpiDot] = useState(0);
   const [sortOrder, setSortOrder] = useState('Newest First');
+  // The Owner and Admin see every store's orders and can narrow to one.
+  const knownStores = useStores();
+  const [storeFilter, setStoreFilter] = useState('All');
   const [page, setPage] = useState(1);
   const kpiScrollRef = useRef(null);
   const showStore = role === 'owner' || role === 'admin';
@@ -47,11 +50,25 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
     () => sentInvoices.map((invoice) => ({ ...invoice, job: invoice.orderSheet || {}, approval: invoiceApprovalStatus(invoice) })),
     [sentInvoices]
   );
-  // Every figure and list below reads over the chosen period.
-  const orders = useMemo(
-    () => filterByPeriod(allOrders, (order) => order.createdAt || order.invoiceDate, period, range.from, range.to),
-    [allOrders, period, range]
-  );
+  const storeOptions = useMemo(() => {
+    const names = new Map();
+    (knownStores || []).filter((store) => store.status === 'active').forEach((store) => {
+      const name = String(store.name || store.key || '').replace(/\s+Store$/i, '').trim();
+      if (name) names.set(name.toLowerCase(), name);
+    });
+    allOrders.forEach((order) => {
+      const name = String(order.store || '').trim();
+      if (name && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
+    });
+    return [...names.values()].sort((a, b) => a.localeCompare(b));
+  }, [knownStores, allOrders]);
+  // Every figure and list below reads over the chosen store and period.
+  const orders = useMemo(() => {
+    const inStore = showStore && storeFilter !== 'All'
+      ? allOrders.filter((order) => String(order.store || '').trim().toLowerCase() === storeFilter.toLowerCase())
+      : allOrders;
+    return filterByPeriod(inStore, (order) => order.createdAt || order.invoiceDate, period, range.from, range.to);
+  }, [allOrders, showStore, storeFilter, period, range]);
   const requestedInvoice = searchParams.get('invoice');
 
   // Notification links carry the invoice number. Open the matching order
@@ -207,6 +224,14 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
                 <option>Oldest First</option>
               </select>
             </label>
+            {showStore ? (
+              <label className="os-field" style={{ minWidth: 160 }}>
+                <select value={storeFilter} onChange={(event) => { setStoreFilter(event.target.value); setPage(1); }} aria-label="Filter orders by store">
+                  <option value="All">All stores</option>
+                  {storeOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </label>
+            ) : null}
           </div>
           <PeriodFilter period={period} onPeriod={setPeriod} from={range.from} to={range.to} onFrom={(from) => setRange((current) => ({ ...current, from }))} onTo={(to) => setRange((current) => ({ ...current, to }))} periods={PERIODS} />
           {/* Tab pills */}

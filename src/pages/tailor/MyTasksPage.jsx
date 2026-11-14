@@ -17,7 +17,7 @@ const itemsLabelFor = (order) => {
 };
 
 const fabricNamesOf = (list) => (Array.isArray(list) ? list : [])
-  .map((entry) => (entry?.clientSupplied ? 'Client supplied' : entry?.name))
+  .map((entry) => (entry?.clientSupplied ? (entry.privateSupplied ? 'Private supplied' : 'Client supplied') : entry?.name))
   .filter(Boolean);
 
 // Production stores every department's choices in the item's fabrics array,

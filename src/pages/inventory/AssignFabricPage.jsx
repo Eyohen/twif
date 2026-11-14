@@ -138,7 +138,7 @@ function OrderFabric({ invoice, inventory, onChanged }) {
   };
 
   const payloadLines = (index) => (drafts[index] || []).map((line) => (line.clientSupplied
-    ? { clientSupplied: true, ...(line.departmentKey ? { departmentKey: line.departmentKey } : {}) }
+    ? { clientSupplied: true, ...(line.privateSupplied ? { privateSupplied: true } : {}), ...(line.departmentKey ? { departmentKey: line.departmentKey } : {}) }
     : { fabricId: line.fabricId, quantity: Number(line.quantity), ...(line.departmentKey ? { departmentKey: line.departmentKey } : {}) }));
 
   const save = async (index) => {
@@ -230,7 +230,7 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                     const have = fabric ? availableAt(fabric, storeKey) : null;
                     return (
                       <div key={`${line.fabricId || 'client'}-${position}`} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <strong style={{ minWidth: 160, fontSize: 13 }}>{line.clientSupplied ? 'Client supplied' : `${fabric?.sku ? `${fabric.sku} · ` : ''}${line.name}`}</strong>
+                        <strong style={{ minWidth: 160, fontSize: 13 }}>{line.clientSupplied ? (line.privateSupplied ? 'Private supplied' : 'Client supplied') : `${fabric?.sku ? `${fabric.sku} · ` : ''}${line.name}`}</strong>
                         {line.clientSupplied ? <span style={{ fontSize: 12, color: '#8a7a6a' }}>Nothing is taken from stock.</span> : (
                           <>
                             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
