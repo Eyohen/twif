@@ -1778,6 +1778,12 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
       note: item.note || '',
     };
   }));
+  // The discount on the whole invoice, reopened in the unit it was entered in.
+  const [invoiceDiscount, setInvoiceDiscount] = useState(() => ({
+    discountMode: invoice.invoiceDiscountMode === 'amount' ? 'amount' : 'percent',
+    discountPercent: toNumber(invoice.invoiceDiscountPercent),
+    discountAmount: toNumber(invoice.invoiceDiscountAmount),
+  }));
   const [customerName, setCustomerName] = useState(invoice.customer || '');
   const [customerPhone, setCustomerPhone] = useState(() => phoneDigits(invoice.customerPhone || invoice.phone || ''));
   const [customerEmail, setCustomerEmail] = useState(invoice.customerEmail || invoice.email || '');
@@ -1873,7 +1879,19 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   const itemDiscountTotal = items.reduce((sum, item) => sum + lineDiscountAmount(item), 0);
   const eliteDiscountAmount = toNumber(invoiceState.eliteDiscountAmount);
   const storeCreditApplied = toNumber(invoiceState.storeCreditApplied);
-  const newTotal = Math.max(0, subtotal - itemDiscountTotal - eliteDiscountAmount - storeCreditApplied);
+  // After the item discounts, and never more than what is left of them.
+  const afterItemDiscounts = Math.max(0, subtotal - itemDiscountTotal);
+  const invoiceDiscountValue = Math.round(lineDiscountAmount({ rate: afterItemDiscounts, quantity: 1, ...invoiceDiscount }) * 100) / 100;
+  const updateInvoiceDiscount = (field, value) => setInvoiceDiscount((current) => {
+    const next = { ...current, [field]: value };
+    if (next.discountMode === 'amount') {
+      next.discountPercent = afterItemDiscounts > 0 ? Math.min((Math.max(toNumber(next.discountAmount), 0) / afterItemDiscounts) * 100, 100) : 0;
+    } else {
+      next.discountAmount = (afterItemDiscounts * Math.min(Math.max(toNumber(next.discountPercent), 0), 100)) / 100;
+    }
+    return next;
+  });
+  const newTotal = Math.max(0, afterItemDiscounts - invoiceDiscountValue - eliteDiscountAmount - storeCreditApplied);
   const alreadyPaid = toNumber(invoiceState.paid);
   const balanceDue = Math.max(0, newTotal - alreadyPaid);
   const belowPaid = newTotal < alreadyPaid;
@@ -1911,6 +1929,9 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
           amount: Math.max((toNumber(item.rate) * toNumber(item.quantity)) - lineDiscountAmount(item), 0),
         })),
         subtotal,
+        invoiceDiscountMode: invoiceDiscount.discountMode,
+        invoiceDiscountPercent: invoiceDiscount.discountPercent,
+        invoiceDiscountAmount: invoiceDiscountValue,
         total: newTotal,
         balanceDue,
       }), { responseType: 'text' });
@@ -1950,6 +1971,9 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
           discountPercent: Math.min(Math.max(toNumber(item.discountPercent), 0), 100),
           discountAmount: Math.round(lineDiscountAmount(item) * 100) / 100,
         })),
+        invoiceDiscountMode: invoiceDiscount.discountMode,
+        invoiceDiscountPercent: Math.min(Math.max(toNumber(invoiceDiscount.discountPercent), 0), 100),
+        invoiceDiscountAmount: invoiceDiscount.discountMode === 'amount' ? Math.max(toNumber(invoiceDiscount.discountAmount), 0) : invoiceDiscountValue,
         customerName,
         customerPhone,
         customerEmail,
@@ -2061,7 +2085,19 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
           </button>
         </div>
 
+        {/* A discount on the whole invoice, taken after the item discounts. */}
+        <div className="os-card" style={{ marginTop: 4 }}>
+          <div className="os-card-body">
+            <DiscountField
+              label="Invoice discount"
+              item={{ rate: afterItemDiscounts, quantity: 1, ...invoiceDiscount }}
+              onChange={updateInvoiceDiscount}
+            />
+          </div>
+        </div>
+
         <dl className="edit-invoice-total">
+          {invoiceDiscountValue > 0 && <><dt>Invoice discount</dt><dd style={{ color: '#2a7d4f' }}>-{money.format(invoiceDiscountValue)}</dd></>}
           <dt>New invoice total</dt><dd><strong style={{ color: belowPaid ? '#8a3520' : undefined }}>{money.format(newTotal)}</strong></dd>
           <dt>Recorded as paid</dt><dd>{money.format(alreadyPaid)}</dd>
           <dt>Balance due</dt><dd><strong>{money.format(balanceDue)}</strong></dd>
@@ -3337,6 +3373,11 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
     // raised. Before this the status said "part paid" with no figure behind it.
     amountReceived: '',
     storeCreditApplied: 0,
+    // A discount on the whole invoice, on top of any per-item ones. Percent or
+    // a naira figure, kept as typed.
+    invoiceDiscountMode: 'percent',
+    invoiceDiscountPercent: 0,
+    invoiceDiscountAmount: 0,
     trackingUrl: '',
     // Left empty: whatever is typed here is what the customer reads.
     notes: '',
@@ -3412,12 +3453,24 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
   const billableItems = items.filter((item) => item.description.trim());
   const subtotal = billableItems.reduce((sum, item) => sum + (toNumber(item.rate) * toNumber(item.quantity)), 0);
   const itemDiscountTotal = billableItems.reduce((sum, item) => sum + lineDiscountAmount(item), 0);
+  // A discount on the whole invoice comes off what is left after the item
+  // discounts, and can never be more than that, so the invoice cannot go
+  // below nothing. Everything after it (elite, store credit) works from what
+  // remains.
+  const afterItemDiscounts = Math.max(0, subtotal - itemDiscountTotal);
+  const invoiceDiscountAmount = Math.round(lineDiscountAmount({
+    rate: afterItemDiscounts,
+    quantity: 1,
+    discountMode: form.invoiceDiscountMode,
+    discountPercent: form.invoiceDiscountPercent,
+    discountAmount: form.invoiceDiscountAmount,
+  }) * 100) / 100;
   // The elite discount follows the customer's membership rather than being
   // typed in — see the tier the customer is on, resolved below.
-  const eliteDiscountAmount = Math.round(((subtotal - itemDiscountTotal) * elitePercent) / 100);
+  const eliteDiscountAmount = Math.round(((afterItemDiscounts - invoiceDiscountAmount) * elitePercent) / 100);
   const availableStoreCredit = Math.max(0, toNumber(chosenCustomer?.storeCreditBalance));
-  const maximumStoreCredit = Math.min(availableStoreCredit, Math.max(0, subtotal - itemDiscountTotal - eliteDiscountAmount));
-  const balanceDue = Math.max(subtotal - itemDiscountTotal - eliteDiscountAmount - toNumber(form.storeCreditApplied), 0);
+  const maximumStoreCredit = Math.min(availableStoreCredit, Math.max(0, afterItemDiscounts - invoiceDiscountAmount - eliteDiscountAmount));
+  const balanceDue = Math.max(afterItemDiscounts - invoiceDiscountAmount - eliteDiscountAmount - toNumber(form.storeCreditApplied), 0);
   // `balanceDue` is what the invoice comes to — the server stores it as the
   // invoice total. What is still owed is that less whatever the customer has
   // just handed over, and nothing used to subtract it: a fully paid invoice
@@ -3430,6 +3483,13 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
   // store credit) owes nothing, so it reads Fully Paid by itself and has no
   // payment method or receipt to ask for.
   const comesToNothing = billableItems.length > 0 && balanceDue <= 0;
+  // A bigger discount can leave less for store credit to cover than was typed;
+  // credit is only ever taken for what the invoice actually needs.
+  useEffect(() => {
+    if (toNumber(form.storeCreditApplied) > maximumStoreCredit) {
+      setForm((current) => ({ ...current, storeCreditApplied: maximumStoreCredit }));
+    }
+  }, [maximumStoreCredit]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!comesToNothing) return;
     setForm((current) => (current.paymentStatus === 'fully_paid' && !current.paymentMethod && !toNumber(current.amountReceived)
@@ -3448,6 +3508,21 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
 
   const updateForm = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  // The invoice-level discount follows the same rule as a line's: what is typed
+  // is kept as typed and the other unit is worked out from it for display.
+  const updateInvoiceDiscount = (field, value) => {
+    setForm((current) => {
+      const next = { ...current, [field === 'discountMode' ? 'invoiceDiscountMode' : field === 'discountPercent' ? 'invoiceDiscountPercent' : 'invoiceDiscountAmount']: value };
+      const base = Math.max(0, subtotal - itemDiscountTotal);
+      if (next.invoiceDiscountMode === 'amount') {
+        next.invoiceDiscountPercent = base > 0 ? Math.min((Math.max(toNumber(next.invoiceDiscountAmount), 0) / base) * 100, 100) : 0;
+      } else {
+        next.invoiceDiscountAmount = (base * Math.min(Math.max(toNumber(next.invoiceDiscountPercent), 0), 100)) / 100;
+      }
+      return next;
+    });
   };
 
   // A store manager may know the discount either as a percent or as the
@@ -3522,10 +3597,17 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
         amount: Math.max(toNumber(item.rate) * toNumber(item.quantity) - lineDiscountAmount(item), 0),
       })),
     subtotal,
+    // The discount on the whole invoice: as entered, and the naira it comes to.
+    invoiceDiscountMode: form.invoiceDiscountMode === 'amount' ? 'amount' : 'percent',
+    invoiceDiscountPercent: Math.round(Math.min(Math.max(toNumber(form.invoiceDiscountPercent), 0), 100) * 10000) / 10000,
+    invoiceDiscountAmount,
     eliteDiscountAmount,
     storeCreditApplied: toNumber(form.storeCreditApplied),
     // Fully paid means the whole balance unless a smaller figure was typed.
     amountReceived: amountPaidNow,
+    // What the document lists as the initial payment, so the preview matches
+    // what will be sent. The record itself is built on the server.
+    payments: amountPaidNow > 0 ? [{ amount: amountPaidNow, recordedAt: new Date().toISOString() }] : [],
     balanceDue,
     trackingUrl: form.trackingUrl || trackingUrlForToken(form.trackingToken),
     notes: form.notes.split('\n').map((note) => note.trim()).filter(Boolean),
@@ -4026,6 +4108,15 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
               <FileText size={14} strokeWidth={1.5} />
               <h3>Invoice Preview</h3>
             </header>
+            {/* A discount on the whole invoice, taken after the item discounts.
+                The per-item discounts above are unchanged. */}
+            <div className="invoice-discount-block" style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #eee5da' }}>
+              <DiscountField
+                label="Invoice discount"
+                item={{ rate: afterItemDiscounts, quantity: 1, discountMode: form.invoiceDiscountMode, discountPercent: form.invoiceDiscountPercent, discountAmount: form.invoiceDiscountAmount }}
+                onChange={updateInvoiceDiscount}
+              />
+            </div>
             <dl>
               <dt>Invoice #</dt>
               <dd style={{ fontFamily: 'monospace', fontSize: 11 }}>{form.invoiceNumber}</dd>
@@ -4042,6 +4133,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
               <dt>Subtotal</dt>
               <dd>{money.format(subtotal)}</dd>
               {itemDiscountTotal > 0 && <><dt>Item discounts</dt><dd style={{ color: '#2a7d4f' }}>-{money.format(itemDiscountTotal)}</dd></>}
+              {invoiceDiscountAmount > 0 && <><dt>Invoice discount{form.invoiceDiscountMode === 'percent' && toNumber(form.invoiceDiscountPercent) > 0 ? ` (${Number(toNumber(form.invoiceDiscountPercent).toFixed(2))}%)` : ''}</dt><dd style={{ color: '#2a7d4f' }}>-{money.format(invoiceDiscountAmount)}</dd></>}
               {eliteDiscountAmount > 0 && <><dt>Elite discount</dt><dd style={{ color: '#2a7d4f' }}>-{money.format(eliteDiscountAmount)}</dd></>}
               {toNumber(form.storeCreditApplied) > 0 && <><dt>Store credit</dt><dd style={{ color: '#2a7d4f' }}>-{money.format(toNumber(form.storeCreditApplied))}</dd></>}
               {amountPaidNow > 0 && <><dt>Invoice total</dt><dd>{money.format(balanceDue)}</dd></>}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Camera, Image as ImageIcon, Check } from 'lucide-react';
 import { api } from '../../lib/api';
 import { compressedImageDataUrl } from '../../utils/image';
+import { todayIso } from '../../utils/oms';
 
 const PAYMENT_METHODS = ['transfer', 'cash', 'card', 'pos', 'check'];
 const paymentMethodLabel = (method) => (method === 'pos' ? 'POS' : `${method.charAt(0).toUpperCase()}${method.slice(1)}`);
@@ -15,6 +16,8 @@ const paymentMethodLabel = (method) => (method === 'pos' ? 'POS' : `${method.cha
 export default function RecordPaymentForm({ invoiceNumber, balance, defaultMethod = 'transfer', onRecorded, fixedAmount }) {
   const [amount, setAmount] = useState(fixedAmount !== undefined ? String(fixedAmount) : '');
   const [method, setMethod] = useState(defaultMethod);
+  // The day the money actually arrived. It goes on the invoice beside the amount.
+  const [paymentDate, setPaymentDate] = useState(() => todayIso());
   const [evidenceList, setEvidenceList] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -51,11 +54,13 @@ export default function RecordPaymentForm({ invoiceNumber, balance, defaultMetho
       const response = await api.patch(`/oms/invoices/${invoiceNumber}/payment`, {
         amountReceived: Number(amount),
         method,
+        ...(paymentDate ? { paymentDate } : {}),
         ...(evidenceList.length ? { paymentEvidence: evidenceList } : {}),
       });
       const updated = response.data?.data?.invoice;
       if (updated) onRecorded?.(updated);
       setAmount(fixedAmount !== undefined ? String(fixedAmount) : '');
+      setPaymentDate(todayIso());
       setEvidenceList([]);
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'That payment could not be recorded.');
@@ -88,6 +93,10 @@ export default function RecordPaymentForm({ invoiceNumber, balance, defaultMetho
               <option key={option} value={option}>{paymentMethodLabel(option)}</option>
             ))}
           </select>
+        </label>
+        <label className="os-field">
+          <span>Payment date</span>
+          <input type="date" value={paymentDate} max={todayIso()} onChange={(event) => setPaymentDate(event.target.value)} aria-label="Date the payment was received" />
         </label>
       </div>
 

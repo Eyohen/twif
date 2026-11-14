@@ -160,6 +160,7 @@ export default function PaymentDetailPage({ invoice: initialInvoice, onBack, onR
               <div style={{ background: '#faf7f3', borderRadius: 8, padding: '12px 14px' }}>
                 {[
                   ['Subtotal', money.format(Number(invoice.subtotal || invoice.total || 0)), false],
+                  ...(Number(invoice.invoiceDiscountAmount || 0) ? [[`Invoice Discount${invoice.invoiceDiscountMode === 'percent' && Number(invoice.invoiceDiscountPercent) > 0 ? ` (${Number(Number(invoice.invoiceDiscountPercent).toFixed(2))}%)` : ''}`, `− ${money.format(Number(invoice.invoiceDiscountAmount))}`, true]] : []),
                   ...(Number(invoice.eliteDiscountAmount || 0) ? [['Elite Discount', `− ${money.format(Number(invoice.eliteDiscountAmount))}`, true]] : []),
                   ...(Number(invoice.storeCreditApplied || 0) ? [['Store Credit Used', `− ${money.format(Number(invoice.storeCreditApplied))}`, true]] : []),
                 ].map(([name, val, isGreen]) => (

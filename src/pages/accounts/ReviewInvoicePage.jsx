@@ -23,6 +23,7 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
   // relationship to the invoice in front of them.
   const total = Number(invoice.total || 0);
   const discount = Number(invoice.eliteDiscountAmount || 0);
+  const invoiceDiscount = Number(invoice.invoiceDiscountAmount || 0);
   const credit = Number(invoice.storeCreditApplied || 0);
   const payable = invoicePayable(invoice);
   // A part payment's amount is never recorded anywhere, so it is shown as
@@ -225,6 +226,7 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
                 {[
                   ['Subtotal', money.format(Number(invoice.subtotal || total)), false],
                   // Discount and credit lines only appear when they apply.
+                  ...(invoiceDiscount ? [[`Invoice Discount${invoice.invoiceDiscountMode === 'percent' && Number(invoice.invoiceDiscountPercent) > 0 ? ` (${Number(Number(invoice.invoiceDiscountPercent).toFixed(2))}%)` : ''}`, `− ${money.format(invoiceDiscount)}`, true]] : []),
                   ...(discount ? [['Elite Discount', `− ${money.format(discount)}`, true]] : []),
                   ...(credit ? [['Store Credit Used', `− ${money.format(credit)}`, true]] : []),
                   ['Total Amount', money.format(payable), false],

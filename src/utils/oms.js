@@ -225,11 +225,18 @@ export const invoiceDocumentPayload = (invoice) => ({
   subtotal: invoice.subtotal || toNumber(invoice.total),
   eliteDiscountAmount: invoice.eliteDiscountAmount || 0,
   storeCreditApplied: invoice.storeCreditApplied || 0,
+  // A discount on the whole invoice, as it was entered.
+  invoiceDiscountMode: invoice.invoiceDiscountMode === 'amount' ? 'amount' : 'percent',
+  invoiceDiscountPercent: invoice.invoiceDiscountPercent || 0,
+  invoiceDiscountAmount: invoice.invoiceDiscountAmount || 0,
   balanceDue: invoice.balanceDue ?? toNumber(invoice.total),
   // What has been paid so far. Left out, the document read nothing as received,
   // so a part-paid invoice downloaded with its Amount Due equal to the whole
   // total and no payment line at all.
   amountReceived: amountReceived(invoice) ?? 0,
+  // Every payment on the invoice, one by one with its date, so the document
+  // lists them rather than printing one running sum.
+  payments: Array.isArray(invoice.paymentHistory) ? invoice.paymentHistory : [],
   paymentStatus: invoice.paymentStatusKey || PAYMENT_STATUS_KEYS[invoice.paymentStatus] || 'partial_paid',
   paymentMethod: invoice.paymentMethodKey || String(invoice.paymentMethod || 'transfer').toLowerCase(),
   trackingToken: invoice.trackingToken,
@@ -344,14 +351,42 @@ export const downloadInvoicePdf = async (html, invoiceNumber = 'invoice') => {
     const image = canvas.toDataURL('image/jpeg', 0.92);
 
     // A long invoice runs onto further pages rather than being squashed onto one.
-    let remaining = imageHeight;
-    let offset = 0;
-    while (remaining > 0) {
-      pdf.addImage(image, 'JPEG', 0, -offset, pageWidth, imageHeight);
-      remaining -= pageHeight;
-      offset += pageHeight;
-      if (remaining > 0) pdf.addPage();
+    // The page is a photograph cut at a fixed height, so a block that has to stay
+    // whole (the payment breakdown, the tracking box) is moved up to the next page
+    // instead of being cut through. Anything marked data-keep-together is treated so.
+    const toPoints = pageWidth / canvas.width;
+    const pageSpan = pageHeight / toPoints;
+    const scale = canvas.width / 820;
+    const bodyTop = body.getBoundingClientRect().top;
+    const keepTogether = [...body.querySelectorAll('[data-keep-together]')].map((element) => {
+      const box = element.getBoundingClientRect();
+      return { top: (box.top - bodyTop) * scale, bottom: (box.bottom - bodyTop) * scale };
+    });
+    const slices = [];
+    let sliceStart = 0;
+    while (sliceStart < canvas.height - 1) {
+      let sliceEnd = Math.min(sliceStart + pageSpan, canvas.height);
+      if (sliceEnd < canvas.height) {
+        const cut = keepTogether.find((block) => block.top < sliceEnd && block.bottom > sliceEnd
+          && block.top > sliceStart + pageSpan * 0.25 && (block.bottom - block.top) < pageSpan);
+        if (cut) sliceEnd = cut.top;
+      }
+      slices.push({ start: sliceStart, end: sliceEnd });
+      sliceStart = sliceEnd;
     }
+    slices.forEach((slice, index) => {
+      if (index) pdf.addPage();
+      pdf.addImage(image, 'JPEG', 0, -slice.start * toPoints, pageWidth, imageHeight);
+      // The part of the photograph below where this page was cut belongs to the
+      // next page; cover it so it is not printed twice.
+      const cutAt = (slice.end - slice.start) * toPoints;
+      if (slice.end < canvas.height && cutAt < pageHeight - 1) {
+        pdf.setFillColor(232, 232, 232);
+        pdf.rect(0, cutAt, pageWidth, pageHeight - cutAt, 'F');
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect((30 / 820) * pageWidth, cutAt, (760 / 820) * pageWidth, pageHeight - cutAt, 'F');
+      }
+    });
 
     pdf.save(`${invoiceNumber}.pdf`);
     return 'downloaded';
