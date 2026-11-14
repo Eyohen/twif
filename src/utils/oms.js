@@ -155,7 +155,11 @@ export const daysUntilDue = (value) => {
   return Math.round((due.getTime() - today.getTime()) / 86400000);
 };
 
-export const dueDateLabel = (value) => {
+// Work that is done has nothing left to count down to.
+export const isFinishedStatus = (status) => ['Ready', 'Ready for Collection', 'Completed'].includes(status);
+
+export const dueDateLabel = (value, status) => {
+  if (isFinishedStatus(status)) return '';
   const days = daysUntilDue(value);
   if (days === null) return '';
   if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, Clock, Package, CheckCircle, Search, ChevronRight, Eye, Edit2, Plus } from 'lucide-react';
-import { formatMoment, dueDateLabel, daysUntilDue } from '../../utils/oms';
+import { ClipboardList, Clock, Package, CheckCircle, Search, ChevronRight, Eye, Edit2, Plus, Trash2 } from 'lucide-react';
+import { formatMoment, dueDateLabel, daysUntilDue, isFinishedStatus } from '../../utils/oms';
 import { api } from '../../lib/api';
 import { Status } from '../../components/oms/Common';
 import OrderSheetDetailsPage from './OrderSheetDetailsPage';
@@ -232,14 +232,14 @@ export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavig
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ fontSize: 13, color: '#5a4e42' }}>{delivery ? formatMoment(delivery) : 'Not set'}</div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: daysUntilDue(delivery) !== null && daysUntilDue(delivery) < 0 ? '#8a3520' : '#2a7d4f', marginTop: 2 }}>
-                      {dueDateLabel(delivery)}
+                      {dueDateLabel(delivery, sheet.status)}
                     </div>
                   </td>
                   <td style={{ padding: '12px 14px', fontSize: 13, color: sheet.tailor && sheet.tailor !== 'Unassigned' ? '#1a1611' : '#8a7a6a', fontWeight: sheet.tailor && sheet.tailor !== 'Unassigned' ? 700 : 400 }}>
                     {tailorLabel(sheet)}
                   </td>
                   <td style={{ padding: '12px 14px' }} onClick={(e) => e.stopPropagation()}>
-                    <Status>{sheet.status}</Status>
+                    <Status>{isFinishedStatus(sheet.status) ? 'Completed' : sheet.status}</Status>
                   </td>
                   <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>
                     {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
@@ -268,6 +268,19 @@ export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavig
                           }}
                         >
                           <Edit2 size={12} strokeWidth={1.8} /> Edit
+                        </button>
+                      ) : null}
+                      {mayDelete ? (
+                        <button
+                          type="button"
+                          onClick={() => deleteSheet(order)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            padding: '5px 10px', border: '1px solid #f3d5cc', borderRadius: 6,
+                            fontSize: 12, fontWeight: 600, background: '#fff5f0', color: '#8a3520', cursor: 'pointer', fontFamily: 'inherit',
+                          }}
+                        >
+                          <Trash2 size={12} strokeWidth={1.8} /> Delete
                         </button>
                       ) : null}
                     </div>
@@ -299,7 +312,7 @@ export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavig
                   <div style={{ fontWeight: 700, fontSize: 14, color: '#3d352c' }}>{order.customer}</div>
                   <div style={{ fontSize: 12, color: '#8a7a6a' }}>{summary.label}{summary.count > 1 ? ` +${summary.count - 1} more` : ''} · {summary.pieces} pc{summary.pieces === 1 ? '' : 's'}</div>
                 </div>
-                <Status>{sheet.status}</Status>
+                <Status>{isFinishedStatus(sheet.status) ? 'Completed' : sheet.status}</Status>
               </div>
               <div style={{ borderTop: '1px solid #f3ede5', display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 16px', gap: 8 }}>
                 <div>

@@ -13,7 +13,7 @@ const outlineButton = {
   fontWeight: 600, background: '#fff', color: '#1a1611', cursor: 'pointer', fontFamily: 'inherit',
 };
 
-export default function OrderDetailsPage({ order, onBack, currentRole, role = 'store_manager' }) {
+export default function OrderDetailsPage({ order, onBack, currentRole, role = 'store_manager', onDeleteSheet }) {
   const [notice, setNotice] = useState('');
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -82,7 +82,7 @@ export default function OrderDetailsPage({ order, onBack, currentRole, role = 's
 
   const facts = [
     { key: 'Invoice No.', value: order.invoiceNumber },
-    { key: 'Delivery Date', value: deliveryDate ? formatMoment(deliveryDate) : 'Not set', sub: dueDateLabel(deliveryDate), subColor: days !== null && days < 0 ? '#8a3520' : '#8a7a6a' },
+    { key: 'Delivery Date', value: deliveryDate ? formatMoment(deliveryDate) : 'Not set', sub: dueDateLabel(deliveryDate, job.status), subColor: days !== null && days < 0 ? '#8a3520' : '#8a7a6a' },
     { key: 'Production', status },
     { key: 'Payment', status: order.paymentStatus || 'Unpaid' },
     { key: 'Invoice Total', value: money.format(payable) },
@@ -110,6 +110,11 @@ export default function OrderDetailsPage({ order, onBack, currentRole, role = 's
         <button type="button" onClick={saveInvoicePdf} style={outlineButton}>
           <Download size={13} strokeWidth={1.8} /> Download Invoice
         </button>
+        {onDeleteSheet && order.orderSheet?.status ? (
+          <button type="button" onClick={onDeleteSheet} style={{ ...outlineButton, color: '#8a3520', borderColor: '#f3d5cc', background: '#fff5f0' }}>
+            Delete Order Sheet
+          </button>
+        ) : null}
       </div>
 
       {notice && (

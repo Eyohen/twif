@@ -1,7 +1,7 @@
 import { orderedMeasurementEntries } from '../../utils/measurements';
 import { useEffect } from 'react';
 import { ArrowLeft, CheckCircle, Package, CreditCard, Ruler, Clock, User, Scissors, Layers, Image as ImageIcon, ClipboardList } from 'lucide-react';
-import { money, formatMoment, amountReceived, invoicePayable, invoiceApprovalStatus, daysUntilDue, dueDateLabel, toNumber, useDepartments } from '../../utils/oms';
+import { money, formatMoment, amountReceived, invoicePayable, invoiceApprovalStatus, daysUntilDue, dueDateLabel, isFinishedStatus, toNumber, useDepartments } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import JobCommentThread from '../../components/oms/JobCommentThread';
 import { departmentConfig } from '../../config/departmentFields';
@@ -29,7 +29,7 @@ export default function OrderSheetDetailsPage({ order, onBack, onEdit, onArchive
   const approval = order.approval || invoiceApprovalStatus(order);
   const status = approval === 'Pending Accounts'
     ? 'Pending Accounts'
-    : sheet.status === 'Ready' ? 'Ready for Collection' : sheet.status || order.orderStatus || 'Awaiting Production';
+    : isFinishedStatus(sheet.status) ? 'Completed' : sheet.status || order.orderStatus || 'Awaiting Production';
 
   const payable = invoicePayable(order);
   const paid = amountReceived(order);
@@ -72,7 +72,7 @@ export default function OrderSheetDetailsPage({ order, onBack, onEdit, onArchive
 
   const facts = [
     { key: 'Invoice No.', value: order.invoiceNumber },
-    { key: 'Delivery Date', value: deliveryDate ? formatMoment(deliveryDate) : 'Not set', sub: dueDateLabel(deliveryDate), subColor: days !== null && days < 0 ? '#8a3520' : '#8a7a6a' },
+    { key: 'Delivery Date', value: deliveryDate ? formatMoment(deliveryDate) : 'Not set', sub: dueDateLabel(deliveryDate, sheet.status), subColor: days !== null && days < 0 ? '#8a3520' : '#8a7a6a' },
     { key: 'Production', status },
     { key: 'Tailor', value: sheet.tailor && sheet.tailor !== 'Unassigned' ? sheet.tailor : 'Unassigned' },
     { key: 'Garments', value: garments.length },

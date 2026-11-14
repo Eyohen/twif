@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Clock, Package, CheckCircle, AlertCircle, Search, ChevronRight, Eye, Plus, FileText } from 'lucide-react';
 import { useStores, money, invoiceApprovalStatus, amountReceived, formatMoment, daysUntilDue, dueDateLabel, toNumber, filterByPeriod } from '../../utils/oms';
 import PeriodFilter, { ALL_TIME, DEFAULT_PERIODS, initialCustomRange } from '../../components/oms/PeriodFilter';
+import { api } from '../../lib/api';
 import { Status } from '../../components/oms/Common';
 import OrderDetailsPage from './OrderDetailsPage';
 import Pagination from '../../components/oms/Pagination';
@@ -20,7 +21,7 @@ const isPaidOrPart = (order) => ['Fully Paid', 'Paid', 'Partial Paid'].includes(
 const readyOn = (order) => (READY_STATES.includes(order.job?.status) ? (order.job.readyAt || order.job.updatedAt || null) : null);
 const shortDate = (value) => (value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 
-export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, currentRole, role = 'store_manager' }) {
+export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, currentRole, role = 'store_manager', onInvoiceChanged, onInvoiceDeleted, onOrderSheetRemoved }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState(() => {
@@ -38,6 +39,21 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
   const [page, setPage] = useState(1);
   const kpiScrollRef = useRef(null);
   const showStore = role === 'owner' || role === 'admin';
+  // Deleting an order sheet is the Owner's alone.
+  const [deleteNotice, setDeleteNotice] = useState('');
+  const deleteSheet = async (order) => {
+    if (!window.confirm(`Delete the order sheet for ${order.invoiceNumber}? This cannot be undone. The invoice stays and a new sheet can be raised.`)) return;
+    try {
+      const response = await api.delete(`/oms/invoices/${order.invoiceNumber}/order-sheet`);
+      const data = response.data?.data || {};
+      if (data.removedInvoice) onInvoiceDeleted?.(order.invoiceNumber);
+      else if (data.invoice) { onInvoiceChanged?.(data.invoice); onOrderSheetRemoved?.(order.invoiceNumber); }
+      setSelectedOrder(null);
+      setDeleteNotice(`The order sheet for ${order.invoiceNumber} was deleted.`);
+    } catch (error) {
+      setDeleteNotice(error.response?.data?.message || 'That order sheet could not be deleted.');
+    }
+  };
 
   const handleKpiScroll = () => {
     if (!kpiScrollRef.current) return;
@@ -121,7 +137,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   if (selectedOrder) {
-    return <OrderDetailsPage order={selectedOrder} currentRole={currentRole} role={role} onBack={() => { setSelectedOrder(null); window.scrollTo(0, 0); }} />;
+    return <OrderDetailsPage order={selectedOrder} currentRole={currentRole} role={role} onDeleteSheet={role === 'owner' ? () => deleteSheet(selectedOrder) : undefined} onBack={() => { setSelectedOrder(null); window.scrollTo(0, 0); }} />;
   }
 
   const kpis = [
@@ -136,6 +152,9 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
 
   return (
     <div className="os-page">
+      {deleteNotice ? (
+        <div className={`os-message ${/could not|already|cannot/i.test(deleteNotice) ? 'os-msg-error' : 'os-msg-success'}`} role="status">{deleteNotice}</div>
+      ) : null}
       {/* Page header */}
       <div className="os-page-header">
         <div className="os-page-title">
@@ -331,7 +350,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
                         counted 4, 3, 2 days left for the first three — from the
                         row's position, not the delivery date. */}
                     <div style={{ fontSize: 11, fontWeight: 600, color: daysUntilDue(delivery) !== null && daysUntilDue(delivery) < 0 ? '#8a3520' : '#2a7d4f', marginTop: 2 }}>
-                      {dueDateLabel(delivery)}
+                      {dueDateLabel(delivery, order.job?.status)}
                     </div>
                   </td>
                   <td style={{ padding: '12px 14px' }} onClick={(e) => e.stopPropagation()}>
@@ -414,7 +433,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
                   {/* Same row-position count as the table above had: on a
                       phone every order past the third read "Overdue". */}
                   <div style={{ fontSize: 11, fontWeight: 600, color: daysUntilDue(delivery) !== null && daysUntilDue(delivery) < 0 ? '#8a3520' : '#2a7d4f', marginTop: 1 }}>
-                    {dueDateLabel(delivery)}
+                    {dueDateLabel(delivery, order.job?.status)}
                   </div>
                 </div>
                 <div>

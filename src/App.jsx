@@ -45,7 +45,7 @@ import {
   openDocumentTab, presentInvoiceDocument, downloadInvoicePdf as saveInvoicePdf,
   useStores,
   useDepartments,
-  daysUntilDue, dueDateLabel,
+  daysUntilDue, dueDateLabel, isFinishedStatus,
 } from './utils/oms';
 import { DEPARTMENT_FIELDS, departmentConfig, missingDepartmentDetails } from './config/departmentFields';
 import { isValidPhone, phoneDigits, PHONE_ERROR, PHONE_MAX_LENGTH, PHONE_PATTERN } from './utils/phone';
@@ -1168,10 +1168,10 @@ function TailorOverview({ currentRole, productionJobs = [], onUpdateJob }) {
 function ProductionOverview({ productionJobs = [], onNavigate }) {
   const [queuePage, setQueuePage] = useState(1);
   const QUEUE_PAGE_SIZE = 6;
-  const readyJobs = productionJobs.filter((job) => job.status === 'Ready');
+  const readyJobs = productionJobs.filter((job) => isFinishedStatus(job.status));
   const unassignedJobs = productionJobs.filter((job) => !job.tailor || job.tailor === 'Unassigned');
   const fabricPending = productionJobs.filter((job) => !job.fabricConfirmed);
-  const activeJobs = productionJobs.filter((job) => job.status !== 'Ready');
+  const activeJobs = productionJobs.filter((job) => !isFinishedStatus(job.status));
   const now = new Date();
   const inSevenDays = new Date(now);
   inSevenDays.setDate(now.getDate() + 7);
@@ -1237,8 +1237,8 @@ function ProductionOverview({ productionJobs = [], onNavigate }) {
                             {isOverdue && <AlertTriangle size={11} />}
                             {job.delivery || 'Not set'}
                           </span>
-                          {dueDateLabel(job.delivery) ? (
-                            <small style={{ display: 'block', marginTop: 2, fontWeight: 600, color: daysUntilDue(job.delivery) < 0 ? '#8a3520' : '#2a7d4f' }}>{dueDateLabel(job.delivery)}</small>
+                          {dueDateLabel(job.delivery, job.status) ? (
+                            <small style={{ display: 'block', marginTop: 2, fontWeight: 600, color: daysUntilDue(job.delivery) < 0 ? '#8a3520' : '#2a7d4f' }}>{dueDateLabel(job.delivery, job.status)}</small>
                           ) : null}
                         </td>
                         <td data-label="Customer">
@@ -6276,8 +6276,8 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                           {order.delivery ? new Date(`${order.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No date'}
                         </div>
                         {/* Nothing left to count down once the work is done. */}
-                        {order.delivery && !['Ready', 'Ready for Collection'].includes(order.status) ? (
-                          <div style={{ marginTop: 2, fontSize: 11, fontWeight: 600, color: daysUntilDue(order.delivery) < 0 ? '#8a3520' : '#2a7d4f' }}>{dueDateLabel(order.delivery)}</div>
+                        {order.delivery && !isFinishedStatus(order.status) ? (
+                          <div style={{ marginTop: 2, fontSize: 11, fontWeight: 600, color: daysUntilDue(order.delivery) < 0 ? '#8a3520' : '#2a7d4f' }}>{dueDateLabel(order.delivery, order.status)}</div>
                         ) : null}
                       </td>
                       <td data-label="Tailor" style={{ padding: '12px 14px' }}>
@@ -8926,7 +8926,7 @@ function renderView(activeView, role, viewProps = {}) {
     }
     return <OrdersView sentInvoices={viewProps.sentInvoices} />;
   }
-  if (activeView === 'Orders') return ['store_manager', 'owner', 'admin'].includes(role) ? <StoreManagerOrdersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} currentRole={viewProps.currentRole} role={role} /> : <OrdersView sentInvoices={viewProps.sentInvoices} />;
+  if (activeView === 'Orders') return ['store_manager', 'owner', 'admin'].includes(role) ? <StoreManagerOrdersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} currentRole={viewProps.currentRole} role={role} onInvoiceChanged={viewProps.onInvoiceUpdated} onInvoiceDeleted={viewProps.onInvoiceDeleted} onOrderSheetRemoved={viewProps.onOrderSheetArchived} /> : <OrdersView sentInvoices={viewProps.sentInvoices} />;
   if (activeView === 'Customers') return role === 'store_manager' || role === 'owner' || role === 'admin' ? <StoreManagerCustomersPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} currentRole={viewProps.currentRole} /> : <CustomersView />;
   if (activeView === 'New Invoice') return <NewInvoiceView currentRole={viewProps.currentRole} onInvoiceSent={viewProps.onInvoiceSent} />;
   if (activeView === 'Order Sheet') {
