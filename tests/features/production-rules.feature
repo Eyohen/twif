@@ -91,8 +91,17 @@ Feature: The rules production runs on
       Then Start Work should be offered
       And Mark Ready should not be offered
 
-    Scenario: A started job offers Mark Ready, not Start Work
+    # Marking a job Ready is the Production Manager's. The button stays on the
+    # tailor's card, disabled, and the server refuses the request as well.
+    Scenario: A started job no longer offers Start Work, and Mark Ready stays disabled for the tailor
       Given a tailor has a job that has not been started
       When the tailor starts that job
-      Then Mark Ready should be offered
+      Then Mark Ready should not be offered
       And Start Work should not be offered
+
+    Scenario: The server refuses a tailor who tries to mark a job Ready
+      Given a tailor has a job that has not been started
+      When the tailor starts that job
+      And the tailor tries to mark that job Ready through the API
+      Then the request should be refused
+      And the job should still be in progress

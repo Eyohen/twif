@@ -22,7 +22,8 @@ Feature: A complete order lifecycle
     When the tailor starts the job
     Then the job should be in progress
 
-    When the tailor marks the job ready
+    # Marking a job Ready is the Production Manager's, not the tailor's.
+    When the Production Manager marks the job ready
     Then the job should be ready for collection
 
     When the customer opens their tracking link

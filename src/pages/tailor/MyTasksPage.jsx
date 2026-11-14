@@ -7,6 +7,11 @@ import { departmentConfig } from '../../config/departmentFields';
 import JobCommentThread from '../../components/oms/JobCommentThread';
 import Pagination from '../../components/oms/Pagination';
 
+// Marking a job Ready is the Production Manager's for now. The Mark Ready button
+// stays on the tailor's card, disabled, so it can be given back by setting this
+// to true (and TAILOR_MAY_MARK_READY on the server).
+const TAILOR_MAY_MARK_READY = false;
+
 // Every garment on the order, not just the first — a card or a confirmation
 // that only ever named item 1 read like a one-item job even when there were
 // several.
@@ -203,7 +208,9 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
           const status = getStatus(order);
           const isExpanded = expandedId === order.id;
           const canStart = status === 'in_queue';
-          const canReady = status === 'in_progress';
+          // Marking a job Ready is the Production Manager's for now. The button
+          // stays so it can be switched back on by flipping TAILOR_MAY_MARK_READY.
+          const canReady = TAILOR_MAY_MARK_READY && status === 'in_progress';
           const { label, bg, color, border } = statusConfig[status];
           const initials = order.customer.split(' ').map(p => p[0]).join('').slice(0, 2);
           const styleImages = Array.isArray(order.styleImages) ? order.styleImages : [];
@@ -574,6 +581,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                 <button
                   type="button"
                   disabled={!canReady}
+                  title={!TAILOR_MAY_MARK_READY ? 'Only the Production Manager can mark a job as Ready' : undefined}
                   onClick={() => canReady && openConfirm({ jobId: order.id, action: 'ready', order })}
                   style={{
                     flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,

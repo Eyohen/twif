@@ -499,6 +499,30 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
   const finishedAt = (job) => job.readyAt || job.updatedAt;
   const priorCompleted = withinWindow(productionJobs.filter((job) => isFinishedStatus(job.status)), finishedAt, lastWindow);
   const nowCompleted = withinWindow(productionJobs.filter((job) => isFinishedStatus(job.status)), finishedAt, thisWindow);
+  // The lists carry only the latest hundred invoices, so finished jobs are
+  // counted by the server across all of them, dated by the day each was marked
+  // ready. The local count stands in until it answers, or if it cannot.
+  const [completedStats, setCompletedStats] = useState(null);
+  useEffect(() => {
+    const now = periodWindow(period, customFrom, customTo);
+    if (!now) { setCompletedStats(null); return undefined; }
+    const before = previousWindow(now);
+    let cancelled = false;
+    api.get('/oms/stats/completed-jobs', {
+      params: {
+        from: now.start.toISOString(),
+        to: now.end.toISOString(),
+        ...(before ? { prevFrom: before.start.toISOString(), prevTo: before.end.toISOString() } : {}),
+      },
+    })
+      .then((response) => { if (!cancelled) setCompletedStats(response.data?.data || null); })
+      .catch(() => { if (!cancelled) setCompletedStats(null); });
+    return () => { cancelled = true; };
+  }, [period, customFrom, customTo]);
+  const completedCount = completedStats && completedStats.count !== null ? completedStats.count : nowCompleted.length;
+  const completedChange = completedStats && completedStats.count !== null && completedStats.previous !== null
+    ? changeAgainst(completedStats.count, completedStats.previous)
+    : changeAgainst(nowCompleted.length, priorCompleted.length);
   // Orders are paid or part-paid invoices; the rest are not orders yet.
   const periodOrders = filteredInvoices.filter(isOrder);
   const priorOrders = priorInvoices.filter(isOrder);
@@ -568,7 +592,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
           ['Total Revenue', money.format(receivedRevenue), changeLabel(receivedChange) || 'Payments recorded in this period', 'green', '▣'],
           ['Total Invoice', money.format(totalRevenue), changeLabel(revenueChange) || 'No earlier period to compare', 'gold', '▣'],
           ['Total Orders', periodOrders.length, changeLabel(changeAgainst(periodOrders.length, priorOrders.length)) || 'Paid or part-paid invoices', 'gold', '▤'],
-          ['Completed Jobs', nowCompleted.length, changeLabel(changeAgainst(nowCompleted.length, priorCompleted.length)) || 'Finished in this period', 'green', '▥'],
+          ['Completed Jobs', completedCount, changeLabel(completedChange) || 'Finished in this period', 'green', '▥'],
           ['Active Customers', customers.length, 'On the books now', 'blue', '♙'],
           ['Low Stock Items', lowStock.length, lowStock.length ? 'At or below threshold' : 'Nothing below threshold', 'red', '△'],
           ['Outstanding Payments', money.format(outstanding), `${filteredInvoices.filter((invoice) => invoice.paymentStatus !== 'Fully Paid').length} invoices not settled`, 'red', '▣'],
@@ -1172,7 +1196,7 @@ function TailorOverview({ currentRole, productionJobs = [], onUpdateJob }) {
 
 function ProductionOverview({ productionJobs = [], onNavigate }) {
   const [queuePage, setQueuePage] = useState(1);
-  const QUEUE_PAGE_SIZE = 6;
+  const QUEUE_PAGE_SIZE = 10;
   const readyJobs = productionJobs.filter((job) => isFinishedStatus(job.status));
   const unassignedJobs = productionJobs.filter((job) => !job.tailor || job.tailor === 'Unassigned');
   const fabricPending = productionJobs.filter((job) => !job.fabricConfirmed);
@@ -2347,6 +2371,34 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
     setOpenMenu(menuId);
   };
 
+  // The menu opens below its button. Near the bottom of the page that would run
+  // off the screen, so it opens upwards instead, and where neither side has
+  // room it takes the larger one and scrolls, so every action stays reachable.
+  const placeInvoiceMenu = (element, anchor) => {
+    if (!element || !anchor) return;
+    const margin = 8;
+    element.style.top = `${anchor.top}px`;
+    element.style.maxHeight = '';
+    element.classList.remove('opens-up');
+    const height = element.offsetHeight;
+    const spaceBelow = window.innerHeight - anchor.top - margin;
+    if (height <= spaceBelow) return;
+    const spaceAbove = (anchor.triggerTop ?? anchor.top) - 6 - margin;
+    if (height <= spaceAbove) {
+      element.style.top = `${(anchor.triggerTop ?? anchor.top) - 6 - height}px`;
+      element.classList.add('opens-up');
+      return;
+    }
+    if (spaceAbove > spaceBelow) {
+      const room = Math.max(120, spaceAbove);
+      element.style.maxHeight = `${room}px`;
+      element.style.top = `${(anchor.triggerTop ?? anchor.top) - 6 - room}px`;
+      element.classList.add('opens-up');
+    } else {
+      element.style.maxHeight = `${Math.max(120, spaceBelow)}px`;
+    }
+  };
+
   const closeInvoiceMenu = ({ consumeHistory = true } = {}) => {
     setOpenMenu(null);
     setInvoiceMenuAnchor(null);
@@ -2793,6 +2845,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
                             const rect = event.currentTarget.getBoundingClientRect();
                             openInvoiceMenu(invoice.invoiceNumber, {
                               top: rect.bottom + 6,
+                              triggerTop: rect.top,
                               left: Math.max(8, Math.min(window.innerWidth - 184, rect.right - 176)),
                             });
                           }}
@@ -2810,6 +2863,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
                             <button type="button" className="invoice-menu-backdrop" aria-label="Close invoice actions" onClick={(event) => { event.stopPropagation(); closeInvoiceMenu(); }} />
                             <div
                               className="customer-action-menu invoice-action-menu"
+                              ref={(element) => placeInvoiceMenu(element, invoiceMenuAnchor)}
                               style={{
                                 position: 'fixed',
                                 top: invoiceMenuAnchor?.top ?? 0,

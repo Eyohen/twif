@@ -2097,6 +2097,8 @@ dd {
 .customer-action-menu button { min-height: 36px; display: flex; align-items: center; gap: 11px; border: 0; border-radius: 4px; background: #fff; color: #181818; padding: 0 10px; font-size: 9px; text-align: left; }
 .customer-action-menu button:hover { background: #faf6ef; }
 .invoice-action-menu { max-height: min(420px, calc(100dvh - 24px)); overflow-y: auto; }
+/* Opening upwards, the pointer sits on the bottom edge. */
+.invoice-action-menu.opens-up::before { top: auto; bottom: -6px; transform: rotate(225deg); }
 .invoice-menu-backdrop { position: fixed; inset: 0; z-index: 2999; border: 0; background: transparent; cursor: default; }
 .customer-action-menu button i { width: 16px; color: #242424; font-size: 13px; font-style: normal; text-align: center; }
 .customer-action-menu button.danger { margin-top: 4px; border-top: 1px solid #eee7de; border-radius: 0 0 4px 4px; color: #d83228; }

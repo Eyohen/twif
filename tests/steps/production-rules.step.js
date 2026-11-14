@@ -313,3 +313,26 @@ Then('the Owner should be able to release it', async function () {
   expect(response.status(), `the Owner was refused: ${body?.message}`).toBe(200);
   expect(body?.data?.orderSheet?.productionOverride?.by, 'the override was not recorded').toBeTruthy();
 });
+
+// The button is disabled on the tailor's card, but that alone proves nothing: the
+// rule has to hold for anyone who sends the request without using the screen.
+When('the tailor tries to mark that job Ready through the API', async function () {
+  const client = await this.api('Tailor');
+  const invoices = await (await client.get(`${API_URL}/oms/invoices/sent`)).json();
+  const invoice = (invoices?.data?.invoices || []).find((entry) => entry.invoiceNumber === this.order.invoiceNumber);
+  this.attempt = await client.patch(`${API_URL}/oms/tracking/order-sheet/${invoice.trackingToken}`, { data: { status: 'Ready' } });
+  this.attemptBody = await this.attempt.json().catch(() => ({}));
+  await client.dispose();
+});
+
+Then('the request should be refused', async function () {
+  expect(this.attempt.status(), JSON.stringify(this.attemptBody)).toBe(403);
+});
+
+Then('the job should still be in progress', async function () {
+  const client = await this.api();
+  const invoices = await (await client.get(`${API_URL}/oms/invoices/sent`)).json();
+  await client.dispose();
+  const invoice = (invoices?.data?.invoices || []).find((entry) => entry.invoiceNumber === this.order.invoiceNumber);
+  expect(invoice.orderSheet?.status).toBe('In Progress');
+});

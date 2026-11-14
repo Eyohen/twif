@@ -266,14 +266,12 @@ Then('the job should be in progress', async function () {
   }).toPass({ timeout: 20000 });
 });
 
-When('the tailor marks the job ready', async function () {
-  const card = this.page.locator('div')
-    .filter({ hasText: this.customerName })
-    .filter({ has: this.page.getByRole('button', { name: /mark ready/i }) })
-    .last();
-  await card.getByRole('button', { name: /mark ready/i }).click();
-  await this.page.getByRole('button', { name: /yes, mark ready/i }).click();
-  await this.page.waitForTimeout(1500);
+When('the Production Manager marks the job ready', async function () {
+  const invoice = await fetchInvoice(this, this.invoiceNumber);
+  const client = await this.api('Production Manager');
+  const response = await client.patch(`${API_URL}/oms/tracking/order-sheet/${invoice.trackingToken}`, { data: { status: 'Ready' } });
+  await client.dispose();
+  expect(response.status(), 'the Production Manager could not mark the job ready').toBe(200);
 });
 
 Then('the job should be ready for collection', async function () {
