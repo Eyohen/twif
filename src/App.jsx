@@ -5482,10 +5482,9 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
 }
 
 function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = false, departmentLabel, storeKey, onQuantity, onRemove, onAdd }) {
-  const availableAtStore = (fabric) => {
-    const balances = fabric?.stockByStore;
-    return balances && Object.keys(balances).length ? toNumber(balances[storeKey]) : toNumber(fabric?.quantity);
-  };
+  // Shown as the total held across every store; Inventory check the store
+  // itself when they approve it.
+  const availableAtStore = (fabric) => toNumber(fabric?.quantity);
   return (
     <div className="os-field fabric-picker department-fabric-picker">
       <span>Fabric for {departmentLabel || 'this garment'}</span>
@@ -5515,7 +5514,7 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = fals
             shelf when they approve it, so nothing is greyed out here. */}
         {inventory.filter((fabric) => !fabrics.some((entry) => entry.fabricId === fabric.id)).map((fabric) => {
           const available = availableAtStore(fabric);
-          return <option key={fabric.id} value={fabric.id}>{fabric.name} ({available} {fabric.unit}){available <= 0 ? ' · None at this store' : ''}</option>;
+          return <option key={fabric.id} value={fabric.id}>{fabric.name} ({available} {fabric.unit})</option>;
         })}
       </select>
       {allocated ? <span className="os-fabric-hint">Already allocated — stock has been taken for this item.</span> : null}
