@@ -33,7 +33,9 @@ export const ordersNeedingFabric = (invoices) => invoices.filter((invoice) => {
 // choose which fabric each garment takes, how much, and let it go. Releasing
 // takes it out of stock and cannot be undone from here.
 export default function AssignFabricPage({ invoices, inventory, loading, onBack, onChanged }) {
-  const orders = useMemo(() => ordersNeedingFabric(invoices), [invoices]);
+  // Orders Production has already chosen fabric for come first.
+  const requested = (invoice) => garmentsOf(invoice).some((item) => !item.fabricAllocated && item.fabricRequest?.status === 'Pending');
+  const orders = useMemo(() => [...ordersNeedingFabric(invoices)].sort((a, b) => Number(requested(b)) - Number(requested(a))), [invoices]);
   const [openNumber, setOpenNumber] = useState('');
   const open = orders.find((invoice) => invoice.invoiceNumber === openNumber)
     || invoices.find((invoice) => invoice.invoiceNumber === openNumber);
@@ -78,7 +80,12 @@ export default function AssignFabricPage({ invoices, inventory, loading, onBack,
                       <tr key={invoice.invoiceNumber}>
                         <td style={{ ...td, fontFamily: 'monospace', color: '#5a4e42' }}>{invoice.invoiceNumber}</td>
                         <td style={{ ...td, fontWeight: 600, color: '#1a1611' }}>{invoice.customer}</td>
-                        <td style={{ ...td, color: '#5a4e42' }}>{pending.map((item) => item.item).filter(Boolean).join(', ') || `${pending.length} garment${pending.length === 1 ? '' : 's'}`}</td>
+                        <td style={{ ...td, color: '#5a4e42' }}>
+                          {pending.map((item) => item.item).filter(Boolean).join(', ') || `${pending.length} garment${pending.length === 1 ? '' : 's'}`}
+                          {pending.some((item) => item.fabricRequest?.status === 'Pending') ? (
+                            <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 10, background: '#fffbf0', border: '1px solid #e8d9a0', color: '#7a6030', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>Awaiting your approval</span>
+                          ) : null}
+                        </td>
                         <td style={{ ...td, color: tailors.length ? '#5a4e42' : '#b0a090' }}>{tailors.join(', ') || 'Not assigned yet'}</td>
                         <td style={{ ...td, color: '#8a7a6a', whiteSpace: 'nowrap' }}>{invoice.orderSheet?.delivery ? formatMoment(invoice.orderSheet.delivery) : '—'}</td>
                         <td style={td}>
@@ -205,6 +212,11 @@ function OrderFabric({ invoice, inventory, onChanged }) {
               {released ? <span style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 10, background: '#f0faf4', color: '#2a7d4f', fontSize: 11, fontWeight: 700 }}>Released</span> : null}
             </div>
             <div className="os-card-body" style={{ display: 'grid', gap: 10 }}>
+              {!released && item.fabricRequest?.status === 'Pending' ? (
+                <p style={{ margin: 0, padding: '8px 12px', borderRadius: 8, background: '#fffbf0', border: '1px solid #e8d9a0', color: '#7a6030', fontSize: 13, fontWeight: 600 }}>
+                  {item.fabricRequest.requestedBy || 'Production'} chose the fabric below and is waiting for your approval. Check it, then approve and release it.
+                </p>
+              ) : null}
               {released ? (
                 <p style={{ margin: 0, fontSize: 13, color: '#5a4e42' }}>
                   {(item.fabricAllocations || []).map((line) => `${line.quantity} ${line.unit} of ${line.name}`).join(', ') || 'Fabric has been released for this garment.'}
@@ -245,7 +257,7 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                       {busy === `save-${index}` ? 'Saving…' : 'Save selection'}
                     </button>
                     <button type="button" disabled={Boolean(busy) || !lines.length} onClick={() => run(index, true)} style={{ padding: '8px 16px', border: 'none', borderRadius: 8, background: '#1a1611', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: lines.length ? 1 : 0.5 }}>
-                      {busy === `release-${index}` ? 'Releasing…' : 'Release fabric'}
+                      {busy === `release-${index}` ? 'Releasing…' : item.fabricRequest?.status === 'Pending' ? 'Approve & release' : 'Release fabric'}
                     </button>
                   </div>
                   <small style={{ color: '#8a7a6a' }}>Releasing takes the fabric out of this store&apos;s stock and hands it to Production. It cannot be undone from here.</small>

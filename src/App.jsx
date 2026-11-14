@@ -5440,7 +5440,14 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
                 </div>
               );
             })}
-            {itemDepartments.length ? null : <span className="tailor-assign-empty">Assign a department before choosing a tailor.</span>}
+            {itemDepartments.length ? null : (
+              <>
+                {/* Fabric does not depend on a department, so Production can
+                    still choose it for a garment that has none yet. */}
+                {renderDepartmentFabric?.(undefined)}
+                <span className="tailor-assign-empty">Assign a department before choosing a tailor.</span>
+              </>
+            )}
           </div>
 
           {/* Scoring only makes sense once there is finished work to judge, so
@@ -5481,7 +5488,7 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = fals
   };
   return (
     <div className="os-field fabric-picker department-fabric-picker">
-      <span>Fabric for {departmentLabel}</span>
+      <span>Fabric for {departmentLabel || 'this garment'}</span>
       {fabrics.length ? (
         <ul className="fabric-chosen">
           {fabrics.map((entry) => {
@@ -5504,9 +5511,11 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = fals
       <select value="" disabled={allocated || readOnly} onChange={(event) => { onAdd(event.target.value); event.target.value = ''; }}>
         <option value="">{fabrics.length ? 'Add another fabric…' : 'Select inventory fabric'}</option>
         <option value="client-supplied">Client supplied</option>
+        {/* Choosing is a request to Inventory, who confirm what is on the
+            shelf when they approve it, so nothing is greyed out here. */}
         {inventory.filter((fabric) => !fabrics.some((entry) => entry.fabricId === fabric.id)).map((fabric) => {
           const available = availableAtStore(fabric);
-          return <option key={fabric.id} value={fabric.id} disabled={available <= 0}>{fabric.name} ({available} {fabric.unit}){available <= 0 ? ' · Out of stock at this store' : ''}</option>;
+          return <option key={fabric.id} value={fabric.id}>{fabric.name} ({available} {fabric.unit}){available <= 0 ? ' · None at this store' : ''}</option>;
         })}
       </select>
       {allocated ? <span className="os-fabric-hint">Already allocated — stock has been taken for this item.</span> : null}
@@ -5533,6 +5542,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
   const [inventory, setInventory] = useState([]);
   const [tailors, setTailors] = useState([]);
   const [pendingFabricSaves, setPendingFabricSaves] = useState(0);
+  const [sendingFabricFor, setSendingFabricFor] = useState(null);
   const [allocatingJobId, setAllocatingJobId] = useState(null);
   const [settingInProgress, setSettingInProgress] = useState(false);
   const [confirmReady, setConfirmReady] = useState(null);
@@ -5832,6 +5842,52 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
     }
   };
 
+  // Production chooses the fabric; Inventory approves it by releasing it. What
+  // a garment's fabric is waiting on, for the line shown under its picker.
+  const stockLinesOf = (itemIndex) => itemFabricsFor(itemIndex).filter((entry) => entry.fabricId && !entry.clientSupplied);
+  const fabricSnapshot = (lines) => JSON.stringify([...lines]
+    .map((line) => [String(line.fabricId), Number(line.quantity) || 0])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
+  const fabricApprovalFor = (itemIndex) => {
+    const item = jobModal?.items?.[itemIndex];
+    const lines = stockLinesOf(itemIndex);
+    if (item?.fabricAllocated) {
+      const by = item.fabricRequest?.approvedBy;
+      return { state: 'approved', text: `Fabric approved and released by Inventory${by ? ` (${by})` : ''}.`, canSend: false };
+    }
+    if (!lines.length) return null;
+    const request = item?.fabricRequest;
+    const ready = lines.every((line) => Number(line.quantity) > 0);
+    if (request?.status === 'Pending' && fabricSnapshot(request.fabrics || []) === fabricSnapshot(lines)) {
+      return { state: 'pending', text: `Sent to Inventory${request.requestedBy ? ` by ${request.requestedBy}` : ''} — waiting for their approval.`, canSend: false };
+    }
+    if (request?.status === 'Pending') {
+      return { state: 'changed', ready, text: 'You changed the fabric after sending it. Send the updated choice so Inventory approve the right one.', canSend: true };
+    }
+    return { state: 'draft', ready, text: ready ? 'Inventory must approve this fabric before the job can be set In Progress.' : 'Say how much of each fabric is needed, then send it to Inventory for approval.', canSend: true };
+  };
+
+  const sendFabricForApproval = async (itemIndex) => {
+    const lines = itemFabricsFor(itemIndex).map((entry) => (entry.clientSupplied
+      ? { clientSupplied: true, ...(entry.departmentKey ? { departmentKey: entry.departmentKey } : {}) }
+      : { fabricId: entry.fabricId, quantity: Number(entry.quantity), ...(entry.departmentKey ? { departmentKey: entry.departmentKey } : {}) }));
+    setSendingFabricFor(itemIndex);
+    try {
+      const response = await api.patch(`/oms/jobs/${jobModal.invoiceNumber}/fabrics`, { submit: true, items: [{ index: itemIndex, fabrics: lines }] });
+      const sheet = response.data?.data?.orderSheet;
+      if (sheet) {
+        const merged = mergeAssignmentSheet(jobModal, sheet);
+        setJobModal(merged);
+        onUpdateJob(jobModal.id, merged);
+      }
+      notify('Sent to Inventory for approval', 'success');
+    } catch (error) {
+      notify(error.response?.data?.message || 'Unable to send the fabric to Inventory', 'error');
+    } finally {
+      setSendingFabricFor(null);
+    }
+  };
+
   // Allocates stock for one garment — `item`/`itemIndex` undefined for a
   // legacy sheet with no real items array, same fallback as elsewhere. Pure:
   // makes the API call and returns what changed, rather than touching state
@@ -5896,6 +5952,16 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
         const needsFabric = (items[index].fabrics || []).some((entry) => entry.fabricId || entry.clientSupplied);
         if (!needsFabric) continue;
         const itemLabel = items[index].item || `Item ${index + 1}`;
+        // Fabric from stock is released by Inventory, not taken here. Customer
+        // fabric needs no approval and is still confirmed as the job starts.
+        if ((items[index].fabrics || []).some((entry) => entry.fabricId && !entry.clientSupplied)) {
+          notify(items[index].fabricRequest?.status === 'Pending'
+            ? `Inventory have not approved the fabric for ${itemLabel} yet.`
+            : `Send the fabric for ${itemLabel} to Inventory for approval first.`, 'error');
+          setJobModal((current) => ({ ...current, items }));
+          onUpdateJob(jobModal.id, { items });
+          return false;
+        }
         // Each item is allocated in turn — a shortfall partway through must
         // not be masked by allocating the rest anyway.
         const result = await allocateFabricForItem(items[index], index, itemLabel);
@@ -6450,6 +6516,27 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                       }}
                       onNotify={notify}
                     />
+
+                    {itemIndex !== undefined ? (() => {
+                      const status = fabricApprovalFor(itemIndex);
+                      if (!status) return null;
+                      const tone = status.state === 'approved' ? ['#f0faf4', '#c3e8d4', '#2a7d4f'] : ['#fffbf0', '#e8d9a0', '#7a6030'];
+                      return (
+                        <div className="fabric-approval" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '10px 12px', borderRadius: 8, background: tone[0], border: `1px solid ${tone[1]}`, color: tone[2], fontSize: 13, fontWeight: 600 }}>
+                          <span style={{ flex: 1, minWidth: 200 }}>{status.text}</span>
+                          {status.canSend ? (
+                            <button
+                              type="button"
+                              disabled={pendingFabricSaves > 0 || sendingFabricFor === itemIndex || !status.ready}
+                              onClick={() => sendFabricForApproval(itemIndex)}
+                              style={{ padding: '7px 14px', border: 'none', borderRadius: 8, background: '#1a1611', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: status.ready ? 1 : 0.5 }}
+                            >
+                              {sendingFabricFor === itemIndex ? 'Sending…' : status.state === 'changed' ? 'Send updated choice to Inventory' : 'Send to Inventory for approval'}
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })() : null}
 
                     <div>
                       <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Reference Images ({itemImages.length})</div>
