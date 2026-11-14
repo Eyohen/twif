@@ -166,6 +166,11 @@ async function makeOrder(world, { paymentStatus, measurements, percentPaid }) {
       // The gate measures what was actually received, so a scenario that calls
       // an order paid has to say how much of it.
       amountReceived: percentPaid ? (50000 * percentPaid) / 100 : 0,
+      // A new invoice that records a payment carries its receipt; the server
+      // refuses one that does not.
+      ...(paymentStatus !== 'unpaid' ? {
+        paymentEvidence: [{ name: 'receipt.png', type: 'image/png', size: 70, dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' }],
+      } : {}),
     },
   });
 

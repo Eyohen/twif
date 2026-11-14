@@ -36,6 +36,8 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
   const [archiving, setArchiving] = useState(null);
   const [page, setPage] = useState(1);
   const kpiScrollRef = useRef(null);
+  // Archiving takes a customer off every list, so it is the Owner's alone.
+  const mayArchive = currentRole?.id === 'owner';
 
   const handleKpiScroll = () => {
     if (!kpiScrollRef.current) return;
@@ -87,6 +89,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
   };
 
   const archiveCustomer = async (customer) => {
+    if (!mayArchive) return;
     try {
       await api.delete(`/oms/customers/${customer.id}`);
       setCustomers((current) => current.filter((item) => item.id !== customer.id));
@@ -376,6 +379,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                             <Eye size={12} strokeWidth={1.8} />
                             View Profile
                           </button>
+                          {mayArchive ? (
                           <button
                             type="button"
                             onClick={() => setArchiving(customer)}
@@ -390,6 +394,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                             <Trash2 size={12} strokeWidth={1.8} />
                             Archive
                           </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -457,6 +462,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                     </div>
                   </div>
                   <div style={{ borderTop: '1px solid #f3ede5', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    {mayArchive ? (
                     <button
                       type="button"
                       onClick={() => setArchiving(customer)}
@@ -470,6 +476,7 @@ export default function StoreManagerCustomersPage({ sentInvoices = [], onNavigat
                       <Trash2 size={13} strokeWidth={1.8} />
                       Archive
                     </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => setSelectedCustomer(customer)}

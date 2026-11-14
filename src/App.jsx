@@ -39,7 +39,7 @@ import {
   mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid, paidPercent, DEFAULT_RELEASE_PERCENT,
   worksOnJob, jobTailors, averageScore,
   invoiceDocumentPayload, PERIOD_OPTIONS, filterByPeriod, periodTrend, addDaysIso, isEliteCustomer,
-  periodWindow, previousWindow, withinWindow, changeAgainst, changeLabel, LOG_PERIODS,
+  periodWindow, previousWindow, withinWindow, changeAgainst, changeLabel, LOG_PERIODS, paymentsRecordedIn, lineDiscountAmount,
   amountReceived, invoicePayable, formatMoment, CUSTOMER_TRACKING_STEPS,
   fitNoteFromOrderSheet, orderNoteFromOrderSheet,
   openDocumentTab, presentInvoiceDocument, downloadInvoicePdf as saveInvoicePdf,
@@ -48,6 +48,10 @@ import {
 } from './utils/oms';
 import { DEPARTMENT_FIELDS, departmentConfig, missingDepartmentDetails } from './config/departmentFields';
 import { isValidPhone, phoneDigits, PHONE_ERROR, PHONE_MAX_LENGTH, PHONE_PATTERN } from './utils/phone';
+import DiscountField from './components/oms/DiscountField';
+import { orderedMeasurementEntries } from './utils/measurements';
+import { compressedImageDataUrl } from './utils/image';
+import PeriodFilter, { ALL_TIME, DEFAULT_PERIODS, initialCustomRange } from './components/oms/PeriodFilter';
 
 const trackingBaseUrl = (
   import.meta.env.VITE_TRACKING_BASE_URL ||
@@ -160,6 +164,9 @@ const NAV_LABEL_OVERRIDES = {
   owner: { 'Order Sheet': 'Create Order Sheet' },
   admin: { 'Order Sheet': 'Create Order Sheet' },
 };
+
+// Today, Yesterday, This Week, This Month, All Time and a Custom range.
+const INVOICE_PERIODS = [...DEFAULT_PERIODS.slice(0, 4), ALL_TIME, DEFAULT_PERIODS[4]];
 
 function navLabel(role, item) {
   return NAV_LABEL_OVERRIDES[role]?.[item] || item;
@@ -433,7 +440,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
   const [customTo, setCustomTo] = useState(todayIso());
   const [activeKpiDot, setActiveKpiDot] = useState(0);
   const kpiScrollRef = useRef(null);
-  const OWNER_KPI_COUNT = 6;
+  const OWNER_KPI_COUNT = 7;
   const handleKpiScroll = () => {
     if (!kpiScrollRef.current) return;
     const { scrollLeft, scrollWidth } = kpiScrollRef.current;
@@ -489,6 +496,12 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
   const priorCompleted = withinWindow(productionJobs, (job) => job.updatedAt, lastWindow).filter((job) => job.status === 'Ready');
   const nowCompleted = withinWindow(productionJobs, (job) => job.updatedAt, thisWindow).filter((job) => job.status === 'Ready');
   const revenueChange = changeAgainst(totalRevenue, priorRevenue);
+  // Revenue is money that has actually come in. What was invoiced in the period
+  // is a different figure (an invoice nobody has paid yet is not revenue), so
+  // it is read from the payments recorded in the same window.
+  const receivedRevenue = paymentsRecordedIn(sentInvoices, thisWindow);
+  const priorReceived = paymentsRecordedIn(sentInvoices, lastWindow);
+  const receivedChange = changeAgainst(receivedRevenue, priorReceived);
   const completed = productionJobs.filter((job) => job.status === 'Ready');
   // Overdue jobs are a standing concern, so this one is measured across the
   // whole board rather than the selected period.
@@ -509,10 +522,15 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
       ? withinWindow(sentInvoices, (invoice) => invoice.createdAt, customerWindow)
       : sentInvoices;
     const totals = new Map();
+    // A top customer is one who has paid. An invoice nobody has paid anything
+    // on says nothing about them, so it neither ranks them nor counts as an
+    // order here, and what is totalled is what they actually paid.
     inWindow.forEach((invoice) => {
+      const paidSoFar = amountReceived(invoice) ?? 0;
+      if (!(paidSoFar > 0)) return;
       const name = invoice.customer || 'Unnamed';
       const entry = totals.get(name) || { id: name, fullName: name, spend: 0, orders: 0, lastOrder: null };
-      entry.spend += toNumber(invoice.total);
+      entry.spend += paidSoFar;
       entry.orders += 1;
       const at = invoice.createdAt ? new Date(invoice.createdAt) : null;
       if (at && (!entry.lastOrder || at > entry.lastOrder)) entry.lastOrder = at;
@@ -525,7 +543,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
   return (
     <div className="owner-dashboard">
       <div className="owner-period-filter">
-        {[['today','Today'],['week','This Week'],['month','This Month'],['year','This Year'],['custom','Custom']].map(([key,label]) => (
+        {[['today','Today'],['yesterday','Yesterday'],['week','This Week'],['month','This Month'],['year','This Year'],['custom','Custom']].map(([key,label]) => (
           <button key={key} className={period === key ? 'active' : ''} onClick={() => setPeriod(key)}>{label}</button>
         ))}
         {period === 'custom' && (
@@ -541,13 +559,14 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
           // A caption only appears where there is an earlier window to measure
           // against; the last three are counts of how things stand today, which
           // nothing in the period before them speaks to.
-          ['Total Revenue', money.format(totalRevenue), changeLabel(revenueChange) || 'No earlier period to compare', 'gold', '▣'],
+          ['Total Revenue', money.format(receivedRevenue), changeLabel(receivedChange) || 'Payments recorded in this period', 'green', '▣'],
+          ['Total Invoice', money.format(totalRevenue), changeLabel(revenueChange) || 'No earlier period to compare', 'gold', '▣'],
           ['Total Orders', filteredInvoices.length, changeLabel(changeAgainst(filteredInvoices.length, priorInvoices.length)) || 'No earlier period to compare', 'gold', '▤'],
           ['Completed Jobs', completed.length, changeLabel(changeAgainst(nowCompleted.length, priorCompleted.length)) || `${nowCompleted.length} in this period`, 'green', '▥'],
           ['Active Customers', customers.length, 'On the books now', 'blue', '♙'],
           ['Low Stock Items', lowStock.length, lowStock.length ? 'At or below threshold' : 'Nothing below threshold', 'red', '△'],
           ['Outstanding Payments', money.format(outstanding), `${filteredInvoices.filter((invoice) => invoice.paymentStatus !== 'Fully Paid').length} invoices not settled`, 'red', '▣'],
-        ].map(([label, value, change, tone, icon], index) => <article className={`owner-kpi tone-${tone}`} key={label}><span>{label}</span><strong>{value}</strong><small>{change}</small><i>{icon}</i>{index < 5 ? <div className="owner-sparkline"><b/><b/><b/><b/><b/><b/><b/></div> : null}</article>)}</section>
+        ].map(([label, value, change, tone, icon], index) => <article className={`owner-kpi tone-${tone}`} key={label}><span>{label}</span><strong>{value}</strong><small>{change}</small><i>{icon}</i>{index < 6 ? <div className="owner-sparkline"><b/><b/><b/><b/><b/><b/><b/></div> : null}</article>)}</section>
       </div>
 
       <section className="owner-action-row">
@@ -583,7 +602,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
             </div>
           </div>
           <footer>{[
-            [money.format(salesRevenue), 'Total Revenue'],
+            [money.format(salesRevenue), 'Total Invoice'],
             [salesInvoices.length, 'Total Orders'],
             [salesInvoices.length ? money.format(salesRevenue / salesInvoices.length) : money.format(0), 'Avg. Order Value'],
             [`${salesInvoices.filter((invoice) => isFullyPaid(invoice)).length}/${salesInvoices.length}`, 'Fully Paid'],
@@ -647,7 +666,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
           <header>
             <span>Top Customers</span>
             <select value={customerPeriod} onChange={(event) => setCustomerPeriod(event.target.value)} aria-label="Top customers period">
-              {LOG_PERIODS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              {[['today', 'Today'], ['yesterday', 'Yesterday'], ...LOG_PERIODS].map(([key, label]) => <option key={key} value={key}>{label}</option>)}
             </select>
           </header>
           {customerPeriod === 'custom' ? (
@@ -1661,14 +1680,17 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
     const quantity = toNumber(item.quantity) || 1;
     const rate = toNumber(item.rate);
     const discountPercent = toNumber(item.discountPercent);
+    // Reopens in the unit the line was first entered in, with the figure as it
+    // was typed. Older invoices carry only a percentage.
+    const inFigures = item.discountMode === 'amount';
     return {
       key: `line-${index}`,
       description: item.description || '',
       quantity,
       rate,
-      discountMode: 'percent',
+      discountMode: inFigures ? 'amount' : 'percent',
       discountPercent,
-      discountAmount: (rate * quantity * discountPercent) / 100,
+      discountAmount: inFigures ? toNumber(item.discountAmount) : (rate * quantity * discountPercent) / 100,
       note: item.note || '',
     };
   }));
@@ -1679,6 +1701,10 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [clarification, setClarification] = useState('');
+  // Which payment status the person editing wants this invoice to end up at.
+  // It only steers the payment form below: the status itself still follows the
+  // money recorded, so it cannot disagree with the books.
+  const [payChoice, setPayChoice] = useState(() => (isFullyPaid(invoice) ? 'fully_paid' : isAwaitingPayment(invoice) ? 'unpaid' : 'partial_paid'));
   // Recording a payment here updates this invoice's paid amount and evidence
   // immediately, without closing the modal — a store manager topping up a
   // partial payment may want to keep going, e.g. correcting a line item next.
@@ -1728,11 +1754,11 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
     if (!file.type.startsWith('image/')) { setError('Payment evidence must be an image or screenshot.'); return; }
     if (file.size > 5 * 1024 * 1024) { setError('Payment evidence must be smaller than 5 MB.'); return; }
     setError('');
-    const reader = new FileReader();
-    reader.onload = () => setNewEvidence((current) => [
-      ...current, { name: file.name, type: file.type, size: file.size, dataUrl: reader.result, uploadedAt: new Date().toISOString(), note: '' },
-    ]);
-    reader.readAsDataURL(file);
+    compressedImageDataUrl(file, { maxEdge: 1800, quality: 0.85 })
+      .then((dataUrl) => setNewEvidence((current) => [
+        ...current, { name: file.name, type: file.type, size: file.size, dataUrl, uploadedAt: new Date().toISOString(), note: '' },
+      ]))
+      .catch(() => setError('That image could not be read. Try another one.'));
   };
   const removeNewEvidence = (index) => setNewEvidence((current) => current.filter((_, position) => position !== index));
 
@@ -1743,25 +1769,12 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
     if (position !== index) return item;
     const next = { ...item, [field]: value };
     const gross = toNumber(next.rate) * toNumber(next.quantity);
-
-    if (field === 'discountAmount') {
-      const amount = Math.min(Math.max(toNumber(value), 0), gross);
-      next.discountAmount = amount;
-      next.discountPercent = gross > 0 ? (amount / gross) * 100 : 0;
-    } else if (field === 'discountPercent') {
-      const percent = Math.min(Math.max(toNumber(value), 0), 100);
-      next.discountPercent = percent;
-      next.discountAmount = (gross * percent) / 100;
-    } else if (field !== 'discountMode') {
-      if (next.discountMode === 'amount') {
-        const amount = Math.min(Math.max(toNumber(next.discountAmount), 0), gross);
-        next.discountAmount = amount;
-        next.discountPercent = gross > 0 ? (amount / gross) * 100 : 0;
-      } else {
-        const percent = Math.min(Math.max(toNumber(next.discountPercent), 0), 100);
-        next.discountPercent = percent;
-        next.discountAmount = (gross * percent) / 100;
-      }
+    // Same rule as the new-invoice screen: the typed value stays as typed and
+    // the other unit is derived from it for display.
+    if (next.discountMode === 'amount') {
+      next.discountPercent = gross > 0 ? Math.min((Math.max(toNumber(next.discountAmount), 0) / gross) * 100, 100) : 0;
+    } else {
+      next.discountAmount = (gross * Math.min(Math.max(toNumber(next.discountPercent), 0), 100)) / 100;
     }
     return next;
   }));
@@ -1773,7 +1786,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   // Mirrors the server's recompute exactly, so the total shown here is the
   // total that will actually be saved rather than a promise about it.
   const subtotal = items.reduce((sum, item) => sum + (toNumber(item.rate) * toNumber(item.quantity)), 0);
-  const itemDiscountTotal = items.reduce((sum, item) => sum + ((toNumber(item.rate) * toNumber(item.quantity) * toNumber(item.discountPercent)) / 100), 0);
+  const itemDiscountTotal = items.reduce((sum, item) => sum + lineDiscountAmount(item), 0);
   const eliteDiscountAmount = toNumber(invoiceState.eliteDiscountAmount);
   const storeCreditApplied = toNumber(invoiceState.storeCreditApplied);
   const newTotal = Math.max(0, subtotal - itemDiscountTotal - eliteDiscountAmount - storeCreditApplied);
@@ -1808,8 +1821,10 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
           note: item.note,
           quantity: toNumber(item.quantity),
           rate: toNumber(item.rate),
-          discountPercent: toNumber(item.discountPercent),
-          amount: (toNumber(item.rate) * toNumber(item.quantity)) * (1 - toNumber(item.discountPercent) / 100),
+          discountMode: item.discountMode === 'amount' ? 'amount' : 'percent',
+          discountPercent: Math.min(Math.max(toNumber(item.discountPercent), 0), 100),
+          discountAmount: Math.round(lineDiscountAmount(item) * 100) / 100,
+          amount: Math.max((toNumber(item.rate) * toNumber(item.quantity)) - lineDiscountAmount(item), 0),
         })),
         subtotal,
         total: newTotal,
@@ -1847,7 +1862,9 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
           note: item.note,
           quantity: toNumber(item.quantity),
           rate: toNumber(item.rate),
-          discountPercent: toNumber(item.discountPercent),
+          discountMode: item.discountMode === 'amount' ? 'amount' : 'percent',
+          discountPercent: Math.min(Math.max(toNumber(item.discountPercent), 0), 100),
+          discountAmount: Math.round(lineDiscountAmount(item) * 100) / 100,
         })),
         customerName,
         customerPhone,
@@ -1940,28 +1957,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
                   <span>Qty</span>
                   <input type="number" min="1" value={item.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} />
                 </label>
-                <label className="os-field">
-                  <span>
-                    Discount
-                    <button
-                      type="button"
-                      onClick={() => updateLine(index, 'discountMode', item.discountMode === 'amount' ? 'percent' : 'amount')}
-                      style={{ marginLeft: 6, fontSize: 12, fontWeight: 800, letterSpacing: 0, textTransform: 'none', color: '#c97b08', background: 'none', border: '1px solid #e3d9c8', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}
-                    >
-                      {item.discountMode === 'amount' ? 'Use %' : 'Use Figures'}
-                    </button>
-                  </span>
-                  {item.discountMode === 'amount' ? (
-                    <input type="number" min="0" max={toNumber(item.rate) * toNumber(item.quantity)} value={item.discountAmount} onChange={(event) => updateLine(index, 'discountAmount', event.target.value)} />
-                  ) : (
-                    <input type="number" min="0" max="100" value={item.discountPercent} onChange={(event) => updateLine(index, 'discountPercent', event.target.value)} />
-                  )}
-                  <small style={{ fontSize: 11, fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#9a8a7a' }}>
-                    {item.discountMode === 'amount'
-                      ? `≈ ${toNumber(item.discountPercent).toFixed(1)}%`
-                      : `≈ ${money.format(toNumber(item.discountAmount))}`}
-                  </small>
-                </label>
+                <DiscountField item={item} onChange={(field, value) => updateLine(index, field, value)} />
               </div>
               <div className="invoice-item-note-row">
                 <label className="os-field">
@@ -2000,12 +1996,46 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
             </div>
           </div>
           <div className="os-card-body">
-            <RecordPaymentForm
-              invoiceNumber={invoice.invoiceNumber}
-              balance={balanceDue}
-              defaultMethod={invoiceState.paymentMethodKey || 'transfer'}
-              onRecorded={handlePaymentRecorded}
-            />
+            <label className="os-field" style={{ marginBottom: 12 }}>
+              <span>Payment status</span>
+              <select value={payChoice} onChange={(event) => setPayChoice(event.target.value)} aria-label="Payment status">
+                <option value="unpaid">Unpaid</option>
+                <option value="partial_paid">Partial Paid</option>
+                <option value="fully_paid">Fully Paid</option>
+              </select>
+              <small style={{ fontSize: 11, fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#9a8a7a' }}>
+                Now: {invoiceState.paymentStatus}. {newTotal <= 0
+                  ? 'This invoice comes to nothing, so there is nothing to pay.'
+                  : alreadyPaid > 0 ? `${money.format(alreadyPaid)} has been recorded so far.` : 'No payment has been recorded yet.'}
+              </small>
+            </label>
+            {newTotal <= 0 || balanceDue <= 0 ? (
+              <p style={{ margin: '0 0 6px', fontSize: 13, color: '#2a7d4f', fontWeight: 600 }}>
+                {newTotal <= 0 ? 'Fully paid — this invoice comes to nothing.' : 'Fully paid — there is no balance left to record.'}
+              </p>
+            ) : payChoice === 'unpaid' ? (
+              <p style={{ margin: '0 0 6px', fontSize: 13, color: '#5a4e42' }}>
+                {alreadyPaid > 0
+                  ? `A payment of ${money.format(alreadyPaid)} is already on record, so this invoice cannot go back to Unpaid. Choose Partial Paid or Fully Paid to record more, or ask Accounts to review the payment.`
+                  : 'The invoice stays unpaid. Nothing is recorded until a payment is made.'}
+              </p>
+            ) : (
+              <>
+                <p style={{ margin: '0 0 8px', fontSize: 13, color: '#5a4e42' }}>
+                  {payChoice === 'fully_paid'
+                    ? `Fully Paid records the whole balance of ${money.format(balanceDue)}. Attach the receipt for it.`
+                    : 'Partial Paid records the amount received so far. Enter it and attach the receipt.'}
+                </p>
+                <RecordPaymentForm
+                  key={payChoice}
+                  invoiceNumber={invoice.invoiceNumber}
+                  balance={balanceDue}
+                  fixedAmount={payChoice === 'fully_paid' ? balanceDue : undefined}
+                  defaultMethod={invoiceState.paymentMethodKey || 'transfer'}
+                  onRecorded={handlePaymentRecorded}
+                />
+              </>
+            )}
             <div style={{ marginTop: 14 }}>
               {isApproved ? (
                 <PaymentEvidenceGallery
@@ -2096,8 +2126,35 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   );
 }
 
-function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onApproveInvoice, onInvoiceChanged, onInvoiceDeleted, onOrderSheetArchived, releasePercent, onNavigate, onOverrideHold }) {
+function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvoiceSent, onApproveInvoice, onInvoiceChanged, onInvoiceDeleted, onOrderSheetArchived, releasePercent, onNavigate, onOverrideHold }) {
   const [editingInvoice, setEditingInvoice] = useState(null);
+  // Owner and Admin can narrow the register to one store; everyone can narrow
+  // it to a day or a stretch of days. Every figure on the page — the tiles and
+  // the tab counts as well as the rows — reads over what is left. Lookups of a
+  // single invoice (a notification link, a job's invoice) use `allInvoices`.
+  const seesEveryStore = ['owner', 'admin'].includes(currentRole?.id);
+  const knownStores = useStores();
+  const [storeFilter, setStoreFilter] = useState('All');
+  const [invoicePeriod, setInvoicePeriod] = useState('all');
+  const [invoiceRange, setInvoiceRange] = useState(initialCustomRange);
+  const sentInvoices = useMemo(() => {
+    const inStore = seesEveryStore && storeFilter !== 'All'
+      ? allInvoices.filter((invoice) => String(invoice.store || '').trim().toLowerCase() === storeFilter.toLowerCase())
+      : allInvoices;
+    return filterByPeriod(inStore, (invoice) => invoice.createdAt || invoice.invoiceDate, invoicePeriod, invoiceRange.from, invoiceRange.to);
+  }, [allInvoices, seesEveryStore, storeFilter, invoicePeriod, invoiceRange]);
+  const storeOptions = useMemo(() => {
+    const names = new Map();
+    (knownStores || []).filter((store) => store.status === 'active').forEach((store) => {
+      const name = String(store.name || store.key || '').replace(/\s+Store$/i, '').trim();
+      if (name) names.set(name.toLowerCase(), name);
+    });
+    allInvoices.forEach((invoice) => {
+      const name = String(invoice.store || '').trim();
+      if (name && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
+    });
+    return [...names.values()].sort((a, b) => a.localeCompare(b));
+  }, [knownStores, allInvoices]);
   // An invoice belongs to whoever raised it and to the people who run the shop.
   // Removing one is the Owner's and Admin's alone — a store manager cannot
   // delete an invoice even if they raised it.
@@ -2151,7 +2208,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
       if (!mayApprove || !onOverrideHold) return [];
       const job = productionJobFromInvoice(invoice);
       if (!job) return [];
-      const reason = productionBlockReason(job, sentInvoices, releasePercent);
+      const reason = productionBlockReason(job, allInvoices, releasePercent);
       if (!reason || /measurements/i.test(reason)) return [];
       return [['Send to Production Anyway', <ArrowRight size={12} strokeWidth={2} />, () => onOverrideHold(job, reason)]];
     })(),
@@ -2284,7 +2341,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
   const requestedInvoice = searchParams.get('invoice');
   useEffect(() => {
     if (!requestedInvoice) return;
-    const match = sentInvoices.find((item) => item.invoiceNumber === requestedInvoice);
+    const match = allInvoices.find((item) => item.invoiceNumber === requestedInvoice);
     if (match) {
       setSelectedInvoice(match);
       setSearchParams({}, { replace: true });
@@ -2302,7 +2359,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
       .catch(() => {})
       .finally(() => { if (!cancelled) setSearchParams({}, { replace: true }); });
     return () => { cancelled = true; };
-  }, [requestedInvoice, sentInvoices, setSearchParams]);
+  }, [requestedInvoice, allInvoices, setSearchParams]);
 
   // Started from a customer profile: open the create screen with that
   // customer already filled in.
@@ -2531,6 +2588,25 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
       ) : null}
 
       <div className="os-card" style={{ overflow: 'visible' }}>
+        <div className="os-card-head" style={{ flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+          <PeriodFilter
+            period={invoicePeriod}
+            onPeriod={setInvoicePeriod}
+            from={invoiceRange.from}
+            to={invoiceRange.to}
+            onFrom={(from) => setInvoiceRange((current) => ({ ...current, from }))}
+            onTo={(to) => setInvoiceRange((current) => ({ ...current, to }))}
+            periods={INVOICE_PERIODS}
+          />
+          {seesEveryStore ? (
+            <label className="os-field" style={{ minWidth: 150 }}>
+              <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)} aria-label="Filter invoices by store">
+                <option value="All">All stores</option>
+                {storeOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+          ) : null}
+        </div>
         <div className="os-card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
           <nav className="os-filter-pills" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
             {tabs.map((tab) => (
@@ -2723,7 +2799,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
             </table>
             {!filteredInvoices.length && (
               <div className="accounts-empty" style={{ textAlign: 'center', padding: '40px 20px', color: '#8a7a6a', fontSize: 13 }}>
-                {sentInvoices.length ? 'No invoices match your search.' : 'No invoices have been sent yet.'}
+                {allInvoices.length ? 'No invoices match your search.' : 'No invoices have been sent yet.'}
               </div>
             )}
           </div>
@@ -2819,7 +2895,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
             ))}
             {!filteredInvoices.length && (
               <div className="accounts-empty" style={{ textAlign: 'center', padding: '32px 16px', color: '#8a7a6a', fontSize: 13 }}>
-                {sentInvoices.length ? 'No invoices match your search.' : 'No invoices have been sent yet.'}
+                {allInvoices.length ? 'No invoices match your search.' : 'No invoices have been sent yet.'}
               </div>
             )}
           </div>
@@ -2834,7 +2910,7 @@ function StoreInvoicesView({ sentInvoices = [], currentRole, onInvoiceSent, onAp
           background: '#faf7f3',
         }}>
           <span style={{ fontSize: 12, color: '#8a7a6a' }}>
-            Showing {filteredInvoices.length ? 1 : 0}–{filteredInvoices.length} of {sentInvoices.length} invoices
+            Showing {filteredInvoices.length ? 1 : 0}–{filteredInvoices.length} of {allInvoices.length} invoices
           </span>
           {/* A ‹ 1 › paginator stood here and did nothing when clicked. This
               list is not paged — every invoice that matches is on screen. */}
@@ -3199,7 +3275,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
   // so the printed figures could not be reconciled by hand.
   const billableItems = items.filter((item) => item.description.trim());
   const subtotal = billableItems.reduce((sum, item) => sum + (toNumber(item.rate) * toNumber(item.quantity)), 0);
-  const itemDiscountTotal = billableItems.reduce((sum, item) => sum + toNumber(item.discountAmount), 0);
+  const itemDiscountTotal = billableItems.reduce((sum, item) => sum + lineDiscountAmount(item), 0);
   // The elite discount follows the customer's membership rather than being
   // typed in — see the tier the customer is on, resolved below.
   const eliteDiscountAmount = Math.round(((subtotal - itemDiscountTotal) * elitePercent) / 100);
@@ -3214,6 +3290,16 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
     ? balanceDue
     : Math.min(toNumber(form.amountReceived), balanceDue);
   const outstanding = Math.max(balanceDue - amountPaidNow, 0);
+  // An invoice that comes to nothing (everything discounted away, or covered by
+  // store credit) owes nothing, so it reads Fully Paid by itself and has no
+  // payment method or receipt to ask for.
+  const comesToNothing = billableItems.length > 0 && balanceDue <= 0;
+  useEffect(() => {
+    if (!comesToNothing) return;
+    setForm((current) => (current.paymentStatus === 'fully_paid' && !current.paymentMethod && !toNumber(current.amountReceived)
+      ? current
+      : { ...current, paymentStatus: 'fully_paid', paymentMethod: '', amountReceived: '' }));
+  }, [comesToNothing]);
 
   // Keeps the chosen store real: the first one is picked once the list
   // arrives, and a store that has since been deleted or deactivated is dropped.
@@ -3238,34 +3324,19 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
       const next = { ...item, [field]: value };
       const gross = toNumber(next.rate) * toNumber(next.quantity);
 
-      if (field === 'discountAmount') {
-        // Clamping this to the current gross broke typing whenever Rate
-        // hadn't been filled in yet (gross 0) or was still smaller than the
-        // figure being typed — every keystroke snapped straight back to 0,
-        // which read as the field not accepting input at all. The line
-        // total below already floors at 0, so nothing is lost by letting the
-        // raw figure stand while the rest of the row is still being filled in.
-        const amount = Math.max(toNumber(value), 0);
-        next.discountAmount = amount;
-        next.discountPercent = gross > 0 ? Math.min((amount / gross) * 100, 100) : 0;
-      } else if (field === 'discountPercent') {
-        const percent = Math.min(Math.max(toNumber(value), 0), 100);
-        next.discountPercent = percent;
-        next.discountAmount = (gross * percent) / 100;
-      } else if (field !== 'discountMode') {
-        // rate/quantity/description/note changed — keep whichever unit the
-        // manager last typed in fixed and recompute the other from it.
-        if (next.discountMode === 'amount') {
-          const amount = Math.max(toNumber(next.discountAmount), 0);
-          next.discountAmount = amount;
-          next.discountPercent = gross > 0 ? Math.min((amount / gross) * 100, 100) : 0;
-        } else {
-          const percent = toNumber(next.discountPercent);
-          next.discountAmount = (gross * percent) / 100;
-        }
+      // Whatever unit the line is in, what was typed is kept exactly as typed;
+      // the other unit is worked out from it for display only. Typing a figure
+      // used to be turned into a rounded percentage, and that percentage (not
+      // the figure) is what the invoice then printed. A figure larger than the
+      // line is not clamped here, so typing never snaps back while Rate is
+      // still being filled in — the line total floors at nothing instead.
+      if (next.discountMode === 'amount') {
+        next.discountPercent = gross > 0 ? Math.min((Math.max(toNumber(next.discountAmount), 0) / gross) * 100, 100) : 0;
+      } else {
+        next.discountAmount = (gross * Math.min(Math.max(toNumber(next.discountPercent), 0), 100)) / 100;
       }
 
-      return { ...next, amount: Math.max(gross - toNumber(next.discountAmount), 0) };
+      return { ...next, amount: Math.max(gross - lineDiscountAmount(next), 0) };
     }));
   };
 
@@ -3307,8 +3378,12 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
         note: item.note,
         rate: toNumber(item.rate),
         quantity: toNumber(item.quantity),
-        discountPercent: toNumber(item.discountPercent),
-        amount: toNumber(item.amount),
+        // The unit the line was entered in goes with it, so the invoice shows a
+        // figure as a figure and a percentage as a percentage.
+        discountMode: item.discountMode === 'amount' ? 'amount' : 'percent',
+        discountPercent: Math.round(Math.min(Math.max(toNumber(item.discountPercent), 0), 100) * 10000) / 10000,
+        discountAmount: Math.round(lineDiscountAmount(item) * 100) / 100,
+        amount: Math.max(toNumber(item.rate) * toNumber(item.quantity) - lineDiscountAmount(item), 0),
       })),
     subtotal,
     eliteDiscountAmount,
@@ -3328,15 +3403,15 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
     } : null,
   });
 
-  const evidenceRequired = form.paymentStatus && form.paymentStatus !== 'unpaid';
+  const evidenceRequired = !comesToNothing && form.paymentStatus && form.paymentStatus !== 'unpaid';
   const selectEvidence = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { setMessage('Payment evidence must be an image or screenshot.'); return; }
     if (file.size > 5 * 1024 * 1024) { setMessage('Payment evidence must be smaller than 5 MB.'); return; }
-    const reader = new FileReader();
-    reader.onload = () => setPaymentEvidence({ name: file.name, type: file.type, size: file.size, dataUrl: reader.result, uploadedAt: new Date().toISOString() });
-    reader.readAsDataURL(file);
+    compressedImageDataUrl(file, { maxEdge: 1800, quality: 0.85 })
+      .then((dataUrl) => setPaymentEvidence({ name: file.name, type: file.type, size: file.size, dataUrl, uploadedAt: new Date().toISOString() }))
+      .catch(() => setMessage('That image could not be read. Try another one.'));
   };
 
   const validateInvoice = () => {
@@ -3348,7 +3423,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
     const requestedCredit = toNumber(form.storeCreditApplied);
     if (requestedCredit > 0 && !chosenCustomer?.id) return 'Select a registered customer before applying store credit.';
     if (requestedCredit > availableStoreCredit) return `This customer only has ${money.format(availableStoreCredit)} in store credit.`;
-    if (form.paymentStatus !== 'unpaid' && !form.paymentMethod) return 'Select a payment method for this payment.';
+    if (!comesToNothing && form.paymentStatus !== 'unpaid' && !form.paymentMethod) return 'Select a payment method for this payment.';
     if (evidenceRequired && !paymentEvidence) return 'Upload payment evidence for a partially or fully paid invoice.';
     // A part paid invoice with no figure is what left Accounts unable to
     // reconcile and production unable to tell whether it may start.
@@ -3585,32 +3660,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
                       <span>Qty</span>
                       <input type="number" min="1" value={item.quantity} onChange={(event) => updateItem(index, 'quantity', event.target.value)} />
                     </label>
-                    <label className="os-field">
-                      <span>
-                        Discount
-                        {/* Some managers know the naira figure they've agreed
-                            with a customer rather than the percent it works
-                            out to — this toggle lets them type whichever one
-                            they have, and we do the conversion. */}
-                        <button
-                          type="button"
-                          onClick={() => updateItem(index, 'discountMode', item.discountMode === 'amount' ? 'percent' : 'amount')}
-                          style={{ marginLeft: 6, fontSize: 12, fontWeight: 800, letterSpacing: 0, textTransform: 'none', color: '#c97b08', background: 'none', border: '1px solid #e3d9c8', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}
-                        >
-                          {item.discountMode === 'amount' ? 'Use %' : 'Use Figures'}
-                        </button>
-                      </span>
-                      {item.discountMode === 'amount' ? (
-                        <input type="number" min="0" value={item.discountAmount} onChange={(event) => updateItem(index, 'discountAmount', event.target.value)} />
-                      ) : (
-                        <input type="number" min="0" max="100" value={item.discountPercent} onChange={(event) => updateItem(index, 'discountPercent', event.target.value)} />
-                      )}
-                      <small style={{ fontSize: 11, fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#9a8a7a' }}>
-                        {item.discountMode === 'amount'
-                          ? `≈ ${toNumber(item.discountPercent).toFixed(1)}%`
-                          : `≈ ${money.format(toNumber(item.discountAmount))}`}
-                      </small>
-                    </label>
+                    <DiscountField item={item} onChange={(field, value) => updateItem(index, field, value)} />
                     <label className="os-field">
                       <span>Amount</span>
                       <input readOnly value={money.format(toNumber(item.amount))} style={{ background: '#faf7f3', fontWeight: 700, color: '#1a1611', cursor: 'default' }} />
@@ -3647,6 +3697,8 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
                 <span>Payment Status <span style={{ color: '#d62828' }}>*</span></span>
                 <select
                   value={form.paymentStatus}
+                  disabled={comesToNothing}
+                  title={comesToNothing ? 'This invoice comes to nothing, so it is fully paid' : undefined}
                   onChange={(event) => {
                     const nextStatus = event.target.value;
                     updateForm('paymentStatus', nextStatus);
@@ -3661,11 +3713,12 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
                   <option value="partial_paid">Partial Paid</option>
                   <option value="fully_paid">Fully Paid</option>
                 </select>
+                {comesToNothing ? <small style={{ fontSize: 11, fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#2a7d4f' }}>The total is ₦0, so this invoice is fully paid and needs no payment method or receipt.</small> : null}
               </label>
               {/* Payment method describes how an invoice was settled, so it only
                   makes sense once the invoice is being raised as already paid
                   (in full or in part) — same rule as Amount Received below. */}
-              {form.paymentStatus && form.paymentStatus !== 'unpaid' ? (
+              {!comesToNothing && form.paymentStatus && form.paymentStatus !== 'unpaid' ? (
                 <label className="os-field">
                   <span>Payment Method <span style={{ color: '#d62828' }}>*</span></span>
                   <select required value={form.paymentMethod} onChange={(event) => updateForm('paymentMethod', event.target.value)}>
@@ -3682,7 +3735,7 @@ function NewInvoiceView({ currentRole, onInvoiceSent, prefillCustomer, onCancel 
                   invoice could say "part paid" with no figure behind it. An
                   unpaid invoice has no amount to record, so the field only
                   makes sense once some payment status is selected. */}
-              {form.paymentStatus && form.paymentStatus !== 'unpaid' ? (
+              {!comesToNothing && form.paymentStatus && form.paymentStatus !== 'unpaid' ? (
                 <label className="os-field">
                   <span>Amount Received (₦){form.paymentStatus === 'partial_paid' ? <span style={{ color: '#d62828' }}> *</span> : null}</span>
                   {/* Fully paid means paid in full — the figure is the invoice
@@ -4149,7 +4202,7 @@ const emptySheetForm = () => ({
   items: [emptyOrderItem()],
 });
 
-function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, onNavigate, currentRole }) {
+function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, onInvoiceSent, onNavigate, currentRole }) {
   // Arriving from an invoice — "raise an order sheet for this one" — rather
   // than from the menu, so the picker does not have to be searched again.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -4161,11 +4214,23 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
     ? String(currentRole.store).split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
     : '';
   const departments = useDepartments();
+  const storeDirectory = useStores();
+  const storeChoices = (storeDirectory || [])
+    .filter((store) => store.status === 'active')
+    .map((store) => ({ key: store.key, label: String(store.name || store.key).replace(/\s+Store$/i, '').trim() }));
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
   const [sheetForm, setSheetForm] = useState(() => ({ ...emptySheetForm(), ...(assignedStoreFallback ? { store: assignedStoreFallback } : {}) }));
   const [customers, setCustomers] = useState([]);
   const [message, setMessage] = useState('');
+  // The Owner and Admin can start an order sheet from a customer, with no
+  // invoice behind it. Nobody else can: a store manager's orders come from the
+  // invoice, which is what Accounts approve.
+  const mayStartWithoutInvoice = ['owner', 'admin'].includes(currentRole?.id);
+  const [startMode, setStartMode] = useState('invoice');
+  const [startCustomerId, setStartCustomerId] = useState('');
+  const [startStore, setStartStore] = useState('');
+  const [startingWithoutInvoice, setStartingWithoutInvoice] = useState(false);
   // Set once the order sheet named in `?edit=` has been loaded into the form.
   // Distinct from `editingInvoiceNumber` (the URL param, cleared once used) so
   // the rest of the form can keep asking "am I editing?" after that happens.
@@ -4366,13 +4431,16 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
       setMessage('Style images need to be under 4 MB each.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => updateStyleImage(index, imageIndex, {
-      label: `Image ${imageIndex + 1}`,
-      name: file.name,
-      dataUrl: reader.result,
-    });
-    reader.readAsDataURL(file);
+    // Shrunk before it is attached — see utils/image.js. The order sheet carries
+    // its pictures in the request itself, and full-size phone photos were
+    // taking it past the server's limit.
+    compressedImageDataUrl(file)
+      .then((dataUrl) => updateStyleImage(index, imageIndex, {
+        label: `Image ${imageIndex + 1}`,
+        name: file.name,
+        dataUrl,
+      }))
+      .catch(() => setMessage('That image could not be read. Try another one.'));
   };
 
   const updateStyleImage = (index, imageIndex, value) => {
@@ -4691,6 +4759,31 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
     setSavedAndClean(true);
   };
 
+  // Opens a bare invoice record for the chosen customer and carries on exactly
+  // as if that invoice had been picked, so the measurements, departments and
+  // items below behave the same way.
+  const startWithoutInvoice = async () => {
+    if (!startCustomerId) { setMessage('Choose the customer this order sheet is for.'); return; }
+    setStartingWithoutInvoice(true);
+    setMessage('');
+    try {
+      const response = await api.post('/oms/order-sheets/without-invoice', {
+        customerId: startCustomerId,
+        ...(startStore ? { store: startStore } : {}),
+      });
+      const created = response.data?.data?.invoice;
+      if (!created?.invoiceNumber) throw new Error('The order could not be started.');
+      onInvoiceSent?.(created);
+      // The effect that picks up ?invoice= finishes the job once the new record
+      // has reached the list.
+      setSearchParams({ invoice: created.invoiceNumber }, { replace: true });
+    } catch (error) {
+      setMessage(error.response?.data?.message || error.message || 'The order sheet could not be started.');
+    } finally {
+      setStartingWithoutInvoice(false);
+    }
+  };
+
   const linkedInvoice = sentInvoices.find((inv) => inv.invoiceNumber === sheetForm.invoiceNumber);
 
   return (
@@ -4726,11 +4819,53 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
               <FileText size={16} strokeWidth={1.5} className="os-card-icon" />
             </div>
             <div className="os-card-body">
+              {mayStartWithoutInvoice && !editingSheet && !sheetForm.invoiceNumber ? (
+                <div role="group" aria-label="How to start this order sheet" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {[['invoice', 'From an invoice'], ['customer', 'From a customer (no invoice)']].map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={startMode === mode}
+                      onClick={() => { setStartMode(mode); setMessage(''); }}
+                      style={{
+                        padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                        border: startMode === mode ? 'none' : '1px solid #ddd5c8',
+                        background: startMode === mode ? '#1a1611' : 'transparent',
+                        color: startMode === mode ? '#fff' : '#5a4e42',
+                      }}
+                    >{label}</button>
+                  ))}
+                </div>
+              ) : null}
               {editingSheet ? (
                 <label className="os-field os-field-full">
                   <span>Invoice Number</span>
                   <input value={sheetForm.invoiceNumber} disabled />
                 </label>
+              ) : startMode === 'customer' && mayStartWithoutInvoice ? (
+                <div className="os-field os-field-full" style={{ display: 'grid', gap: 10 }}>
+                  <label className="os-field os-field-full">
+                    <span>Customer</span>
+                    <select value={startCustomerId} onChange={(event) => setStartCustomerId(event.target.value)}>
+                      <option value="">Choose an existing customer…</option>
+                      {customers
+                        .filter((customer) => !String(customer.id).startsWith('sent-') && String(customer.category || '').toLowerCase() !== 'archived')
+                        .sort((a, b) => String(a.fullName).localeCompare(String(b.fullName)))
+                        .map((customer) => <option key={customer.id} value={customer.id}>{customer.fullName}{customer.phone ? ` · ${customer.phone}` : ''}</option>)}
+                    </select>
+                  </label>
+                  <label className="os-field os-field-full">
+                    <span>Store</span>
+                    <select value={startStore} onChange={(event) => setStartStore(event.target.value)}>
+                      <option value="">The customer&apos;s usual store</option>
+                      {storeChoices.map((store) => <option key={store.key} value={store.key}>{store.label}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" className="os-release-btn" style={{ width: 'auto', justifySelf: 'start' }} onClick={startWithoutInvoice} disabled={startingWithoutInvoice || !startCustomerId}>
+                    {startingWithoutInvoice ? 'Starting…' : 'Start order sheet'}
+                  </button>
+                  <small style={{ color: '#8a7a6a' }}>No invoice is raised. The order is recorded as raised by you, needs no Accounts approval, and goes to Production once the measurements and departments are complete.</small>
+                </div>
               ) : (
                 <label className="os-field os-field-full">
                   <span>Invoice Number</span>
@@ -4826,9 +4961,9 @@ function OrderSheetView({ sentInvoices = [], onCreateJob, onOrderSheetUpdated, o
               <div className="os-card-body">
                 {Object.keys(sheetForm.measurementDetails || {}).length ? (
                   <div className="sheet-measurements">
-                    {Object.entries(sheetForm.measurementDetails).map(([key, value]) => (
+                    {orderedMeasurementEntries(sheetForm.measurementDetails).map(({ key, value, label }) => (
                       <label className="os-field" key={key}>
-                        <span>{key.replace(/_/g, ' ')}</span>
+                        <span>{label}</span>
                         <input
                           value={value}
                           onChange={(event) => setSheetForm((current) => ({
@@ -6206,7 +6341,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                   order level (Production's own textarea further down), so
                   only that belongs in a box separate from any one item. */}
               {jobModal.productionNote ? (
-                <div style={{ padding: '12px 14px', background: '#fffbf0', border: '1px solid #e8d9a0', borderRadius: 8, fontSize: 13, color: '#5a4e42' }}>
+                <div style={{ padding: '12px 14px', background: '#fffbf0', border: '1px solid #e8d9a0', borderRadius: 8, fontSize: 13, color: '#5a4e42', whiteSpace: 'pre-line', overflowWrap: 'break-word' }}>
                   <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Production Note</div>
                   {jobModal.productionNote}
                 </div>
@@ -6216,7 +6351,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                   store manager's free-text note from raising the order
                   sheet. Distinct from the structured measurements below. */}
               {jobModal.fitNote ? (
-                <div style={{ padding: '12px 14px', background: '#f0f4ff', border: '1px solid #c7d2f0', borderRadius: 8, fontSize: 13, color: '#5a4e42' }}>
+                <div style={{ padding: '12px 14px', background: '#f0f4ff', border: '1px solid #c7d2f0', borderRadius: 8, fontSize: 13, color: '#5a4e42', whiteSpace: 'pre-line', overflowWrap: 'break-word' }}>
                   <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Fit Notes</div>
                   {jobModal.fitNote}
                 </div>
@@ -6377,9 +6512,9 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                   // uses for measurements, rather than a bulleted list — one
                   // figure per cell, in two columns, so a tailor can scan it
                   // the way it already reads everywhere else in the app.
-                  const detailEntries = jobModal.measurementDetails ? Object.entries(jobModal.measurementDetails) : [];
+                  const detailEntries = jobModal.measurementDetails ? orderedMeasurementEntries(jobModal.measurementDetails) : [];
                   const rows = detailEntries.length
-                    ? detailEntries.map(([key, value]) => [key.replace(/_/g, ' '), value])
+                    ? detailEntries.map(({ label, value }) => [label, value])
                     : String(jobModal.measurements || '').split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line) => {
                       const [label, ...rest] = line.split(':');
                       return rest.length ? [label.trim(), rest.join(':').trim()] : [line, ''];
@@ -7164,6 +7299,21 @@ function StaffView({ role, currentRole }) {
 function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportFormat, setExportFormat, exportReport, message }) {
   const [activeTab, setActiveTab] = useState('Commercial Activity');
   const summary = report.summary;
+  // Ranked on what customers have paid; an invoice nobody has paid on leaves its
+  // customer off the list.
+  const reportTopCustomers = useMemo(() => {
+    const byCustomer = new Map();
+    report.invoices.forEach((invoice) => {
+      const paid = toNumber(invoice.paid);
+      if (!(paid > 0)) return;
+      const name = invoice.customer || 'Unnamed';
+      const entry = byCustomer.get(name) || { name, paid: 0, orders: 0 };
+      entry.paid += paid;
+      entry.orders += 1;
+      byCustomer.set(name, entry);
+    });
+    return [...byCustomer.values()].sort((a, b) => b.paid - a.paid).slice(0, 5);
+  }, [report.invoices]);
   const paidTotal = report.invoices.filter((invoice) => invoice.paymentStatus === 'Fully Paid').reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
   const pending = report.invoices.filter((invoice) => invoice.approvalStatus === 'Pending Accounts');
   const flagged = report.invoices.filter((invoice) => ['Flagged', 'Rejected'].includes(invoice.approvalStatus));
@@ -7716,18 +7866,18 @@ function AccountsReportsDashboard({ report, from, to, setFrom, setTo, exportForm
             <div><strong style={{ fontSize: 13 }}>Top Customers</strong></div>
           </div>
           <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {report.invoices.slice(0, 5).map((invoice, i) => (
-              <div key={invoice.invoiceNumber} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {reportTopCustomers.map((customer) => (
+              <div key={customer.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1a1611', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
-                  {invoice.customer.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()}
+                  {customer.name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1611', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invoice.customer}</div>
-                  <div style={{ fontSize: 11, color: '#8a7a6a' }}>{money.format(invoice.total)}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1611', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{customer.name}</div>
+                  <div style={{ fontSize: 11, color: '#8a7a6a' }}>{money.format(customer.paid)} paid · {customer.orders} invoice{customer.orders === 1 ? '' : 's'}</div>
                 </div>
               </div>
             ))}
-            {!report.invoices.length && <div style={{ fontSize: 12, color: '#8a7a6a', padding: '8px 0' }}>No customer data.</div>}
+            {!reportTopCustomers.length && <div style={{ fontSize: 12, color: '#8a7a6a', padding: '8px 0' }}>No paid invoices in this period.</div>}
           </div>
         </div>
       </div>
@@ -8618,6 +8768,7 @@ function renderView(activeView, role, viewProps = {}) {
         sentInvoices={viewProps.sentInvoices}
         onCreateJob={viewProps.onCreateJob}
         onOrderSheetUpdated={viewProps.onOrderSheetUpdated}
+        onInvoiceSent={viewProps.onInvoiceSent}
         onNavigate={viewProps.onNavigate}
         currentRole={viewProps.currentRole}
       />

@@ -1,3 +1,4 @@
+import { orderedMeasurementEntries } from '../../utils/measurements';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CheckSquare, Clock, User, Package, ArrowRight, Play, CheckCircle, ChevronDown, ChevronUp, Calendar, Ruler, Image, Scissors, Filter } from 'lucide-react';
@@ -514,7 +515,7 @@ export default function MyTasksPage({ compact = false, currentRole, productionJo
                           <thead><tr><th>Measurement</th><th>Value</th></tr></thead>
                           <tbody>
                         {(order.measurementDetails
-                          ? Object.entries(order.measurementDetails)
+                          ? orderedMeasurementEntries(order.measurementDetails).map(({ label, value }) => [label, value])
                           : String(order.measurements).split(/[\n,]/).map((line) => line.trim()).filter(Boolean).map((line) => {
                             const [label, ...rest] = line.split(':');
                             return rest.length ? [label.trim(), rest.join(':').trim()] : [line, ''];

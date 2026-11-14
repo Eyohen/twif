@@ -218,6 +218,10 @@ export const invoiceDocumentPayload = (invoice) => ({
   eliteDiscountAmount: invoice.eliteDiscountAmount || 0,
   storeCreditApplied: invoice.storeCreditApplied || 0,
   balanceDue: invoice.balanceDue ?? toNumber(invoice.total),
+  // What has been paid so far. Left out, the document read nothing as received,
+  // so a part-paid invoice downloaded with its Amount Due equal to the whole
+  // total and no payment line at all.
+  amountReceived: amountReceived(invoice) ?? 0,
   paymentStatus: invoice.paymentStatusKey || PAYMENT_STATUS_KEYS[invoice.paymentStatus] || 'partial_paid',
   paymentMethod: invoice.paymentMethodKey || String(invoice.paymentMethod || 'transfer').toLowerCase(),
   trackingToken: invoice.trackingToken,
@@ -572,6 +576,7 @@ export const classNames = (...items) => items.filter(Boolean).join(' ');
 
 export const PERIOD_OPTIONS = [
   ['today', 'Today'],
+  ['yesterday', 'Yesterday'],
   ['week', 'This Week'],
   ['month', 'This Month'],
   ['quarter', 'This Quarter'],
@@ -612,6 +617,10 @@ export const filterByPeriod = (records, getDate, period, customFrom, customTo) =
   };
 
   if (period === 'today') return records.filter((record) => on(record) === today);
+  if (period === 'yesterday') {
+    const yesterday = addDaysIso(today, -1);
+    return records.filter((record) => on(record) === yesterday);
+  }
   if (period === 'week') return records.filter((record) => getDate(record) && new Date(getDate(record)) >= weekAgo);
   if (period === 'month') return records.filter((record) => on(record) >= monthStart);
   if (period === 'quarter') {
@@ -641,6 +650,12 @@ export const periodWindow = (period, customFrom, customTo) => {
   start.setHours(0, 0, 0, 0);
 
   if (period === 'today') return { start, end };
+  if (period === 'yesterday') {
+    start.setDate(start.getDate() - 1);
+    const yesterdayEnd = new Date(start);
+    yesterdayEnd.setHours(23, 59, 59, 999);
+    return { start, end: yesterdayEnd };
+  }
   if (period === 'week') { start.setDate(start.getDate() - 6); return { start, end }; }
   if (period === 'month') { start.setDate(1); return { start, end }; }
   if (period === 'quarter') { start.setMonth(Math.floor(start.getMonth() / 3) * 3, 1); return { start, end }; }
@@ -690,7 +705,7 @@ export const changeLabel = (change, unit = 'the period before') => {
 // move with the selected range instead of being a fixed decorative shape.
 export const periodTrend = (records, period, buckets = 11) => {
   const now = new Date();
-  const spanDays = period === 'today' ? 1 : period === 'week' ? 7 : period === 'year' ? 365 : 30;
+  const spanDays = period === 'today' || period === 'yesterday' ? 1 : period === 'week' ? 7 : period === 'year' ? 365 : 30;
   const totals = new Array(buckets).fill(0);
 
   records.forEach((record) => {
@@ -703,4 +718,35 @@ export const periodTrend = (records, period, buckets = 11) => {
 
   const peak = Math.max(...totals, 1);
   return totals.map((value) => ({ value, height: Math.max(4, Math.round((value / peak) * 100)) }));
+};
+
+
+// What has actually been paid in, as opposed to what has been invoiced. Each
+// recorded payment carries the moment it was entered, so a window is summed
+// from those entries. An invoice from before payments were itemised has only
+// a running `paid` figure, which is counted on the day the invoice was raised.
+export const paymentsRecordedIn = (invoices = [], window = null) => invoices.reduce((sum, invoice) => {
+  const history = Array.isArray(invoice.paymentHistory) ? invoice.paymentHistory : [];
+  const entries = history.length
+    ? history.map((entry) => ({ amount: toNumber(entry.amount), at: entry.recordedAt }))
+    : [{ amount: toNumber(invoice.paid), at: invoice.createdAt }];
+  return sum + entries.reduce((inner, entry) => {
+    if (!(entry.amount > 0)) return inner;
+    if (!window) return inner + entry.amount;
+    const at = new Date(entry.at);
+    return !Number.isNaN(at.valueOf()) && at >= window.start && at <= window.end ? inner + entry.amount : inner;
+  }, 0);
+}, 0);
+
+// The window `period` stands for, or null for All Time. A Custom range with no
+// From date yet reads as All Time rather than throwing.
+export const windowForPeriod = (period, customFrom, customTo) => periodWindow(period, customFrom, customTo);
+
+// What one invoice line is discounted by, in naira. A line carries the mode it
+// was entered in: a naira figure is taken exactly as typed, a percentage is
+// worked out from the line's gross. Either way it can never exceed the gross.
+export const lineDiscountAmount = (item = {}) => {
+  const gross = toNumber(item.rate) * toNumber(item.quantity);
+  if (item.discountMode === 'amount') return Math.min(Math.max(toNumber(item.discountAmount), 0), gross);
+  return (gross * Math.min(Math.max(toNumber(item.discountPercent), 0), 100)) / 100;
 };

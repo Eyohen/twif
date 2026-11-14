@@ -1,3 +1,4 @@
+import { orderedMeasurementEntries } from '../../utils/measurements';
 import { useEffect } from 'react';
 import { ArrowLeft, CheckCircle, Package, CreditCard, Ruler, Clock, User, Scissors, Layers, Image as ImageIcon, ClipboardList } from 'lucide-react';
 import { money, formatMoment, amountReceived, invoicePayable, invoiceApprovalStatus, daysUntilDue, dueDateLabel, toNumber, useDepartments } from '../../utils/oms';
@@ -53,7 +54,7 @@ export default function OrderSheetDetailsPage({ order, onBack, onEdit, onArchive
   const orderNote = sheet.productionNote || invoiceNotes.join(' · ');
 
   const measurements = sheet.measurementDetails && typeof sheet.measurementDetails === 'object'
-    ? Object.entries(sheet.measurementDetails).filter(([, value]) => String(value ?? '').trim())
+    ? orderedMeasurementEntries(sheet.measurementDetails).map(({ label, value }) => [label, value]).filter(([, value]) => String(value ?? '').trim())
     : [];
   const measurementNote = !measurements.length && sheet.measurements ? String(sheet.measurements) : '';
 

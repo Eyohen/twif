@@ -1,17 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Clock, Package, CheckCircle, AlertCircle, Search, ChevronRight, Eye, Plus } from 'lucide-react';
-import { money, invoiceApprovalStatus, amountReceived, formatMoment, daysUntilDue, dueDateLabel, toNumber } from '../../utils/oms';
+import { Clock, Package, CheckCircle, AlertCircle, Search, ChevronRight, Eye, Plus, FileText } from 'lucide-react';
+import { money, invoiceApprovalStatus, amountReceived, formatMoment, daysUntilDue, dueDateLabel, toNumber, filterByPeriod } from '../../utils/oms';
+import PeriodFilter, { ALL_TIME, DEFAULT_PERIODS, initialCustomRange } from '../../components/oms/PeriodFilter';
 import { Status } from '../../components/oms/Common';
 import OrderDetailsPage from './OrderDetailsPage';
 import Pagination from '../../components/oms/Pagination';
 
-const KPI_COUNT = 4;
+const KPI_COUNT = 5;
+const READY_STATES = ['Ready', 'Ready for Collection'];
+// An order is an invoice that has been paid for, in full or in part. "Orders"
+// is therefore the view the register opens on, and "All" (which also holds
+// invoices nobody has paid anything on yet) comes last.
+const FILTER_TABS = ['Orders', 'Pending Accounts', 'In Production', 'Ready for Collection', 'Unpaid', 'Partial Paid', 'Paid', 'All'];
+const PERIODS = [...DEFAULT_PERIODS.slice(0, 4), ALL_TIME, DEFAULT_PERIODS[4]];
+const isPaidOrPart = (order) => ['Fully Paid', 'Paid', 'Partial Paid'].includes(order.paymentStatus);
+// When production marked the order ready. Orders finished before that moment
+// was recorded fall back to the last time the sheet changed.
+const readyOn = (order) => (READY_STATES.includes(order.job?.status) ? (order.job.readyAt || order.job.updatedAt || null) : null);
+const shortDate = (value) => (value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 
 export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, currentRole, role = 'store_manager' }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('All');
+  const [filter, setFilter] = useState(() => {
+    const requested = searchParams.get('filter');
+    return FILTER_TABS.includes(requested) ? requested : 'Orders';
+  });
+  const [period, setPeriod] = useState('all');
+  const [range, setRange] = useState(initialCustomRange);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [activeKpiDot, setActiveKpiDot] = useState(0);
   const [sortOrder, setSortOrder] = useState('Newest First');
@@ -26,25 +43,40 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
     setActiveKpiDot(Math.round(scrollLeft / cardWidth));
   };
 
-  const orders = sentInvoices.map((invoice) => ({ ...invoice, job: invoice.orderSheet || {}, approval: invoiceApprovalStatus(invoice) }));
+  const allOrders = useMemo(
+    () => sentInvoices.map((invoice) => ({ ...invoice, job: invoice.orderSheet || {}, approval: invoiceApprovalStatus(invoice) })),
+    [sentInvoices]
+  );
+  // Every figure and list below reads over the chosen period.
+  const orders = useMemo(
+    () => filterByPeriod(allOrders, (order) => order.createdAt || order.invoiceDate, period, range.from, range.to),
+    [allOrders, period, range]
+  );
   const requestedInvoice = searchParams.get('invoice');
 
   // Notification links carry the invoice number. Open the matching order
   // detail once invoices have loaded instead of stopping at the register.
   useEffect(() => {
     if (!requestedInvoice) return;
-    const match = orders.find((order) => order.invoiceNumber === requestedInvoice);
+    const match = allOrders.find((order) => order.invoiceNumber === requestedInvoice);
     if (!match) return;
     setSelectedOrder(match);
     setSearchParams({}, { replace: true });
-  }, [requestedInvoice, orders, setSearchParams]);
+  }, [requestedInvoice, allOrders, setSearchParams]);
+  // Arriving with ?filter=... (the overview's Ready for Pickup link) is read
+  // once, then cleared so the address does not keep re-applying it.
+  useEffect(() => {
+    if (!searchParams.get('filter')) return;
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
   const matchesFilter = (order) => filter === 'All'
+    || (filter === 'Orders' && isPaidOrPart(order))
     || (filter === 'Unpaid' && !['Fully Paid', 'Paid', 'Partial Paid'].includes(order.paymentStatus))
     || (filter === 'Partial Paid' && order.paymentStatus === 'Partial Paid')
     || (filter === 'Paid' && ['Fully Paid', 'Paid'].includes(order.paymentStatus))
     || (filter === 'Pending Accounts' && order.approval === 'Pending Accounts')
     || (filter === 'In Production' && ['Assigned', 'In Progress'].includes(order.job.status))
-    || (filter === 'Ready for Collection' && ['Ready', 'Ready for Collection'].includes(order.job.status));
+    || (filter === 'Ready for Collection' && READY_STATES.includes(order.job.status));
   // The sort control offered Newest and Oldest and did neither.
   const orderedAt = (order) => new Date(order.createdAt || order.invoiceDate || 0).getTime();
   const filtered = useMemo(() => orders
@@ -61,6 +93,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const paidOrders = orders.filter(isPaidOrPart);
   const pendingAccounts = orders.filter((order) => order.approval === 'Pending Accounts');
   const inProduction = orders.filter((order) => ['Assigned', 'In Progress'].includes(order.job.status));
   const ready = orders.filter((order) => ['Ready', 'Ready for Collection'].includes(order.job.status));
@@ -75,15 +108,14 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
   }
 
   const kpis = [
+    { Icon: FileText, label: 'Orders', count: paidOrders.length, total: totalFor(paidOrders), tone: '#f6f1ff', iconColor: '#5b3fa0', textColor: '#5b3fa0' },
     { Icon: Clock, label: 'Pending Accounts', count: pendingAccounts.length, total: totalFor(pendingAccounts), tone: '#fffbf0', iconColor: '#c97b08', textColor: '#7a6030' },
     { Icon: Package, label: 'In Production', count: inProduction.length, total: totalFor(inProduction), tone: '#f0f4ff', iconColor: '#3a5098', textColor: '#3a5098' },
     { Icon: CheckCircle, label: 'Ready for Collection', count: ready.length, total: totalFor(ready), tone: '#f0faf4', iconColor: '#2a7d4f', textColor: '#2a7d4f' },
     { Icon: AlertCircle, label: 'Outstanding Payments', count: outstanding.length, total: totalFor(outstanding), tone: '#fff5f0', iconColor: '#8a3520', textColor: '#8a3520' },
   ];
 
-  // Ready for Collection is where an order ends: nothing in TWIF sets a state
-  // after it, so a Completed tab could only ever come back empty.
-  const filterTabs = ['All', 'Unpaid', 'Partial Paid', 'Paid', 'Pending Accounts', 'In Production', 'Ready for Collection'];
+  const filterTabs = FILTER_TABS;
 
   return (
     <div className="os-page">
@@ -132,7 +164,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
       ) : null}
 
       {/* KPI stat cards */}
-      <div className="os-kpi-row" ref={kpiScrollRef} onScroll={handleKpiScroll}>
+      <div className="os-kpi-row os-kpi-row-five" ref={kpiScrollRef} onScroll={handleKpiScroll}>
         {kpis.map(({ Icon, label, count, total, tone, iconColor, textColor }) => (
           <div key={label} className="os-card" style={{ background: tone, borderColor: '#eee5da' }}>
             <div style={{ padding: '16px 18px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -176,6 +208,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
               </select>
             </label>
           </div>
+          <PeriodFilter period={period} onPeriod={setPeriod} from={range.from} to={range.to} onFrom={(from) => setRange((current) => ({ ...current, from }))} onTo={(to) => setRange((current) => ({ ...current, to }))} periods={PERIODS} />
           {/* Tab pills */}
           <nav className="os-filter-pills" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {filterTabs.map((item) => (
@@ -197,10 +230,10 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
 
       {/* Desktop table */}
       <div className="os-desktop-table" style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #eee5da', background: '#fff' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', minWidth: 1180, borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#faf7f3' }}>
-              {['Invoice No.', 'Customer', ...(showStore ? ['Store'] : []), 'Items', 'Invoice Total', 'Payment', 'Delivery Date', 'Production', 'Created', 'Actions'].map((col) => (
+              {['Invoice No.', 'Customer', ...(showStore ? ['Store'] : []), 'Items', 'Invoice Total', 'Payment', 'Delivery Date', 'Production', 'Marked Ready', 'Created', 'Actions'].map((col) => (
                 <th key={col} style={{
                   padding: '11px 14px', textAlign: 'left', fontSize: 11,
                   fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase',
@@ -229,7 +262,7 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
                   onClick={() => setSelectedOrder(order)}
                 >
                   <td style={{ padding: '12px 14px' }}>
-                    <div style={{ fontWeight: 800, fontSize: 14, color: '#0f0b06' }}>{order.invoiceNumber}</div>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: '#0f0b06', whiteSpace: 'nowrap' }}>{order.invoiceNumber}</div>
                     {/* An "Order #" was printed here, counted down from 1256 by
                         the row's position — a number that existed nowhere. */}
                     {!showStore ? <div style={{ fontSize: 11, color: '#8a7a6a' }}>{order.store || order.job.store || ''}</div> : null}
@@ -281,6 +314,9 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
                     <div style={{ fontSize: 11, color: '#8a7a6a', marginTop: 3 }}>
                       {status === 'Pending Accounts' ? 'Awaiting confirm' : status === 'Ready for Collection' ? 'Awaiting pickup' : 'With Production'}
                     </div>
+                  </td>
+                  <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42', whiteSpace: 'nowrap' }}>
+                    {shortDate(readyOn(order))}
                   </td>
                   <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42' }}>
                     {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
@@ -360,6 +396,12 @@ export default function StoreManagerOrdersPage({ sentInvoices = [], onNavigate, 
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Items</div>
                   <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>{order.pieces || order.job.pieces || 1} pieces</div>
                 </div>
+                {readyOn(order) ? (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Marked Ready</div>
+                    <div style={{ fontSize: 12, color: '#1a1611', marginTop: 2 }}>{shortDate(readyOn(order))}</div>
+                  </div>
+                ) : null}
                 {showStore ? (
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#8a7a6a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Store</div>

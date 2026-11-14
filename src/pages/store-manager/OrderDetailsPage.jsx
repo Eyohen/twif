@@ -1,3 +1,4 @@
+import { orderedMeasurementEntries } from '../../utils/measurements';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Download, CheckCircle, Package, CreditCard, Ruler, FileText, Clock, User, AlertCircle } from 'lucide-react';
 import { api } from '../../lib/api';
@@ -54,7 +55,7 @@ export default function OrderDetailsPage({ order, onBack, currentRole, role = 's
   // 34in waist used to be printed on every order, which is a set of numbers a
   // tailor could cut against.
   const measurements = job.measurementDetails && typeof job.measurementDetails === 'object'
-    ? Object.entries(job.measurementDetails).filter(([, value]) => String(value ?? '').trim())
+    ? orderedMeasurementEntries(job.measurementDetails).map(({ label, value }) => [label, value]).filter(([, value]) => String(value ?? '').trim())
     : [];
   const measurementNote = !measurements.length && job.measurements ? String(job.measurements) : '';
 

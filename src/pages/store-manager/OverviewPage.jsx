@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Users, FileText, Package, Bell, TrendingUp, Clock, CheckCircle, AlertCircle } from 'lucide-react';
-import { invoiceApprovalStatus, isFullyPaid } from '../../utils/oms';
+import { invoiceApprovalStatus, isFullyPaid, filterByPeriod, addDaysIso, todayIso, money, toNumber } from '../../utils/oms';
 import { api } from '../../lib/api';
+import PeriodFilter, { initialCustomRange } from '../../components/oms/PeriodFilter';
 
-const ACTIVITY_LABELS = ['Invoice Sent', 'Measurement', 'Ready', 'Payment'];
-const ACTIVITY_TIMES = ['10:30 AM', '11:45 AM', '1:15 PM', '2:20 PM'];
-const ACTIVITY_NOTES = ['Invoice sent to customer', 'Measurement completed', 'Ready for collection', 'Payment received'];
+const PERIOD_NAMES = { today: 'Today', yesterday: 'Yesterday', week: 'This Week', month: 'This Month', custom: 'In Range' };
+const READY_STATES = ['Ready', 'Ready for Collection'];
+const dayLabel = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
 
 export default function StoreManagerOverviewPage({ sentInvoices = [], productionJobs = [], onNavigate }) {
   const [customers, setCustomers] = useState([]);
+  // The tiles used to count every invoice ever sent under "Orders Today". They
+  // read over the period picked here, and open on Today.
+  const [period, setPeriod] = useState('today');
+  const [range, setRange] = useState(initialCustomRange);
 
   useEffect(() => {
     let cancelled = false;
@@ -18,21 +23,38 @@ export default function StoreManagerOverviewPage({ sentInvoices = [], production
     return () => { cancelled = true; };
   }, []);
 
-  const today = new Set(sentInvoices.map((invoice) => invoice.customer)).size;
+  const periodInvoices = filterByPeriod(sentInvoices, (invoice) => invoice.createdAt, period, range.from, range.to);
+  const periodName = PERIOD_NAMES[period] || 'Today';
+  const periodCustomers = new Set(periodInvoices.map((invoice) => invoice.customer)).size;
+  const periodValue = periodInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
   const awaitingPayment = sentInvoices.filter((invoice) => !isFullyPaid(invoice));
-  const readyJobs = productionJobs.filter((job) => ['Ready', 'Ready for Collection'].includes(job.status));
+  const readyJobs = productionJobs.filter((job) => READY_STATES.includes(job.status));
   const pendingApproval = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts');
   // Counted against the customer register, since this tile links there.
   const customersWithoutMeasurements = customers.filter((customer) => !customer.measurementsAdded).length;
-  const activities = sentInvoices.slice(0, 4);
-  const collections = productionJobs.filter((job) => job.delivery).slice(0, 9);
-  const collectionGroups = [collections.slice(0, 3), collections.slice(3, 7), collections.slice(7, 9)];
+  const activities = [...periodInvoices]
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .slice(0, 4);
+
+  // Orders that are ready, set against the day the customer is due to collect
+  // them. These used to be the first nine jobs with a delivery date, whatever
+  // their state, split into three fixed groups under invented dates.
+  const todayKey = todayIso();
+  const tomorrowKey = addDaysIso(todayKey, 1);
+  const deliveryDay = (job) => String(job.delivery || '').slice(0, 10);
+  const readyWithDate = readyJobs.filter((job) => deliveryDay(job));
+  const collectionGroups = [
+    { title: 'Today & overdue', note: 'Due now or already past', jobs: readyWithDate.filter((job) => deliveryDay(job) <= todayKey) },
+    { title: `Tomorrow`, note: dayLabel(tomorrowKey), jobs: readyWithDate.filter((job) => deliveryDay(job) === tomorrowKey) },
+    { title: 'Later', note: 'Due after tomorrow', jobs: readyWithDate.filter((job) => deliveryDay(job) > tomorrowKey) },
+  ];
+  const readyWithoutDate = readyJobs.length - readyWithDate.length;
 
   const kpis = [
-    { Icon: FileText, label: 'Orders Today', value: sentInvoices.length, detail: '+2 from yesterday', tone: 'blue', dest: 'Orders' },
+    { Icon: FileText, label: `Orders ${periodName}`, value: periodInvoices.length, detail: money.format(periodValue), tone: 'blue', dest: 'Orders' },
     { Icon: TrendingUp, label: 'Awaiting Payment', value: awaitingPayment.length, detail: 'View and follow up', tone: 'gold', dest: 'Invoices', params: { status: 'AwaitingPayment' } },
-    { Icon: Package, label: 'Ready for Pickup', value: readyJobs.length, detail: 'View collections', tone: 'green', dest: 'Invoices' },
-    { Icon: Users, label: 'Customers Today', value: today, detail: '+3 new customers', tone: 'purple', dest: 'Customers' },
+    { Icon: Package, label: 'Ready for Pickup', value: readyJobs.length, detail: 'View collections', tone: 'green', dest: 'Orders', params: { filter: 'Ready for Collection' } },
+    { Icon: Users, label: `Customers ${periodName}`, value: periodCustomers, detail: 'Customers with an order', tone: 'purple', dest: 'Customers' },
   ];
 
   const pendingItems = [
@@ -51,6 +73,8 @@ export default function StoreManagerOverviewPage({ sentInvoices = [], production
   return (
     <div className="store-overview">
 
+      <PeriodFilter period={period} onPeriod={setPeriod} from={range.from} to={range.to} onFrom={(from) => setRange((current) => ({ ...current, from }))} onTo={(to) => setRange((current) => ({ ...current, to }))} />
+
       <section className="store-overview-kpis">
         {kpis.map(({ Icon, label, value, detail, tone, dest, params }) => (
           <article
@@ -67,9 +91,9 @@ export default function StoreManagerOverviewPage({ sentInvoices = [], production
 
       <section className="store-overview-main-grid">
         <article className="store-overview-panel todays-activity">
-          <h2>Today&apos;s Activity</h2>
+          <h2>{period === 'today' ? 'Today\u2019s Activity' : `Activity \u00b7 ${periodName}`}</h2>
           <div>
-            {activities.map((invoice, index) => (
+            {activities.map((invoice) => (
               <section
                 key={invoice.invoiceNumber}
                 style={{ cursor: onNavigate ? 'pointer' : 'default' }}
@@ -79,13 +103,13 @@ export default function StoreManagerOverviewPage({ sentInvoices = [], production
                 <span>
                   <small>{invoice.invoiceNumber}</small>
                   <strong>{invoice.customer}</strong>
-                  <p>{ACTIVITY_NOTES[index]}</p>
+                  <p>{invoice.paymentStatus || 'Invoice sent to customer'}</p>
                 </span>
-                <time>{ACTIVITY_TIMES[index]}</time>
-                <b className={`activity-${index}`}>{ACTIVITY_LABELS[index]}</b>
+                <time>{invoice.createdAt ? new Date(invoice.createdAt).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true }) : ''}</time>
+                <b className="activity-0">Invoice Sent</b>
               </section>
             ))}
-            {!activities.length ? <p className="store-overview-empty">Store activity will appear here.</p> : null}
+            {!activities.length ? <p className="store-overview-empty">No invoices for this period yet.</p> : null}
           </div>
         </article>
 
@@ -113,18 +137,19 @@ export default function StoreManagerOverviewPage({ sentInvoices = [], production
             <h2><Package size={16} strokeWidth={1.8} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 7 }} />Ready for Collection</h2>
           </header>
           <div>
-            {collectionGroups.map((jobs, index) => (
-              <section key={index}>
+            {collectionGroups.map(({ title, note, jobs }) => (
+              <section key={title}>
                 <header>
-                  <strong>{index === 0 ? 'Tomorrow' : index === 1 ? 'Friday, 25 Jul' : 'Saturday, 26 Jul'}</strong>
+                  <strong>{title}</strong>
                   <i><Package size={14} strokeWidth={1.8} /></i>
                 </header>
-                <b>{jobs.length} orders</b>
-                <p>{jobs.map((job) => job.invoiceNumber).join(', ') || 'No scheduled orders'}</p>
+                <b>{jobs.length} order{jobs.length === 1 ? '' : 's'}</b>
+                <p>{jobs.map((job) => job.invoiceNumber).join(', ') || note}</p>
               </section>
             ))}
+            {readyWithoutDate ? <p className="store-overview-empty">{readyWithoutDate} ready order{readyWithoutDate === 1 ? ' has' : 's have'} no delivery date set.</p> : null}
           </div>
-          <button type="button" onClick={() => onNavigate?.('Orders')}>View all collections &nbsp;›</button>
+          <button type="button" onClick={() => onNavigate?.('Orders', { filter: 'Ready for Collection' })}>View all collections &nbsp;›</button>
         </article>
 
         <article className="store-overview-panel recent-store-notifications">

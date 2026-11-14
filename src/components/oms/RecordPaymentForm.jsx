@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Camera, Image as ImageIcon, Check } from 'lucide-react';
 import { api } from '../../lib/api';
+import { compressedImageDataUrl } from '../../utils/image';
 
 const PAYMENT_METHODS = ['transfer', 'cash', 'card', 'pos', 'check'];
 const paymentMethodLabel = (method) => (method === 'pos' ? 'POS' : `${method.charAt(0).toUpperCase()}${method.slice(1)}`);
@@ -9,8 +10,10 @@ const paymentMethodLabel = (method) => (method === 'pos' ? 'POS' : `${method.cha
 // Accounts' Payments screen, the invoice review screen, and Edit Invoice all
 // need the same amount/method/evidence form and the same cumulative-balance
 // behaviour, so it lives here once rather than three times.
-export default function RecordPaymentForm({ invoiceNumber, balance, defaultMethod = 'transfer', onRecorded }) {
-  const [amount, setAmount] = useState('');
+// `fixedAmount` is for the Fully Paid choice on Edit Invoice: the figure is the
+// whole balance and is not typed.
+export default function RecordPaymentForm({ invoiceNumber, balance, defaultMethod = 'transfer', onRecorded, fixedAmount }) {
+  const [amount, setAmount] = useState(fixedAmount !== undefined ? String(fixedAmount) : '');
   const [method, setMethod] = useState(defaultMethod);
   const [evidenceList, setEvidenceList] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -26,12 +29,12 @@ export default function RecordPaymentForm({ invoiceNumber, balance, defaultMetho
     if (!file.type.startsWith('image/')) { setError('Payment evidence must be an image or screenshot.'); return; }
     if (file.size > 5 * 1024 * 1024) { setError('Payment evidence must be smaller than 5 MB.'); return; }
     setError('');
-    const reader = new FileReader();
-    reader.onload = () => setEvidenceList((current) => [
-      ...current,
-      { name: file.name, type: file.type, size: file.size, dataUrl: reader.result, uploadedAt: new Date().toISOString() },
-    ]);
-    reader.readAsDataURL(file);
+    compressedImageDataUrl(file, { maxEdge: 1800, quality: 0.85 })
+      .then((dataUrl) => setEvidenceList((current) => [
+        ...current,
+        { name: file.name, type: file.type, size: file.size, dataUrl, uploadedAt: new Date().toISOString() },
+      ]))
+      .catch(() => setError('That image could not be read. Try another one.'));
   };
 
   const removeEvidence = (index) => setEvidenceList((current) => current.filter((_, position) => position !== index));
@@ -52,7 +55,7 @@ export default function RecordPaymentForm({ invoiceNumber, balance, defaultMetho
       });
       const updated = response.data?.data?.invoice;
       if (updated) onRecorded?.(updated);
-      setAmount('');
+      setAmount(fixedAmount !== undefined ? String(fixedAmount) : '');
       setEvidenceList([]);
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'That payment could not be recorded.');
@@ -74,6 +77,7 @@ export default function RecordPaymentForm({ invoiceNumber, balance, defaultMetho
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
             placeholder={String(balance)}
+            readOnly={fixedAmount !== undefined}
             required
           />
         </label>

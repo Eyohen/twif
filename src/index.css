@@ -2321,7 +2321,7 @@ dd {
 .owner-role-shell .sidebar nav { gap: 1px; }
 .owner-role-shell .sidebar nav :is(button,a) { min-height: 36px; padding: 8px 10px; }
 .owner-dashboard { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; color: #151515; }
-.owner-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.owner-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .owner-kpi { position: relative; min-width: 0; min-height: 137px; display: grid; align-content: start; gap: 8px; overflow: hidden; border: 1px solid #eee5da; border-radius: 8px; background: #fff; padding: 15px; }
 .owner-kpi > span { max-width: calc(100% - 38px); font-size: 7px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
 .owner-kpi > strong { font-size: 19px; white-space: nowrap; }
@@ -8924,6 +8924,11 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   }
 }
 
+/* The store orders register carries five figures, so it gets five columns on a wide screen. */
+@media (min-width: 1151px) {
+  .os-kpi-row.os-kpi-row-five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
 /* The dot indicator only means anything once the row actually scrolls. */
 .os-kpi-dots { display: none; }
 @media (max-width: 900px) { .os-kpi-dots { display: flex; } }
@@ -9045,6 +9050,11 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 .job-item-row strong { font-size: 13px; font-weight: 700; color: #0f0b06; }
 .job-item-row small { font-size: 11px; color: #8a7a6a; }
 .job-item-note { color: #5a4e42 !important; }
+/* A note is written as sentences, often on separate lines. Left to collapse, the
+   line breaks vanish and the sentences run into one another; they also have to
+   wrap at a word, never mid-word, inside the narrow item row. */
+.job-item-row small { line-height: 1.45; overflow-wrap: break-word; word-break: normal; }
+.job-item-note { white-space: pre-line; }
 
 /* Notifications that route somewhere read as tappable. */
 .notification-actionable { cursor: pointer; transition: background .15s, box-shadow .15s; }

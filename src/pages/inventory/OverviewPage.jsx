@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { money, formatMoment, isInvoiceApproved } from '../../utils/oms';
 import { stockStatus, itemImage, formatInventoryNumber } from './item';
 import ItemDetailsPage from './ItemDetailsPage';
+import AssignFabricPage, { ordersNeedingFabric } from './AssignFabricPage';
 
 const TONE_COLORS = {
   gold: { bg: '#fff8ee', color: '#c97b08', iconBg: '#fff1d6' },
@@ -206,6 +207,7 @@ export default function InventoryOverviewPage({ onNavigate }) {
   const [showAllAllocations, setShowAllAllocations] = useState(false);
   const [showAwaitingFabric, setShowAwaitingFabric] = useState(false);
   const [showFabricOrders, setShowFabricOrders] = useState(false);
+  const [showAssignFabric, setShowAssignFabric] = useState(false);
   const requestedAllocationOrder = searchParams.get('allocation');
 
   useEffect(() => {
@@ -233,6 +235,19 @@ export default function InventoryOverviewPage({ onNavigate }) {
     return () => { live = false; };
   }, []);
 
+  // Read again after fabric is released: stock moved, the allocation register
+  // grew and the order's sheet now shows that garment as released.
+  const reloadAfterRelease = async () => {
+    const [fabricsResult, allocationsResult, invoicesResult] = await Promise.allSettled([
+      api.get('/oms/fabrics'),
+      api.get('/oms/fabrics/allocations'),
+      api.get('/oms/invoices/sent'),
+    ]);
+    if (fabricsResult.status === 'fulfilled') setItems(fabricsResult.value?.data?.data?.fabrics || []);
+    if (allocationsResult.status === 'fulfilled') setAllocations(allocationsResult.value?.data?.data?.allocations || []);
+    if (invoicesResult.status === 'fulfilled') setInvoices(invoicesResult.value?.data?.data?.invoices || []);
+  };
+
   const alerts = useMemo(() => items
     .filter((item) => stockStatus(item) !== 'In Stock')
     .sort((a, b) => Number(a.quantity || 0) - Number(b.quantity || 0)), [items]);
@@ -252,6 +267,9 @@ export default function InventoryOverviewPage({ onNavigate }) {
   }
   if (showAllAllocations) {
     return <TodaysAllocationsPage allocations={todaysAllocations} loading={loading} onBack={() => setShowAllAllocations(false)} />;
+  }
+  if (showAssignFabric) {
+    return <AssignFabricPage invoices={invoices} inventory={items} loading={loading} onBack={() => setShowAssignFabric(false)} onChanged={reloadAfterRelease} />;
   }
   if (showAwaitingFabric) {
     return <AwaitingFabricPage invoices={awaitingFabric} loading={loading} onBack={() => setShowAwaitingFabric(false)} />;
@@ -291,13 +309,22 @@ export default function InventoryOverviewPage({ onNavigate }) {
             <p>Stock levels, alerts and what has gone out to production</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => onNavigate?.('Inventory')}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', background: '#1a1611', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-        >
-          <PlusCircle size={14} /> Manage Inventory
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => setShowAssignFabric(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', background: '#c97b08', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            <Package size={14} /> Assign Fabric{ordersNeedingFabric(invoices).length ? ` (${ordersNeedingFabric(invoices).length})` : ''}
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate?.('Inventory')}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', background: '#1a1611', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            <PlusCircle size={14} /> Manage Inventory
+          </button>
+        </div>
       </div>
 
       <div className="kpi-carousel-wrap">
@@ -390,7 +417,10 @@ export default function InventoryOverviewPage({ onNavigate }) {
               <strong>Awaiting Fabric</strong>
               <p>Approved invoices with nothing released yet</p>
             </div>
-            <button type="button" onClick={() => setShowAwaitingFabric(true)} style={linkButton}>
+            <button type="button" onClick={() => setShowAssignFabric(true)} style={{ ...linkButton, marginLeft: 'auto', background: '#1a1611', color: '#fff', border: 'none', fontWeight: 700 }}>
+              Assign Fabric
+            </button>
+            <button type="button" onClick={() => setShowAwaitingFabric(true)} style={{ ...linkButton, marginLeft: 6 }}>
               View All <ChevronRight size={12} />
             </button>
           </div>
