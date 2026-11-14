@@ -5482,6 +5482,9 @@ function TailorAssignmentPanel({ job, itemIndex, tailors, departments, renderDep
 }
 
 function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = false, departmentLabel, storeKey, onQuantity, onRemove, onAdd }) {
+  // Typing narrows the list by SKU, name or type, so a code like 0002 finds
+  // its fabric without scrolling through everything held.
+  const [search, setSearch] = useState('');
   // Shown as the total held across every store; Inventory check the store
   // itself when they approve it.
   const availableAtStore = (fabric) => toNumber(fabric?.quantity);
@@ -5496,7 +5499,7 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = fals
             const short = Boolean(entry.fabricId) && toNumber(entry.quantity) > available;
             return (
               <li key={entry.fabricId || 'client-supplied'}>
-                <div><strong>{entry.name}</strong><small>{entry.clientSupplied ? 'The customer is bringing this' : `${available} ${stock?.unit || entry.unit} in stock`}</small></div>
+                <div><strong>{stock?.sku ? `${stock.sku} · ` : ''}{entry.name}</strong><small>{entry.clientSupplied ? 'The customer is bringing this' : `${available} ${stock?.unit || entry.unit} in stock`}</small></div>
                 {entry.clientSupplied ? <span className="fabric-supplied">Customer&apos;s own</span> : (
                   <label><input type="number" min="0" step="0.01" value={entry.quantity ?? ''} disabled={allocated || readOnly} onChange={(event) => onQuantity(entry.fabricId, event.target.value)} aria-label={`How much ${entry.name} this department needs`} /><span>{entry.unit || 'units'}</span></label>
                 )}
@@ -5507,15 +5510,26 @@ function DepartmentFabricPicker({ fabrics, inventory, allocated, readOnly = fals
           })}
         </ul>
       ) : null}
-      <select value="" disabled={allocated || readOnly} onChange={(event) => { onAdd(event.target.value); event.target.value = ''; }}>
+      <input
+        type="search"
+        value={search}
+        disabled={allocated || readOnly}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Search fabric by SKU or name…"
+        aria-label={`Search fabric for ${departmentLabel || 'this garment'}`}
+      />
+      <select value="" disabled={allocated || readOnly} onChange={(event) => { onAdd(event.target.value); event.target.value = ''; setSearch(''); }}>
         <option value="">{fabrics.length ? 'Add another fabric…' : 'Select inventory fabric'}</option>
         <option value="client-supplied">Client supplied</option>
         {/* Choosing is a request to Inventory, who confirm what is on the
             shelf when they approve it, so nothing is greyed out here. */}
-        {inventory.filter((fabric) => !fabrics.some((entry) => entry.fabricId === fabric.id)).map((fabric) => {
-          const available = availableAtStore(fabric);
-          return <option key={fabric.id} value={fabric.id}>{fabric.name} ({available} {fabric.unit})</option>;
-        })}
+        {inventory
+          .filter((fabric) => !fabrics.some((entry) => entry.fabricId === fabric.id))
+          .filter((fabric) => !search.trim() || `${fabric.sku || ''} ${fabric.name} ${fabric.type || ''}`.toLowerCase().includes(search.trim().toLowerCase()))
+          .map((fabric) => {
+            const available = availableAtStore(fabric);
+            return <option key={fabric.id} value={fabric.id}>{fabric.sku ? `${fabric.sku} · ` : ''}{fabric.name} ({available} {fabric.unit})</option>;
+          })}
       </select>
       {allocated ? <span className="os-fabric-hint">Already allocated — stock has been taken for this item.</span> : null}
       {!allocated && readOnly ? <span className="os-fabric-hint">Locked because this order is completed.</span> : null}

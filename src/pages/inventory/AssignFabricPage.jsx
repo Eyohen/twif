@@ -118,6 +118,8 @@ function OrderFabric({ invoice, inventory, onChanged }) {
   const [drafts, setDrafts] = useState(() => Object.fromEntries(garments.map((item, index) => [index, (item.fabrics || []).map((line) => ({ ...line }))])));
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState(null);
+  // One search box per garment, matching on SKU, name or type.
+  const [searches, setSearches] = useState({});
 
   const setLine = (index, position, changes) => setDrafts((current) => ({
     ...current,
@@ -228,7 +230,7 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                     const have = fabric ? availableAt(fabric, storeKey) : null;
                     return (
                       <div key={`${line.fabricId || 'client'}-${position}`} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <strong style={{ minWidth: 160, fontSize: 13 }}>{line.clientSupplied ? 'Client supplied' : line.name}</strong>
+                        <strong style={{ minWidth: 160, fontSize: 13 }}>{line.clientSupplied ? 'Client supplied' : `${fabric?.sku ? `${fabric.sku} · ` : ''}${line.name}`}</strong>
                         {line.clientSupplied ? <span style={{ fontSize: 12, color: '#8a7a6a' }}>Nothing is taken from stock.</span> : (
                           <>
                             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -244,12 +246,21 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                   }) : <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No fabric chosen for this garment yet.</p>}
                   <label className="os-field" style={{ maxWidth: 360 }}>
                     <span>Add fabric</span>
-                    <select value="" onChange={(event) => addLine(index, event.target.value)} aria-label={`Add fabric for ${item.item || `item ${index + 1}`}`}>
+                    <input
+                      type="search"
+                      value={searches[index] || ''}
+                      onChange={(event) => setSearches((current) => ({ ...current, [index]: event.target.value }))}
+                      placeholder="Search fabric by SKU or name…"
+                      aria-label={`Search fabric for ${item.item || `item ${index + 1}`}`}
+                    />
+                    <select value="" onChange={(event) => { addLine(index, event.target.value); setSearches((current) => ({ ...current, [index]: '' })); }} aria-label={`Add fabric for ${item.item || `item ${index + 1}`}`}>
                       <option value="">Choose from stock…</option>
-                      {inventory.map((fabric) => {
-                        const have = availableAt(fabric, storeKey);
-                        return <option key={fabric.id} value={fabric.id} disabled={have <= 0}>{fabric.name} ({formatInventoryNumber(have)} {fabric.unit}){have <= 0 ? ' · out of stock here' : ''}</option>;
-                      })}
+                      {inventory
+                        .filter((fabric) => !(searches[index] || '').trim() || `${fabric.sku || ''} ${fabric.name} ${fabric.type || ''}`.toLowerCase().includes(searches[index].trim().toLowerCase()))
+                        .map((fabric) => {
+                          const have = availableAt(fabric, storeKey);
+                          return <option key={fabric.id} value={fabric.id} disabled={have <= 0}>{fabric.sku ? `${fabric.sku} · ` : ''}{fabric.name} ({formatInventoryNumber(have)} {fabric.unit}){have <= 0 ? ' · out of stock here' : ''}</option>;
+                        })}
                     </select>
                   </label>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
