@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Clock, Package, CheckCircle, Search, ChevronRight, Eye, Edit2, Plus } from 'lucide-react';
 import { formatMoment, dueDateLabel, daysUntilDue } from '../../utils/oms';
+import { api } from '../../lib/api';
 import { Status } from '../../components/oms/Common';
 import OrderSheetDetailsPage from './OrderSheetDetailsPage';
 import Pagination from '../../components/oms/Pagination';
@@ -9,11 +10,27 @@ const PAGE_SIZE = 10;
 
 // An order sheet only shows up here once it exists — an invoice still
 // waiting for one belongs on the Orders page, not this one.
-export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavigate, currentRole, role = 'store_manager' }) {
+export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavigate, currentRole, role = 'store_manager', onInvoiceChanged, onInvoiceDeleted, onOrderSheetRemoved }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [selectedSheet, setSelectedSheet] = useState(null);
   const [sortOrder, setSortOrder] = useState('Newest First');
+  const [deleteNotice, setDeleteNotice] = useState('');
+  // Deleting is the Owner's and Admin's, as archiving is.
+  const mayDelete = ['owner', 'admin'].includes(role);
+  const deleteSheet = async (order) => {
+    if (!window.confirm(`Delete the order sheet for ${order.invoiceNumber}? This cannot be undone. The invoice stays and a new sheet can be raised.`)) return;
+    try {
+      const response = await api.delete(`/oms/invoices/${order.invoiceNumber}/order-sheet`);
+      const data = response.data?.data || {};
+      if (data.removedInvoice) onInvoiceDeleted?.(order.invoiceNumber);
+      else if (data.invoice) { onInvoiceChanged?.(data.invoice); onOrderSheetRemoved?.(order.invoiceNumber); }
+      setSelectedSheet(null);
+      setDeleteNotice(`The order sheet for ${order.invoiceNumber} was deleted.`);
+    } catch (error) {
+      setDeleteNotice(error.response?.data?.message || 'That order sheet could not be deleted.');
+    }
+  };
   const [page, setPage] = useState(1);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
@@ -55,6 +72,7 @@ export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavig
         order={selectedSheet}
         onBack={() => { setSelectedSheet(null); window.scrollTo(0, 0); }}
         onEdit={(invoiceNumber) => onNavigate?.('Order Sheet', { edit: invoiceNumber })}
+        onDelete={mayDelete && (selectedSheet.sheet || selectedSheet.orderSheet)?.status === 'Order Sheet Confirmed' ? () => deleteSheet(selectedSheet) : undefined}
         currentRole={currentRole}
         role={role}
       />
@@ -84,6 +102,9 @@ export default function StoreManagerOrderSheetsPage({ sentInvoices = [], onNavig
 
   return (
     <div className="os-page">
+      {deleteNotice ? (
+        <div className={`os-message ${/could not|already|cannot/i.test(deleteNotice) ? 'os-msg-error' : 'os-msg-success'}`} role="status">{deleteNotice}</div>
+      ) : null}
       <div className="os-page-header">
         <div className="os-page-title">
           <ClipboardList size={22} strokeWidth={1.8} />

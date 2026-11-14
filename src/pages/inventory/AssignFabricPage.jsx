@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, Package, ChevronRight, Check } from 'lucide-react';
 import { api } from '../../lib/api';
-import { formatMoment, isInvoiceApproved } from '../../utils/oms';
+import { formatMoment, isInvoiceApproved, useStores } from '../../utils/oms';
 import { formatInventoryNumber } from './item';
 
 const th = { textTransform: 'uppercase', fontSize: 10, color: '#8a7a6a', letterSpacing: '0.08em', padding: '9px 14px', background: '#faf7f3', fontWeight: 700, textAlign: 'left', borderBottom: '1px solid #eee5da' };
@@ -15,6 +15,20 @@ const storeKeyOf = (invoice) => String(invoice.storeKey || invoice.store || '').
 const availableAt = (fabric, storeKey) => {
   const balances = fabric.stockByStore || {};
   return Object.keys(balances).length ? Number(balances[storeKey] || 0) : Number(fabric.quantity || 0);
+};
+
+// Stock can sit in several places — each store, and Storage. These are the
+// ones holding any of a fabric; a fabric with no per-place figures is one lump.
+const locationsOf = (fabric) => Object.entries(fabric?.stockByStore || {})
+  .map(([key, amount]) => [key, Number(amount) || 0])
+  .filter(([, amount]) => amount > 0);
+
+// Where a line is taken from: the order's own store when it holds enough,
+// otherwise the first place that does. Inventory can still pick another.
+const defaultSource = (fabric, storeKey, quantity) => {
+  if (!fabric || !Object.keys(fabric.stockByStore || {}).length) return '';
+  if (availableAt(fabric, storeKey) >= quantity && availableAt(fabric, storeKey) > 0) return storeKey;
+  return (locationsOf(fabric).find(([, amount]) => amount >= quantity) || [storeKey])[0];
 };
 
 // What still needs doing on an order: the garments whose fabric has not yet
@@ -121,6 +135,9 @@ function OrderFabric({ invoice, inventory, onChanged }) {
   // One search box per garment, matching on SKU, name or type.
   const [searches, setSearches] = useState({});
   // The garment being declined, and why.
+  const stores = useStores();
+  const placeName = (key) => (key === 'storage' ? 'Storage' : String((stores || []).find((store) => store.key === key)?.name || key).replace(/\s+Store$/i, ''));
+  const sourceFor = (line, fabric) => line.fromStore || defaultSource(fabric, storeKey, Number(line.quantity) || 0);
   const [declining, setDeclining] = useState(null);
   const [reason, setReason] = useState('');
 
@@ -156,11 +173,15 @@ function OrderFabric({ invoice, inventory, onChanged }) {
     setNotice(null);
     if (!lines.length) { setNotice({ error: true, text: `Choose the fabric ${item.item || 'this garment'} needs.` }); return; }
     if (stockLines.some((line) => !(Number(line.quantity) > 0))) { setNotice({ error: true, text: 'Say how much of each fabric is needed.' }); return; }
+    // Enough in the place it is being taken from — the order's store, or any
+    // other location Inventory chose — and no more than that is needed.
     const short = stockLines.find((line) => {
       const fabric = inventory.find((entry) => String(entry.id) === String(line.fabricId));
-      return fabric && Number(line.quantity) > availableAt(fabric, storeKey);
+      if (!fabric) return false;
+      if (!Object.keys(fabric.stockByStore || {}).length) return Number(line.quantity) > Number(fabric.quantity || 0);
+      return Number(line.quantity) > availableAt(fabric, sourceFor(line, fabric));
     });
-    if (release && short) { setNotice({ error: true, text: `There is not enough ${short.name} at this store to release that much.` }); return; }
+    if (release && short) { setNotice({ error: true, text: `No single location holds ${short.quantity} ${short.unit || ''} of ${short.name} to release that much.`.replace('  ', ' ') }); return; }
     const tailor = (item.tailors || [])[0];
     if (release && stockLines.length && !tailor) { setNotice({ error: true, text: 'Production has not assigned a tailor to this garment yet. Fabric is released once there is one.' }); return; }
 
@@ -170,7 +191,11 @@ function OrderFabric({ invoice, inventory, onChanged }) {
       let allocated = null;
       if (release && stockLines.length) {
         const response = await api.post('/oms/fabrics/allocate', {
-          fabrics: stockLines.map((line) => ({ fabricId: line.fabricId, quantity: Number(line.quantity) })),
+          fabrics: stockLines.map((line) => {
+            const fabric = inventory.find((entry) => String(entry.id) === String(line.fabricId));
+            const from = fabric ? sourceFor(line, fabric) : '';
+            return { fabricId: line.fabricId, quantity: Number(line.quantity), ...(from ? { fromStore: from } : {}) };
+          }),
           trackingToken: sheet.trackingToken || invoice.trackingToken,
           tailorName: tailor,
           itemIndex: index,
@@ -251,7 +276,9 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                 <>
                   {lines.length ? lines.map((line, position) => {
                     const fabric = inventory.find((entry) => String(entry.id) === String(line.fabricId));
-                    const have = fabric ? availableAt(fabric, storeKey) : null;
+                    const places = fabric ? locationsOf(fabric) : [];
+                    const source = fabric ? sourceFor(line, fabric) : '';
+                    const have = fabric ? (places.length || Object.keys(fabric.stockByStore || {}).length ? availableAt(fabric, source) : Number(fabric.quantity || 0)) : null;
                     return (
                       <div key={`${line.fabricId || 'client'}-${position}`} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                         <strong style={{ minWidth: 160, fontSize: 13 }}>{line.clientSupplied ? (line.privateSupplied ? 'Private supplied' : 'Client supplied') : `${fabric?.sku ? `${fabric.sku} · ` : ''}${line.name}`}</strong>
@@ -261,7 +288,19 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                               <input type="number" min="0" step="0.01" value={line.quantity} aria-label={`How much ${line.name} this garment needs`} onChange={(event) => setLine(index, position, { quantity: event.target.value })} style={{ width: 110 }} />
                               <span style={{ fontSize: 12, color: '#8a7a6a' }}>{line.unit || 'units'}</span>
                             </label>
-                            {have !== null ? <small style={{ color: Number(line.quantity) > have ? '#8a3520' : '#8a7a6a' }}>{formatInventoryNumber(have)} {line.unit} at this store</small> : null}
+                            {places.length ? (
+                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8a7a6a' }}>
+                                Take from
+                                <select value={source} onChange={(event) => setLine(index, position, { fromStore: event.target.value })} aria-label={`Where to take ${line.name} from`}>
+                                  {places.map(([key, amount]) => (
+                                    <option key={key} value={key} disabled={amount < (Number(line.quantity) || 0)}>
+                                      {placeName(key)}: {formatInventoryNumber(amount)} {line.unit}{key === storeKey ? ' (order\u2019s store)' : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : null}
+                            {have !== null ? <small style={{ color: Number(line.quantity) > have ? '#8a3520' : '#8a7a6a' }}>{formatInventoryNumber(have)} {line.unit} available{places.length ? ' there' : ''}</small> : null}
                           </>
                         )}
                         <button type="button" onClick={() => removeLine(index, position)} aria-label={`Remove ${line.name || 'client supplied fabric'}`} style={{ marginLeft: 'auto', padding: '3px 9px', border: '1px solid #f3d5cc', borderRadius: 6, background: '#fff5f0', color: '#8a3520', fontSize: 12, cursor: 'pointer' }}>Remove</button>
@@ -282,8 +321,10 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                       {inventory
                         .filter((fabric) => !(searches[index] || '').trim() || `${fabric.sku || ''} ${fabric.name} ${fabric.type || ''}`.toLowerCase().includes(searches[index].trim().toLowerCase()))
                         .map((fabric) => {
-                          const have = availableAt(fabric, storeKey);
-                          return <option key={fabric.id} value={fabric.id} disabled={have <= 0}>{fabric.sku ? `${fabric.sku} · ` : ''}{fabric.name} ({formatInventoryNumber(have)} {fabric.unit}){have <= 0 ? ' · out of stock here' : ''}</option>;
+                          // Held anywhere counts: it can be taken from whichever
+                          // location has it.
+                          const have = Number(fabric.quantity || 0);
+                          return <option key={fabric.id} value={fabric.id} disabled={have <= 0}>{fabric.sku ? `${fabric.sku} · ` : ''}{fabric.name} ({formatInventoryNumber(have)} {fabric.unit}){have <= 0 ? ' · out of stock' : ''}</option>;
                         })}
                     </select>
                   </label>

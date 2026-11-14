@@ -2226,6 +2226,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
       return [['Send to Production Anyway', <ArrowRight size={12} strokeWidth={2} />, () => onOverrideHold(job, reason)]];
     })(),
     ...(mayArchive && invoice.orderSheet ? [['Archive Order Sheet', <ClipboardList size={12} strokeWidth={2} />, () => archiveOrderSheet(invoice)]] : []),
+    ...(mayArchive && invoice.orderSheet?.status === 'Order Sheet Confirmed' ? [['Delete Order Sheet', <Trash2 size={12} strokeWidth={2} />, () => deleteOrderSheet(invoice)]] : []),
     ...(mayArchive ? [['Archive Invoice', <Package size={12} strokeWidth={2} />, () => archiveInvoice(invoice)]] : []),
     ...(mayDelete(invoice) ? [['Delete Invoice', <Trash2 size={12} strokeWidth={2} />, () => removeInvoice(invoice)]] : []),
   ];
@@ -2255,6 +2256,26 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
       setRowNotice(`The order sheet for ${invoice.invoiceNumber} was archived.`);
     } catch (error) {
       setRowNotice(error.response?.data?.message || 'That order sheet could not be archived.');
+    }
+  };
+
+  const deleteOrderSheet = async (invoice) => {
+    if (!window.confirm(`Delete the order sheet for ${invoice.invoiceNumber}? This cannot be undone. The invoice stays and a new sheet can be raised.`)) return;
+    try {
+      const response = await api.delete(`/oms/invoices/${invoice.invoiceNumber}/order-sheet`);
+      const data = response.data?.data || {};
+      if (data.removedInvoice) {
+        onInvoiceDeleted?.(invoice.invoiceNumber);
+        setSelectedInvoice(null);
+      } else if (data.invoice) {
+        onInvoiceChanged?.(data.invoice);
+        onOrderSheetArchived?.(invoice.invoiceNumber);
+        setSelectedInvoice(data.invoice);
+      }
+      setShowOrderSheet(false);
+      setRowNotice(`The order sheet for ${invoice.invoiceNumber} was deleted.`);
+    } catch (error) {
+      setRowNotice(error.response?.data?.message || 'That order sheet could not be deleted.');
     }
   };
 
@@ -2472,6 +2493,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
         onBack={() => setShowOrderSheet(false)}
         onEdit={(invoiceNumber) => onNavigate?.('Order Sheet', { edit: invoiceNumber })}
         onArchive={mayArchive ? () => archiveOrderSheet(selectedInvoice) : undefined}
+        onDelete={mayArchive && selectedInvoice.orderSheet?.status === 'Order Sheet Confirmed' ? () => deleteOrderSheet(selectedInvoice) : undefined}
       />
     );
   }
@@ -8919,7 +8941,7 @@ function renderView(activeView, role, viewProps = {}) {
       />
     );
   }
-  if (activeView === 'Order Sheets') return <StoreManagerOrderSheetsPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} currentRole={viewProps.currentRole} role={role} />;
+  if (activeView === 'Order Sheets') return <StoreManagerOrderSheetsPage sentInvoices={viewProps.sentInvoices} onNavigate={viewProps.onNavigate} currentRole={viewProps.currentRole} role={role} onInvoiceChanged={viewProps.onInvoiceUpdated} onInvoiceDeleted={viewProps.onInvoiceDeleted} onOrderSheetRemoved={viewProps.onOrderSheetArchived} />;
   if (activeView === 'Payments') return ['accounts', 'owner', 'admin'].includes(role)
     ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} onInvoiceUpdated={viewProps.onInvoiceUpdated} />
     : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} releasePercent={viewProps.releasePercent} />;
