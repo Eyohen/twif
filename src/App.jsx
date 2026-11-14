@@ -5979,7 +5979,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
 
       {/* Columns come from .os-layout so the sidebar can stack on a phone; an
           inline grid-template-columns here left the job list 86px wide. */}
-      <div className="os-layout">
+      <div className="os-layout os-layout-board">
         {/* Main: Active Jobs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Held jobs. The Exceptions figure used to be a count with nothing
@@ -6098,7 +6098,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
 
             {/* Job Table — Desktop */}
             <div className="os-desktop-table" style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', display: 'table' }}>
+              <table className="prod-board-table" style={{ width: '100%', borderCollapse: 'collapse', display: 'table' }}>
                 <thead>
                   <tr>
                     {['Customer', 'Item', 'Delivery', 'Tailor', 'Fabric', 'Status', ''].map((h) => (

@@ -11303,3 +11303,55 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
 @media (max-width: 720px) {
   .um-profile-grid { grid-template-columns: 1fr; }
 }
+
+
+/* ═══ PRODUCTION BOARD (Owner, Admin and Production Manager) ═══════════════
+   The table lost its shape on desktop. A site-wide rule lets any table cell
+   break anywhere (overflow-wrap: anywhere), so once the side cards took their
+   260px the columns shrank to a few letters: a tailor's name wrapped as
+   "Segu / n", dates split over two lines and the View & score button ran out
+   of the card. Cells here wrap at spaces only, the short ones never wrap, every
+   column has a floor, and the table scrolls inside its card rather than
+   squeezing. Below 1600px the side cards move under the table so it has the
+   whole width.
+   ═══════════════════════════════════════════════════════════════════════ */
+.workspace .prod-board-table { width: 100%; min-width: 940px; table-layout: auto; border-collapse: collapse; }
+.workspace .prod-board-table th,
+.workspace .prod-board-table td { overflow-wrap: normal; word-break: normal; vertical-align: middle; }
+.workspace .prod-board-table th { white-space: nowrap; }
+.workspace .prod-board-table td[data-label="Customer"] { min-width: 230px; }
+.workspace .prod-board-table td[data-label="Customer"] > div { min-width: 0; }
+.workspace .prod-board-table td[data-label="Customer"] > div > div:last-child > div:first-child { overflow-wrap: break-word; }
+.workspace .prod-board-table td[data-label="Item"] { min-width: 150px; }
+.workspace .prod-board-table td[data-label="Item"] > div:first-child { overflow-wrap: break-word; }
+.workspace .prod-board-table td[data-label="Delivery"],
+.workspace .prod-board-table td[data-label="Tailor"],
+.workspace .prod-board-table td[data-label="Status"] { white-space: nowrap; }
+.workspace .prod-board-table td[data-label="Tailor"] > span { display: inline-block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.workspace .prod-board-table td[data-label="Fabric"] { min-width: 150px; }
+.workspace .prod-board-table td[data-label="Fabric"] > div:first-child { overflow-wrap: break-word; }
+.workspace .prod-board-table td[data-label="Actions"] { width: 1%; white-space: nowrap; text-align: right; }
+.workspace .prod-board-table td[data-label="Actions"] button { margin-left: auto; }
+.workspace .prod-board-table .status { white-space: nowrap; overflow-wrap: normal; }
+
+@media (min-width: 861px) and (max-width: 1599px) {
+  .os-layout.os-layout-board { grid-template-columns: minmax(0, 1fr); }
+  .os-layout.os-layout-board > .os-sidebar {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 16px;
+  }
+}
+
+.workspace .prod-board-table td[data-label="Delivery"] > div { white-space: nowrap; }
+@media (max-width: 1360px) {
+  .workspace .prod-board-table { min-width: 800px; }
+  .workspace .prod-board-table th,
+  .workspace .prod-board-table td { padding-left: 9px !important; padding-right: 9px !important; }
+  .workspace .prod-board-table td[data-label="Customer"] { min-width: 185px; }
+  .workspace .prod-board-table td[data-label="Item"] { min-width: 120px; }
+  .workspace .prod-board-table td[data-label="Fabric"] { min-width: 120px; }
+  .workspace .prod-board-table td[data-label="Tailor"] > span { max-width: 110px; }
+}
