@@ -574,7 +574,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
           {[
             ['▤', `${filteredInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts').length} invoices are awaiting Accounts approval.`, 'Review', 'gold', 'Invoices'],
             ['△', `${delayed.length} orders are overdue by more than 2 days.`, 'View', 'red', 'Orders'],
-            ['△', `${lowStock[0]?.name || 'Inventory'} requires restocking.`, 'Restock', 'blue', 'Inventory'],
+            ['△', `${lowStock[0] ? `${lowStock[0].name}${lowStock[0].sku ? ` (SKU ${lowStock[0].sku})` : ''}` : 'Inventory'} requires restocking.`, 'Restock', 'blue', 'Inventory'],
             [revenueChange && !revenueChange.up ? '↘' : '↗',
               revenueChange
                 ? `Revenue is ${revenueChange.up ? 'up' : 'down'} ${Math.abs(revenueChange.percent).toFixed(1)}% on the period before.`
@@ -692,7 +692,7 @@ function OwnerOverview({ sentInvoices = [], productionJobs = [], onNavigate }) {
             </tbody>
           </table>
         </section>
-        <section className="owner-panel owner-table-panel"><header><span>Inventory Alerts</span><button onClick={() => onNavigate?.('Inventory')}>View full inventory →</button></header><table><thead><tr><th>Item</th><th>Category</th><th>Stock</th><th>Status</th><th>Location</th></tr></thead><tbody>{lowStock.slice(0, 5).map((item) => <tr key={item.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Inventory')}><td>{item.name}</td><td>{item.type}</td><td>{item.quantity} {item.unit}</td><td><Status>{toNumber(item.quantity) <= 0 ? 'Out of Stock' : 'Low Stock'}</Status></td><td>{item.store || 'Not assigned'}</td></tr>)}</tbody></table></section>
+        <section className="owner-panel owner-table-panel"><header><span>Inventory Alerts</span><button onClick={() => onNavigate?.('Inventory')}>View full inventory →</button></header><table><thead><tr><th>Item</th><th>SKU</th><th>Category</th><th>Stock</th><th>Status</th><th>Location</th></tr></thead><tbody>{lowStock.slice(0, 5).map((item) => <tr key={item.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Inventory')}><td>{item.name}</td><td>{item.sku || '—'}</td><td>{item.type}</td><td>{item.quantity} {item.unit}</td><td><Status>{toNumber(item.quantity) <= 0 ? 'Out of Stock' : 'Low Stock'}</Status></td><td>{item.store || 'Not assigned'}</td></tr>)}</tbody></table></section>
         <section className="owner-panel owner-table-panel"><header><span>Staff Performance (This Week)</span><button onClick={() => onNavigate?.('Staff')}>View all staff →</button></header><table><thead><tr><th>Staff Member</th><th>Role</th><th>Jobs Completed</th><th>Rating</th></tr></thead><tbody>{tailorRows.map((person, index) => <tr key={person.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Staff')}><td><i>{person.displayName?.slice(0, 1)}</i>{person.displayName}</td><td>Tailor</td><td>{productionJobs.filter((job) => worksOnJob(job, person.displayName) && job.status === 'Ready').length}</td><td>{(() => { const average = averageScore(productionJobs, person.displayName); return average === null ? <span style={{ color: '#8a7a6a' }}>Not scored</span> : `★ ${average.toFixed(1)} / 10`; })()}</td></tr>)}</tbody></table></section>
       </section>
     </div>
