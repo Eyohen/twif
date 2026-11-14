@@ -120,6 +120,9 @@ function OrderFabric({ invoice, inventory, onChanged }) {
   const [notice, setNotice] = useState(null);
   // One search box per garment, matching on SKU, name or type.
   const [searches, setSearches] = useState({});
+  // The garment being declined, and why.
+  const [declining, setDeclining] = useState(null);
+  const [reason, setReason] = useState('');
 
   const setLine = (index, position, changes) => setDrafts((current) => ({
     ...current,
@@ -189,6 +192,22 @@ function OrderFabric({ invoice, inventory, onChanged }) {
     }
   };
 
+  const decline = async (index) => {
+    setBusy(`decline-${index}`);
+    setNotice(null);
+    try {
+      const response = await api.patch(`/oms/jobs/${invoice.invoiceNumber}/fabrics/decline`, { index, reason });
+      await onChanged?.(invoice.invoiceNumber, response.data?.data?.orderSheet, null);
+      setNotice({ error: false, text: `Declined. Production has been told${reason.trim() ? ' why' : ''}.` });
+      setDeclining(null);
+      setReason('');
+    } catch (error) {
+      setNotice({ error: true, text: error.response?.data?.message || 'That could not be declined.' });
+    } finally {
+      setBusy('');
+    }
+  };
+
   // Refreshed from the list once a garment has been released.
   const fresh = garmentsOf(invoice);
 
@@ -217,6 +236,11 @@ function OrderFabric({ invoice, inventory, onChanged }) {
               {!released && item.fabricRequest?.status === 'Pending' ? (
                 <p style={{ margin: 0, padding: '8px 12px', borderRadius: 8, background: '#fffbf0', border: '1px solid #e8d9a0', color: '#7a6030', fontSize: 13, fontWeight: 600 }}>
                   {item.fabricRequest.requestedBy || 'Production'} chose the fabric below and is waiting for your approval. Check it, then approve and release it.
+                </p>
+              ) : null}
+              {!released && item.fabricRequest?.status === 'Declined' ? (
+                <p style={{ margin: 0, padding: '8px 12px', borderRadius: 8, background: '#fff5f0', border: '1px solid #f3d5cc', color: '#8a3520', fontSize: 13, fontWeight: 600 }}>
+                  Declined{item.fabricRequest.declinedBy ? ` by ${item.fabricRequest.declinedBy}` : ''}{item.fabricRequest.declineReason ? `: ${item.fabricRequest.declineReason}` : ''}. Waiting for Production to choose again.
                 </p>
               ) : null}
               {released ? (
@@ -271,6 +295,19 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                       {busy === `release-${index}` ? 'Releasing…' : item.fabricRequest?.status === 'Pending' ? 'Approve & release' : 'Release fabric'}
                     </button>
                   </div>
+                  {item.fabricRequest?.status === 'Pending' ? (
+                    declining === index ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Why? (optional, Production will see it)" aria-label="Reason for declining" style={{ flex: 1, minWidth: 220 }} maxLength={300} />
+                        <button type="button" disabled={Boolean(busy)} onClick={() => decline(index)} style={{ padding: '8px 16px', border: 'none', borderRadius: 8, background: '#8a3520', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          {busy === `decline-${index}` ? 'Declining…' : 'Confirm decline'}
+                        </button>
+                        <button type="button" onClick={() => { setDeclining(null); setReason(''); }} style={{ padding: '8px 14px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                      </div>
+                    ) : (
+                      <button type="button" disabled={Boolean(busy)} onClick={() => { setDeclining(index); setReason(''); }} style={{ justifySelf: 'start', padding: '6px 14px', border: '1px solid #f3d5cc', borderRadius: 8, background: '#fff5f0', color: '#8a3520', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Decline request</button>
+                    )
+                  ) : null}
                   <small style={{ color: '#8a7a6a' }}>Releasing takes the fabric out of this store&apos;s stock and hands it to Production. It cannot be undone from here.</small>
                 </>
               )}

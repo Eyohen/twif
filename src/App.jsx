@@ -5886,6 +5886,9 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
     if (!lines.length) return null;
     const request = item?.fabricRequest;
     const ready = lines.every((line) => Number(line.quantity) > 0);
+    if (request?.status === 'Declined' && fabricSnapshot(request.fabrics || []) === fabricSnapshot(lines)) {
+      return { state: 'declined', text: `Declined by ${request.declinedBy || 'Inventory'}${request.declineReason ? `: ${request.declineReason}` : '.'} Choose another fabric or quantity and it will be sent again.`, canSend: false };
+    }
     if (request?.status === 'Pending' && fabricSnapshot(request.fabrics || []) === fabricSnapshot(lines)) {
       return { state: 'pending', text: `Sent to Inventory${request.requestedBy ? ` by ${request.requestedBy}` : ''} — waiting for their approval.`, canSend: false };
     }
@@ -6008,6 +6011,8 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
         if ((items[index].fabrics || []).some((entry) => entry.fabricId && !entry.clientSupplied)) {
           notify(items[index].fabricRequest?.status === 'Pending'
             ? `Inventory have not approved the fabric for ${itemLabel} yet.`
+            : items[index].fabricRequest?.status === 'Declined'
+            ? `Inventory declined the fabric for ${itemLabel}. Choose another.`
             : `Send the fabric for ${itemLabel} to Inventory for approval first.`, 'error');
           setJobModal((current) => ({ ...current, items }));
           onUpdateJob(jobModal.id, { items });
@@ -6575,7 +6580,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                     {itemIndex !== undefined ? (() => {
                       const status = fabricApprovalFor(itemIndex);
                       if (!status) return null;
-                      const tone = status.state === 'approved' ? ['#f0faf4', '#c3e8d4', '#2a7d4f'] : ['#fffbf0', '#e8d9a0', '#7a6030'];
+                      const tone = status.state === 'approved' ? ['#f0faf4', '#c3e8d4', '#2a7d4f'] : status.state === 'declined' ? ['#fff5f0', '#f3d5cc', '#8a3520'] : ['#fffbf0', '#e8d9a0', '#7a6030'];
                       return (
                         <div className="fabric-approval" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '10px 12px', borderRadius: 8, background: tone[0], border: `1px solid ${tone[1]}`, color: tone[2], fontSize: 13, fontWeight: 600 }}>
                           <span style={{ flex: 1, minWidth: 200 }}>{status.text}</span>
