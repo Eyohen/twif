@@ -53,6 +53,7 @@ import DiscountField from './components/oms/DiscountField';
 import { orderedMeasurementEntries } from './utils/measurements';
 import { compressedImageDataUrl } from './utils/image';
 import PeriodFilter, { ALL_TIME, DEFAULT_PERIODS, initialCustomRange } from './components/oms/PeriodFilter';
+import { TailorTargetBoard } from './components/oms/TailorTargets';
 
 const trackingBaseUrl = (
   import.meta.env.VITE_TRACKING_BASE_URL ||
@@ -1197,23 +1198,6 @@ function TailorOverview({ currentRole, productionJobs = [], onUpdateJob }) {
 function ProductionOverview({ productionJobs = [], onNavigate }) {
   const [queuePage, setQueuePage] = useState(1);
   const QUEUE_PAGE_SIZE = 10;
-  // Tailor workload: what each tailor carries against the maximum the Owner has
-  // set, over the period chosen. Everyone on the tailor list is shown, so a
-  // tailor with nothing assigned reads 0 rather than being absent.
-  const [workloadPeriod, setWorkloadPeriod] = useState('year');
-  const [maxJobs, setMaxJobs] = useState(5);
-  const [tailorStaff, setTailorStaff] = useState([]);
-  useEffect(() => {
-    api.get('/oms/settings')
-      .then((response) => {
-        const value = Number(response.data?.data?.settings?.tailorWorkloadMax);
-        if (Number.isFinite(value) && value >= 1) setMaxJobs(value);
-      })
-      .catch(() => {});
-    api.get('/oms/staff')
-      .then((response) => setTailorStaff((response.data?.data?.staffUsers || []).filter((person) => person.role === 'tailor' && person.status === 'active')))
-      .catch(() => {});
-  }, []);
   const readyJobs = productionJobs.filter((job) => isFinishedStatus(job.status));
   const unassignedJobs = productionJobs.filter((job) => !job.tailor || job.tailor === 'Unassigned');
   const fabricPending = productionJobs.filter((job) => !job.fabricConfirmed);
@@ -1228,29 +1212,6 @@ function ProductionOverview({ productionJobs = [], onNavigate }) {
   const overdueJobs = activeJobs.filter((job) => {
     const deliveryDate = new Date(job.delivery);
     return !Number.isNaN(deliveryDate.getTime()) && deliveryDate < now;
-  });
-  // A job counts toward a tailor while it is still open, in the period they
-  // were put on it. Assignments made before the day was recorded read from the
-  // sheet's last change.
-  const workloadWindow = periodWindow(workloadPeriod);
-  const assignedAtFor = (job, name) => {
-    const stamps = (job.items || []).map((item) => item.tailorAssignedAt?.[name]).filter(Boolean).sort();
-    return stamps[0] || job.updatedAt || null;
-  };
-  const tailorsOnJob = (job) => [...new Set([
-    ...(job.items || []).flatMap((item) => item.tailors || []),
-    ...(Array.isArray(job.tailors) ? job.tailors : []),
-    ...(job.tailor && job.tailor !== 'Unassigned' ? [job.tailor] : []),
-  ])];
-  const tailorWorkload = tailorStaff.reduce((workload, person) => ({ ...workload, [person.displayName]: 0 }), {});
-  productionJobs.filter((job) => !isFinishedStatus(job.status)).forEach((job) => {
-    tailorsOnJob(job).forEach((name) => {
-      const at = assignedAtFor(job, name);
-      if (!at || !workloadWindow) return;
-      const when = new Date(at);
-      if (Number.isNaN(when.getTime()) || when < workloadWindow.start || when > workloadWindow.end) return;
-      tailorWorkload[name] = (tailorWorkload[name] || 0) + 1;
-    });
   });
   const priorityJobs = [...activeJobs].sort((a, b) => {
     const first = new Date(a.delivery).getTime();
@@ -1337,30 +1298,9 @@ function ProductionOverview({ productionJobs = [], onNavigate }) {
         </div>
 
         <div className="panel">
-          <SectionHeader eyebrow="Team capacity" title="Tailor Workload" />
-          <PeriodFilter
-            period={workloadPeriod}
-            onPeriod={setWorkloadPeriod}
-            periods={[['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['year', 'This Year']]}
-            label="Tailor workload period"
-          />
-          <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8a7a6a' }}>Open jobs assigned in this period · maximum {maxJobs} per tailor</p>
-          <div className="inventory-category-list">
-            {Object.entries(tailorWorkload).length ? Object.entries(tailorWorkload)
-              .sort(([first], [second]) => first.localeCompare(second))
-              .map(([tailor, workload]) => (
-              <div key={tailor} className="tailor-workload-row">
-                <div className="tailor-workload-identity">
-                  <div className="table-avatar table-avatar--sm">{tailor.split(' ').map(p => p[0]).join('').slice(0, 2)}</div>
-                  <span className="tailor-workload-name">{tailor}<small>Active assignments</small></span>
-                </div>
-                <div className="tailor-workload-count">
-                  <strong aria-label={`${workload} of ${maxJobs} jobs`}>{workload}/{maxJobs}</strong>
-                  <div className={`tailor-workload-bar${workload >= maxJobs ? ' is-full' : ''}`} style={{ '--fill': `${Math.min(workload / maxJobs, 1) * 100}%` }} />
-                </div>
-              </div>
-              )) : <div className="invoice-preview-empty">No tailors are set up yet.</div>}
-          </div>
+          <SectionHeader eyebrow="Team capacity" title="Tailor Target" />
+          <p style={{ margin: '0 0 6px', fontSize: 12, color: '#8a7a6a' }}>Jobs each tailor has completed this week against the weekly target the Owner has set.</p>
+          <TailorTargetBoard />
         </div>
       </section>
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CheckCircle, Clock, BarChart2, TrendingUp, Calendar, ChevronLeft, ChevronRight, HelpCircle, Award } from 'lucide-react';
 import { Status } from '../../components/oms/Common';
 import { worksOnJob, LOG_PERIODS, periodWindow, todayIso } from '../../utils/oms';
+import { MyTargetCard, TargetHistory, useMyTargetWeeks } from '../../components/oms/TailorTargets';
 
 const SUMMARY_ITEMS = [
   { key: 'completed', icon: CheckCircle,  label: 'Jobs Completed',           tone: 'green'  },
@@ -28,6 +29,9 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
   const [to, setTo] = useState(todayIso());
 
   const tailorName = currentRole?.name?.split(' (')[0] || '';
+  // The weeks as the server counts them, for the target card and the week's total.
+  const myWeeks = useMyTargetWeeks(Math.max(12, weeksBack + 1));
+  const targetWeek = myWeeks ? myWeeks[period === 'week' ? weeksBack : 0] : null;
   const now = new Date();
 
   const monday = new Date(now);
@@ -98,7 +102,8 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
   const bestWeek = Math.max(...weekBuckets.map((week) => week.jobs || 0));
 
   const summaryValues = {
-    completed: completedJobs.length,
+    // The week on screen reads the same count as the target card above it.
+    completed: period === 'week' && targetWeek ? targetWeek.completed : completedJobs.length,
     progress:  activeJobs.length,
     avg:       completedJobs.length ? `${averageDays.toFixed(1)} days` : '—',
     ontime:    withDueDate.length ? `${Math.round((onTime.length / withDueDate.length) * 100)}%` : '—',
@@ -167,6 +172,9 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
         </div>
       </div>
 
+      {/* This week against the weekly target set for this tailor. */}
+      <MyTargetCard week={targetWeek} />
+
       {/* KPI Summary Row */}
       <div className="os-kpi-row" style={{ gap: 12 }}>
         {SUMMARY_ITEMS.map(({ key, icon: Icon, label, tone }) => {
@@ -194,6 +202,11 @@ export default function WeeklyLogPage({ currentRole, productionJobs = [] }) {
             </div>
           );
         })}
+      </div>
+
+      {/* Earlier weeks, each with the target that applied and how it came out. */}
+      <div className="os-card">
+        <div className="os-card-body"><TargetHistory title="Previous weeks" /></div>
       </div>
 
       {/* Completed Jobs Table */}

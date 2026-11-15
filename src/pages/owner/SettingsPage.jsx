@@ -39,14 +39,6 @@ const SECTIONS = [
     Icon: Factory,
     fields: [
       { key: 'productionLeadTimeWeeks', label: 'Standard lead time (weeks)', type: 'number', min: 1 },
-      {
-        key: 'tailorWorkloadMax',
-        label: 'Maximum jobs per tailor',
-        type: 'number',
-        min: 1,
-        ownerOnly: true,
-        hint: 'The Tailor Workload bars on the Production overview fill to this number, and each tailor shows as, say, 7/20. Only the Owner can change it.',
-      },
       { key: 'collectionReminderDays', label: 'Chase collection after (days)', type: 'number', min: 1 },
       { key: 'lowStockThreshold', label: 'Default low-stock threshold', type: 'number', min: 0 },
     ],

@@ -8247,8 +8247,6 @@ dd {
 .tailor-workload-count strong { font-family:var(--font-display); font-size:18px; min-width:48px; text-align:right; white-space:nowrap; }
 .tailor-workload-bar { width:80px; height:6px; border-radius:3px; background:#f0ece6; position:relative; overflow:hidden; }
 .tailor-workload-bar::after { content:''; position:absolute; inset:0 auto 0 0; width:var(--fill, 0%); background:#e7a62d; border-radius:3px; transition:width .4s ease; }
-/* Full means the tailor is at the Owner's limit. */
-.tailor-workload-bar.is-full::after { background:#c0452f; }
 
 /* Weekly log improvements */
 .weekly-summary-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
@@ -11360,3 +11358,39 @@ tbody tr td { border-bottom: 1px solid #f0ece6; }
   .workspace .prod-board-table td[data-label="Fabric"] { min-width: 120px; }
   .workspace .prod-board-table td[data-label="Tailor"] > span { max-width: 110px; }
 }
+
+
+/* Tailor targets: weekly progress, status, review flags and the week stepper. */
+.target-board { display: grid; gap: 10px; }
+.target-stepper { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 2px; }
+.target-stepper > div { display: grid; gap: 1px; min-width: 150px; text-align: center; }
+.target-stepper strong { font-size: 13px; }
+.target-stepper small { font-size: 11px; color: #8a7a6a; }
+.target-stepper button { border: 1px solid #ddd5c8; background: #fff; border-radius: 8px; padding: 5px 8px; cursor: pointer; display: inline-flex; align-items: center; color: #5a4e42; font-family: inherit; }
+.target-stepper button:disabled { opacity: .4; cursor: not-allowed; }
+.target-stepper .target-today { font-size: 12px; font-weight: 700; padding: 5px 12px; }
+.target-list { display: grid; }
+.target-row { border-bottom: 1px solid #f0ece6; padding: 4px 0; }
+.target-row:last-child { border-bottom: 0; }
+.target-row .tailor-workload-row { border-bottom: 0; padding-bottom: 4px; }
+.target-row-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 0 10px 42px; }
+.target-row-foot small { color: #8a7a6a; font-size: 11px; }
+.target-status { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.target-status.is-not_met { background: #fff5f0; color: #8a3520; border: 1px solid #f3d5cc; }
+.target-status.is-met { background: #f0faf4; color: #2a7d4f; border: 1px solid #c3e8d4; }
+.target-status.is-exceeded { background: #e8f6ee; color: #1d6b40; border: 1px solid #9fd4b7; }
+.target-status.is-no_target { background: #f5f0e8; color: #8a7a6a; border: 1px solid #eee5da; }
+.tailor-workload-bar.is-full::after { background: #2a9d63; }
+.target-flag { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; margin: 0 0 10px 42px; padding: 7px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4; }
+.target-flag em { display: block; width: 100%; font-style: normal; font-size: 11px; opacity: .75; }
+.target-flag.is-bonus_review { background: #fffbf0; color: #7a6030; border: 1px solid #e8d9a0; }
+.target-flag.is-performance_review { background: #fff5f0; color: #8a3520; border: 1px solid #f3d5cc; }
+.target-history { margin-top: 14px; }
+.target-history h4 { margin: 0 0 8px; font-size: 14px; }
+.target-history-note { color: #8a7a6a; font-size: 12px; margin: 6px 0; }
+.target-card { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 18px; border: 1px solid #eee5da; border-radius: 12px; background: #fffbf0; margin-bottom: 14px; }
+.target-card small { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #8a7a6a; font-weight: 700; }
+.target-card strong { display: block; font-size: 30px; font-family: var(--font-display); margin: 2px 0; }
+.target-card span { font-size: 12px; color: #5a4e42; }
+.target-card-side { display: grid; gap: 8px; justify-items: end; }
+.target-card-side .tailor-workload-bar { width: 140px; }

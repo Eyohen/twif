@@ -68,7 +68,7 @@ const roleStyle = {
 const blankForm = {
   displayName: '', fullName: '', phone: '', email: '', dateOfBirth: '',
   role: 'tailor', store: 'all', tailorDepartment: 'native', tailorDepartments: ['native'],
-  tailorGrade: '1', pin: '', confirmPin: '',
+  tailorGrade: '1', weeklyTarget: '', pin: '', confirmPin: '',
 };
 
 function Avatar({ name, size = 'md' }) {
@@ -207,7 +207,12 @@ export default function UserManagementPage({ currentRole }) {
   };
 
   const persistStaff = async () => {
-    const payload = { ...form, displayName: form.displayName || form.fullName };
+    const payload = {
+      ...form,
+      displayName: form.displayName || form.fullName,
+      // A whole number of jobs, or nothing.
+      weeklyTarget: form.role === 'tailor' && String(form.weeklyTarget ?? '').trim() !== '' ? Number(form.weeklyTarget) : null,
+    };
     if (screen === 'edit' && selected?.role === 'owner') {
       delete payload.role;
       delete payload.store;
@@ -724,6 +729,27 @@ function StaffForm({ mode, form, update, canAssignOwner, onCancel, onSubmit, mes
                         {[1, 2, 3, 4, 5].map((g) => <option value={g} key={g}>Grade {g}</option>)}
                       </select>
                     </label>
+                    {/* How many jobs this tailor is expected to complete each week. It
+                        is the Owner's to set; each week is then counted against it. */}
+                    <label className="os-field">
+                      <span>Weekly production target (jobs per week)</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="1000"
+                        step="1"
+                        value={form.weeklyTarget ?? ''}
+                        disabled={!canAssignOwner}
+                        placeholder="e.g. 5"
+                        onChange={(event) => update('weeklyTarget', event.target.value)}
+                        aria-label="Weekly production target"
+                      />
+                      <small style={{ color: '#8a7a6a' }}>
+                        {canAssignOwner
+                          ? 'Based on the tailor\'s department and expected output. A change applies from this week; weeks already gone keep the target they were judged on.'
+                          : 'Only the Owner can set or change a tailor\'s weekly target.'}
+                      </small>
+                    </label>
                   </>
                 )}
               </div>
@@ -1011,6 +1037,7 @@ function StaffProfile({ person, isOwner, onBack, onEdit, onHistory, onModal, mod
                 <>
                   <InfoRow label="Departments">{(person.tailorDepartments?.length ? person.tailorDepartments : [person.tailorDepartment]).filter(Boolean).map(departmentName).join(', ') || 'Not assigned'}</InfoRow>
                   <InfoRow label="Tailor Grade">{`Grade ${person.tailorGrade || 1}`}</InfoRow>
+                  <InfoRow label="Weekly target">{person.weeklyTarget ? `${person.weeklyTarget} jobs per week` : 'Not set'}</InfoRow>
                 </>
               ) : null}
               <InfoRow label="Account Status">{person.status}</InfoRow>

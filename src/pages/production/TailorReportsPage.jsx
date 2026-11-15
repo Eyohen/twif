@@ -6,6 +6,7 @@ import {
   worksOnJob, scoresForTailor, changeAgainst, changeLabel, todayIso,
 } from '../../utils/oms';
 import { downloadCsv, csvStamp } from '../../utils/csv';
+import { TailorTargetBoard, TargetHistory } from '../../components/oms/TailorTargets';
 
 // Production could see what was on the board today but nothing about how a
 // tailor had been doing. This reads a period — week, month, quarter, year or a
@@ -126,6 +127,10 @@ export default function TailorReportsPage({ mode = 'list', productionJobs = [] }
           </div>
         </div>
 
+        <div className="os-card">
+          <div className="os-card-body"><TargetHistory staffId={openTailor.id} title="Weekly target record" /></div>
+        </div>
+
         <PeriodBar {...{ period, setPeriod, from, setFrom, to, setTo }} />
 
         <div className="tailor-figures">
@@ -205,6 +210,17 @@ export default function TailorReportsPage({ mode = 'list', productionJobs = [] }
           }}
         >Export</button>
       </div>
+
+      {/* Each tailor's weekly target and how this week (or any earlier one) came out. */}
+      {mode === 'performance' ? (
+        <div className="os-card">
+          <div className="os-card-head">
+            <Award size={16} strokeWidth={1.5} style={{ color: '#c97b08' }} />
+            <div><strong>Tailor Target</strong><p>Jobs completed against each tailor&apos;s weekly target. Step back to review earlier weeks.</p></div>
+          </div>
+          <div className="os-card-body"><TailorTargetBoard /></div>
+        </div>
+      ) : null}
 
       <PeriodBar {...{ period, setPeriod, from, setFrom, to, setTo }} />
 
