@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Layers, Plus, Settings2, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, GripVertical, Layers, Plus, Settings2, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 
-export default function DepartmentsPage() {
+export default function DepartmentsPage({ currentRole }) {
+  // Only the Owner can add, rename or remove parameters. The Admin can put them in order.
+  const isOwner = currentRole?.id === 'owner';
+  const [dragIndex, setDragIndex] = useState(null);
+  const [overIndex, setOverIndex] = useState(null);
   const parameterEditorRef = useRef(null);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,11 +82,25 @@ export default function DepartmentsPage() {
     });
   };
 
+  // Additional Information is always last, so nothing is moved past it.
+  const moveField = (from, to) => {
+    setEditing((current) => {
+      const lastMovable = current.fields.findIndex((field) => field.key === 'additionalInformation');
+      const limit = (lastMovable < 0 ? current.fields.length : lastMovable) - 1;
+      const target = Math.max(0, Math.min(to, limit));
+      if (from === target || from < 0 || from > limit) return current;
+      const fields = [...current.fields];
+      const [moved] = fields.splice(from, 1);
+      fields.splice(target, 0, moved);
+      return { ...current, fields };
+    });
+  };
+
   const saveParameters = async () => {
     setSaving(true);
     setMessage('');
     try {
-      await api.patch(`/oms/departments/${editing.id}`, { fields: editing.fields, note: editing.note || '' });
+      await api.patch(`/oms/departments/${editing.id}`, { fields: editing.fields, ...(isOwner ? { note: editing.note || '' } : {}) });
       setMessage(`${editing.name} parameters were updated.`);
       setEditing(null);
       reload();
@@ -156,28 +174,60 @@ export default function DepartmentsPage() {
         <div ref={parameterEditorRef} className="os-card" style={{ marginTop: 18, scrollMarginTop: 18 }}>
           <div className="os-card-header"><div><h3>{editing.name} parameters</h3><p>These fields appear on order sheets and are checked before production starts.</p></div></div>
           <div className="os-card-body" style={{ display: 'grid', gap: 14 }}>
-            {editing.fields.length ? editing.fields.map((field, index) => (
-              <div key={field.key || `${field.label}-${index}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'center' }}>
+            <p style={{ margin: 0, fontSize: 12, color: '#8a7a6a' }}>
+              This is the order staff see on order sheets, measurements and tailor tasks. Drag a parameter by its handle, or use the arrows, then save.
+              {isOwner ? '' : ' You can change the order; only the Owner can add, rename or remove parameters.'}
+            </p>
+            {editing.fields.length ? editing.fields.map((field, index) => {
+              const fixed = field.key === 'additionalInformation';
+              const lastMovable = editing.fields.findIndex((entry) => entry.key === 'additionalInformation');
+              const limit = (lastMovable < 0 ? editing.fields.length : lastMovable) - 1;
+              return (
+              <div
+                key={field.key || `${field.label}-${index}`}
+                draggable={!fixed}
+                onDragStart={(event) => { if (fixed) return; setDragIndex(index); event.dataTransfer.effectAllowed = 'move'; }}
+                onDragOver={(event) => { if (dragIndex === null) return; event.preventDefault(); setOverIndex(Math.min(index, limit)); }}
+                onDrop={(event) => { event.preventDefault(); if (dragIndex !== null) moveField(dragIndex, Math.min(index, limit)); setDragIndex(null); setOverIndex(null); }}
+                onDragEnd={() => { setDragIndex(null); setOverIndex(null); }}
+                style={{
+                  display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: 10, alignItems: 'center',
+                  padding: '4px 6px', borderRadius: 8,
+                  background: overIndex === index && dragIndex !== null && dragIndex !== index ? '#fff8ee' : 'transparent',
+                  outline: overIndex === index && dragIndex !== null && dragIndex !== index ? '2px dashed #c97b08' : 'none',
+                  opacity: dragIndex === index ? 0.5 : 1,
+                }}
+              >
+                <span title={fixed ? 'Additional Information always stays last' : 'Drag to reorder'} style={{ display: 'inline-flex', color: fixed ? '#d8cfc2' : '#8a7a6a', cursor: fixed ? 'default' : 'grab' }}>
+                  <GripVertical size={16} />
+                </span>
                 <input
                   value={field.label}
-                  disabled={field.key === 'additionalInformation'}
+                  disabled={fixed || !isOwner}
                   aria-label={`Parameter ${index + 1} name`}
                   onChange={(event) => setEditing((current) => ({ ...current, fields: current.fields.map((entry, fieldIndex) => fieldIndex === index ? { ...entry, label: event.target.value } : entry) }))}
                 />
-                <label style={{ fontSize: 13 }}><input type="checkbox" disabled={field.key === 'additionalInformation'} checked={field.required !== false} onChange={(event) => setEditing((current) => ({ ...current, fields: current.fields.map((entry, fieldIndex) => fieldIndex === index ? { ...entry, required: event.target.checked } : entry) }))} /> Required</label>
-                {field.key === 'additionalInformation' ? (
+                <label style={{ fontSize: 13 }}><input type="checkbox" disabled={fixed || !isOwner} checked={field.required !== false} onChange={(event) => setEditing((current) => ({ ...current, fields: current.fields.map((entry, fieldIndex) => fieldIndex === index ? { ...entry, required: event.target.checked } : entry) }))} /> Required</label>
+                {fixed ? <span style={{ width: 62 }} /> : (
+                  <span style={{ display: 'inline-flex', gap: 4 }}>
+                    <button type="button" aria-label={`Move ${field.label} up`} disabled={index === 0} onClick={() => moveField(index, index - 1)}><ArrowUp size={14} /></button>
+                    <button type="button" aria-label={`Move ${field.label} down`} disabled={index >= limit} onClick={() => moveField(index, index + 1)}><ArrowDown size={14} /></button>
+                  </span>
+                )}
+                {fixed ? (
                   <span style={{ width: 34, fontSize: 11, color: '#8a7a6a', textAlign: 'center' }} title="Additional Information is included for every department">Default</span>
                 ) : (
-                  <button type="button" aria-label={`Remove ${field.label}`} onClick={() => setEditing((current) => ({ ...current, fields: current.fields.filter((_, fieldIndex) => fieldIndex !== index) }))}><Trash2 size={14} /></button>
+                  <button type="button" aria-label={`Remove ${field.label}`} disabled={!isOwner} onClick={() => setEditing((current) => ({ ...current, fields: current.fields.filter((_, fieldIndex) => fieldIndex !== index) }))}><Trash2 size={14} /></button>
                 )}
               </div>
-            )) : <p style={{ color: '#8a7a6a', fontSize: 13 }}>No parameters yet.</p>}
+              );
+            }            ) : <p style={{ color: '#8a7a6a', fontSize: 13 }}>No parameters yet.</p>}
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <input style={{ flex: 1 }} value={editing.newLabel} onChange={(event) => setEditing((current) => ({ ...current, newLabel: event.target.value }))} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addParameter(); } }} placeholder="e.g. Embroidery colour" />
-              <button type="button" onClick={addParameter}><Plus size={14} style={{ verticalAlign: 'middle' }} /> Add parameter</button>
+              <input style={{ flex: 1 }} disabled={!isOwner} value={editing.newLabel} onChange={(event) => setEditing((current) => ({ ...current, newLabel: event.target.value }))} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addParameter(); } }} placeholder="e.g. Embroidery colour" />
+              <button type="button" disabled={!isOwner} onClick={addParameter}><Plus size={14} style={{ verticalAlign: 'middle' }} /> Add parameter</button>
             </div>
-            <label className="os-field"><span>Department note (optional)</span><textarea rows={3} value={editing.note || ''} onChange={(event) => setEditing((current) => ({ ...current, note: event.target.value }))} /></label>
+            <label className="os-field"><span>Department note (optional)</span><textarea rows={3} disabled={!isOwner} value={editing.note || ''} onChange={(event) => setEditing((current) => ({ ...current, note: event.target.value }))} /></label>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button type="button" onClick={() => setEditing(null)}>Cancel</button>
               <button type="button" disabled={saving} onClick={saveParameters} style={{ background: '#1a1611', color: '#fff' }}>{saving ? 'Saving…' : 'Save parameters'}</button>

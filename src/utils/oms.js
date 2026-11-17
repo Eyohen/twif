@@ -442,7 +442,7 @@ export const productionBlockReason = (job, invoices, releasePercent = DEFAULT_RE
 // An order item can be shared between several tailors, so "is this mine?" is a
 // question about the item list as well as the single name the board carries.
 export const jobTailors = (job) => {
-  const fromItems = (job?.items || []).flatMap((item) => item.tailors || []);
+  const fromItems = [...(job?.items || []).flatMap((item) => item.tailors || []), ...(Array.isArray(job?.tailors) ? job.tailors : [])];
   const named = job?.tailor && job.tailor !== 'Unassigned' ? [job.tailor] : [];
   return [...new Set([...fromItems, ...named])];
 };
@@ -796,3 +796,34 @@ export const lineDiscountAmount = (item = {}) => {
   if (item.discountMode === 'amount') return Math.min(Math.max(toNumber(item.discountAmount), 0), gross);
   return (gross * Math.min(Math.max(toNumber(item.discountPercent), 0), 100)) / 100;
 };
+
+
+// Payments recorded against an invoice are reviewed one by one. A payment with
+// no review status was recorded before that existed (or is the one the invoice
+// was raised with) and is covered by the invoice's own review.
+export const paymentsAwaitingReview = (invoices = []) => invoices.flatMap((invoice) => {
+  const history = Array.isArray(invoice.paymentHistory) ? invoice.paymentHistory : [];
+  return history
+    .filter((entry) => entry && entry.id && ['Pending Accounts', 'Flagged'].includes(entry.reviewStatus))
+    .map((entry) => ({
+      key: `${invoice.invoiceNumber}:${entry.id}`,
+      invoice,
+      payment: entry,
+      // Which payment this is on the invoice, so "Payment 2" means the same thing everywhere.
+      number: history.indexOf(entry) + 1,
+    }));
+}).sort((a, b) => new Date(b.payment.recordedAt || 0) - new Date(a.payment.recordedAt || 0));
+
+// Both return the invoice as the server now holds it, so the screen can swap it
+// in rather than guess at the result.
+export const reviewPayment = (invoiceNumber, paymentId, status, note = '') => api
+  .patch(`/oms/invoices/${encodeURIComponent(invoiceNumber)}/payments/${encodeURIComponent(paymentId)}/review`, { status, note })
+  .then((response) => response.data?.data?.invoice);
+
+export const clarifyPayment = (invoiceNumber, paymentId, clarification) => api
+  .patch(`/oms/invoices/${encodeURIComponent(invoiceNumber)}/payments/${encodeURIComponent(paymentId)}/clarify`, { clarification })
+  .then((response) => response.data?.data?.invoice);
+
+// A payment Accounts have flagged is waiting for the Store Manager's answer.
+export const hasFlaggedPayment = (invoice) => (Array.isArray(invoice?.paymentHistory) ? invoice.paymentHistory : [])
+  .some((entry) => entry?.id && entry.reviewStatus === 'Flagged');

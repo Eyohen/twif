@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { money } from '../../utils/oms';
 
 const actionDetails = {
   Approved: {
@@ -37,6 +38,20 @@ const actionDetails = {
     confirmLabel: 'Yes, Flag Invoice',
     description: (invoice) => `Are you sure you want to flag ${invoice.invoiceNumber} for ${invoice.customer}? The Store Manager will be asked to provide clarification.`,
   },
+  PaymentApproved: {
+    tone: 'approve',
+    icon: '✓',
+    title: 'Approve Payment?',
+    confirmLabel: 'Yes, Approve Payment',
+    description: (invoice, payment) => `Confirm that the ${payment ? money.format(Number(payment.amount || 0)) : ''} payment on ${invoice.invoiceNumber} for ${invoice.customer} has been received and checked. Other payments on this invoice are not affected.`,
+  },
+  PaymentFlagged: {
+    tone: 'flag',
+    icon: '⚑',
+    title: 'Flag Payment?',
+    confirmLabel: 'Yes, Flag Payment',
+    description: (invoice, payment) => `Flag the ${payment ? money.format(Number(payment.amount || 0)) : ''} payment on ${invoice.invoiceNumber} for ${invoice.customer}? The Store Manager will be asked to provide clarification. Other payments on this invoice are not affected.`,
+  },
   Partial: {
     tone: 'partial',
     icon: '◔',
@@ -46,7 +61,7 @@ const actionDetails = {
   },
 };
 
-export default function InvoiceActionConfirmModal({ invoice, status, onCancel, onConfirm }) {
+export default function InvoiceActionConfirmModal({ invoice, status, payment, onCancel, onConfirm }) {
   const details = actionDetails[status];
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -81,12 +96,12 @@ export default function InvoiceActionConfirmModal({ invoice, status, onCancel, o
       <button className="invoice-action-confirm-close" type="button" onClick={onCancel} aria-label="Close confirmation">×</button>
       <i className="invoice-action-confirm-icon" aria-hidden="true">{details.icon}</i>
       <h3 id="invoice-action-confirm-title">{details.title}</h3>
-      <p>{details.description(invoice)}</p>
+      <p>{details.description(invoice, payment)}</p>
       <dl>
         <dt>Invoice</dt><dd>{invoice.invoiceNumber}</dd>
         <dt>Customer</dt><dd>{invoice.customer}</dd>
       </dl>
-      {status === 'Flagged' ? (
+      {status === 'Flagged' || status === 'PaymentFlagged' ? (
         <label style={{ display: 'grid', gap: 6, textAlign: 'left', marginTop: 12, fontSize: 12, fontWeight: 700, color: '#5a4e42' }}>
           What needs clarification? <span style={{ fontWeight: 400 }}>(optional)</span>
           <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={2000} placeholder="Tell the Store Manager exactly what Accounts needs checked or explained…" style={{ resize: 'vertical', padding: 10, border: '1px solid #ddd5c8', borderRadius: 8, font: 'inherit' }} />
@@ -96,7 +111,7 @@ export default function InvoiceActionConfirmModal({ invoice, status, onCancel, o
       <footer>
         <button type="button" className="invoice-action-cancel" disabled={submitting} onClick={onCancel}>Cancel</button>
         <button type="button" className="invoice-action-submit" disabled={submitting} onClick={submit}>
-          {submitting ? (status === 'Flagged' ? 'Flagging…' : 'Saving…') : details.confirmLabel}
+          {submitting ? (status === 'Flagged' || status === 'PaymentFlagged' ? 'Flagging…' : 'Saving…') : details.confirmLabel}
         </button>
       </footer>
     </section>

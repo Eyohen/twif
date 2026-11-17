@@ -8,10 +8,15 @@ import { formatMoment } from '../../utils/oms';
 // thumbnail grid with a lightbox instead of the single frame it used to be —
 // shared between the Payments detail screen and the Accounts review screen
 // rather than kept twice.
-export default function PaymentEvidenceGallery({ invoiceNumber, evidence, emptyMessage }) {
+export default function PaymentEvidenceGallery({ invoiceNumber, evidence, emptyMessage, paymentId }) {
   const [openIndex, setOpenIndex] = useState(null);
-  const list = Array.isArray(evidence) ? evidence : [];
-  const { urls, failed } = usePaymentEvidence(invoiceNumber, list.length);
+  const everything = Array.isArray(evidence) ? evidence : [];
+  const { urls: allUrls, failed } = usePaymentEvidence(invoiceNumber, everything.length);
+  // One payment's receipts only: the images are fetched by their place in the
+  // whole list, so the ones belonging to this payment are picked out by place.
+  const keep = paymentId ? everything.map((item, index) => (item?.paymentId === paymentId ? index : -1)).filter((index) => index >= 0) : null;
+  const list = keep ? keep.map((index) => everything[index]) : everything;
+  const urls = keep ? (allUrls.length === everything.length ? keep.map((index) => allUrls[index]) : []) : allUrls;
 
   if (!list.length) {
     return <p className="review-evidence-empty">{emptyMessage}</p>;
@@ -19,12 +24,14 @@ export default function PaymentEvidenceGallery({ invoiceNumber, evidence, emptyM
 
   return (
     <>
-      <dl className="review-evidence-meta">
+      {/* One payment's receipts sit in a narrow column, where the summary wraps
+          a letter to a line, and the payment above them already names the date. */}
+      {paymentId ? null : <dl className="review-evidence-meta">
         <div><dt>{list.length === 1 ? 'File' : 'Files'}</dt><dd>{list.length}</dd></div>
         {list[list.length - 1]?.uploadedAt ? (
           <div><dt>Last uploaded</dt><dd>{formatMoment(list[list.length - 1].uploadedAt)}</dd></div>
         ) : null}
-      </dl>
+      </dl>}
 
       {urls.length ? (
         <div className="review-evidence-grid">

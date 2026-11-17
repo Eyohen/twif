@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Box, AlertTriangle, XCircle, Layers, Search, RefreshCw, Download, PlusCircle, Boxes, Eye, Edit2, ChevronRight, ImagePlus, X } from 'lucide-react';
+import { Box, AlertTriangle, XCircle, Layers, Search, RefreshCw, Download, PlusCircle, Boxes, Eye, Edit2, ChevronRight, ImagePlus, X, Package } from 'lucide-react';
 import { api } from '../../lib/api';
 import { money, useStores } from '../../utils/oms';
 import { stockStatus, itemImage, colourSwatch, formatInventoryNumber } from './item';
@@ -8,6 +8,7 @@ import { Status } from '../../components/oms/Common';
 import ItemDetailsPage from './ItemDetailsPage';
 import EditItemPage from './EditItemPage';
 import OwnerInventoryApprovalsPage from '../owner/InventoryApprovalsPage';
+import AssignFabricPage, { ordersNeedingFabric } from './AssignFabricPage';
 
 const PAGE_SIZE = 10;
 const EMPTY_FORM = { sku: '', name: '', type: '', colour: '', quantity: '', unit: 'yards', cost: '', location: '', store: '', supplier: '', lowStockThreshold: '', image: '' };
@@ -114,6 +115,26 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
   }, []);
 
   useEffect(() => { loadItems(); }, [loadItems]);
+
+  // The Owner and Admin can release fabric to a production job from here, the
+  // same as the Inventory Manager can. The orders are read once the page opens
+  // so the button can say how many are waiting.
+  const [invoices, setInvoices] = useState([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [showAssignFabric, setShowAssignFabric] = useState(false);
+  const loadInvoices = useCallback(async () => {
+    setInvoicesLoading(true);
+    try {
+      const response = await api.get('/oms/invoices/sent');
+      setInvoices(response.data?.data?.invoices || []);
+    } catch {
+      setInvoices([]);
+    } finally {
+      setInvoicesLoading(false);
+    }
+  }, []);
+  useEffect(() => { if (ownerMode) loadInvoices(); }, [ownerMode, loadInvoices]);
+  const waitingForFabric = useMemo(() => ordersNeedingFabric(invoices).length, [invoices]);
 
   useEffect(() => {
     api.get('/oms/inventory-types')
@@ -224,6 +245,17 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
   };
 
   if (showApprovals) return <OwnerInventoryApprovalsPage currentRole={currentRole} onBack={() => setShowApprovals(false)} />;
+  if (showAssignFabric) {
+    // Stock and the orders are read again after every release, so what is
+    // shown is what is now on the shelf and what is still waiting.
+    return <AssignFabricPage
+      invoices={invoices}
+      inventory={items}
+      loading={invoicesLoading}
+      onBack={() => setShowAssignFabric(false)}
+      onChanged={async () => { await Promise.all([loadItems(), loadInvoices()]); }}
+    />;
+  }
   if (editingItem) {
     return (
       <EditItemPage
@@ -282,6 +314,15 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
           >
             <Download size={14} /> Export
           </button>
+          {ownerMode && (
+            <button
+              type="button"
+              onClick={() => setShowAssignFabric(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', background: '#c97b08', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              <Package size={14} /> Assign Fabric{waitingForFabric ? ` (${waitingForFabric})` : ''}
+            </button>
+          )}
           {ownerMode && (
             <button
               type="button"

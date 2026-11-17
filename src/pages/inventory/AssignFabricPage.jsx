@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, Package, ChevronRight, Check } from 'lucide-react';
 import { api } from '../../lib/api';
-import { formatMoment, isInvoiceApproved, useStores } from '../../utils/oms';
+import { formatMoment, isInvoiceApproved, useStores, useDepartments } from '../../utils/oms';
 import { formatInventoryNumber } from './item';
 
 const th = { textTransform: 'uppercase', fontSize: 10, color: '#8a7a6a', letterSpacing: '0.08em', padding: '9px 14px', background: '#faf7f3', fontWeight: 700, textAlign: 'left', borderBottom: '1px solid #eee5da' };
@@ -46,11 +46,14 @@ export const ordersNeedingFabric = (invoices) => invoices.filter((invoice) => {
 // The Inventory Officer releases fabric to Production, so this is where they
 // choose which fabric each garment takes, how much, and let it go. Releasing
 // takes it out of stock and cannot be undone from here.
-export default function AssignFabricPage({ invoices, inventory, loading, onBack, onChanged }) {
+export default function AssignFabricPage({ invoices, inventory, loading, onBack, onChanged, initialInvoiceNumber = '' }) {
   // Orders Production has already chosen fabric for come first.
   const requested = (invoice) => garmentsOf(invoice).some((item) => !item.fabricAllocated && item.fabricRequest?.status === 'Pending');
   const orders = useMemo(() => [...ordersNeedingFabric(invoices)].sort((a, b) => Number(requested(b)) - Number(requested(a))), [invoices]);
-  const [openNumber, setOpenNumber] = useState('');
+  const [openNumber, setOpenNumber] = useState(initialInvoiceNumber);
+  // Opened straight from the dashboard's queue, going back means the dashboard,
+  // not a list the person never asked to see.
+  const openedDirectly = Boolean(initialInvoiceNumber) && openNumber === initialInvoiceNumber;
   const open = orders.find((invoice) => invoice.invoiceNumber === openNumber)
     || invoices.find((invoice) => invoice.invoiceNumber === openNumber);
 
@@ -60,8 +63,8 @@ export default function AssignFabricPage({ invoices, inventory, loading, onBack,
         <div className="os-page-title">
           <Package size={22} />
           <div>
-            <button type="button" onClick={open ? () => setOpenNumber('') : onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0, marginBottom: 5, border: 'none', background: 'none', color: '#8a7a6a', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
-              <ArrowLeft size={13} /> {open ? 'Assign Fabric' : 'Inventory Overview'}
+            <button type="button" onClick={open && !openedDirectly ? () => setOpenNumber('') : onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0, marginBottom: 5, border: 'none', background: 'none', color: '#8a7a6a', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <ArrowLeft size={13} /> {open && !openedDirectly ? 'Assign Fabric' : 'Inventory Overview'}
             </button>
             <h2>{open ? `Assign Fabric · ${open.invoiceNumber}` : 'Assign Fabric'}</h2>
             <p>{open
@@ -136,6 +139,8 @@ function OrderFabric({ invoice, inventory, onChanged }) {
   const [searches, setSearches] = useState({});
   // The garment being declined, and why.
   const stores = useStores();
+  const departmentList = useDepartments();
+  const departmentName = (key) => String((departmentList || []).find((entry) => entry.key === key)?.name || key || '');
   const placeName = (key) => (key === 'storage' ? 'Storage' : String((stores || []).find((store) => store.key === key)?.name || key).replace(/\s+Store$/i, ''));
   const sourceFor = (line, fabric) => line.fromStore || defaultSource(fabric, storeKey, Number(line.quantity) || 0);
   const [declining, setDeclining] = useState(null);
@@ -207,7 +212,7 @@ function OrderFabric({ invoice, inventory, onChanged }) {
       setNotice({
         error: false,
         text: release
-          ? (allocated ? `${allocated.map((line) => `${line.quantity} ${line.unit} of ${line.name}`).join(', ')} released for ${item.item || `item ${index + 1}`}.` : `Client-supplied fabric noted for ${item.item || `item ${index + 1}`}.`)
+          ? (allocated ? `${allocated.map((line) => `${line.quantity} ${line.unit} of ${line.name}${line.store ? ` from ${placeName(line.store)}` : ''}${line.remainingAfter !== undefined ? ` (${formatInventoryNumber(line.remainingAfter)} ${line.unit} left there)` : ''}`).join('; ')} released for ${item.item || `item ${index + 1}`}.` : `Client-supplied fabric noted for ${item.item || `item ${index + 1}`}.`)
           : `Fabric selection saved for ${item.item || `item ${index + 1}`}.`,
       });
     } catch (error) {
@@ -253,7 +258,7 @@ function OrderFabric({ invoice, inventory, onChanged }) {
               <span className="os-step-num">{index + 1}</span>
               <div>
                 <strong>{item.item || `Item ${index + 1}`}</strong>
-                <p>{(Number(item.pieces) || 1)} piece{(Number(item.pieces) || 1) === 1 ? '' : 's'} · Tailor: {tailor || 'not assigned yet'}{item.delivery ? ` · Delivery ${formatMoment(item.delivery)}` : ''}</p>
+                <p>{(Number(item.pieces) || 1)} piece{(Number(item.pieces) || 1) === 1 ? '' : 's'}{(item.departments || []).length ? ` · Department${item.departments.length === 1 ? '' : 's'}: ${item.departments.map(departmentName).join(', ')}` : ''} · Tailor: {tailor || 'not assigned yet'}{item.delivery ? ` · Delivery ${formatMoment(item.delivery)}` : ''}</p>
               </div>
               {released ? <span style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 10, background: '#f0faf4', color: '#2a7d4f', fontSize: 11, fontWeight: 700 }}>Released</span> : null}
             </div>
@@ -270,7 +275,7 @@ function OrderFabric({ invoice, inventory, onChanged }) {
               ) : null}
               {released ? (
                 <p style={{ margin: 0, fontSize: 13, color: '#5a4e42' }}>
-                  {(item.fabricAllocations || []).map((line) => `${line.quantity} ${line.unit} of ${line.name}`).join(', ') || 'Fabric has been released for this garment.'}
+                  {(item.fabricAllocations || []).map((line) => `${line.quantity} ${line.unit} of ${line.name}${line.store ? ` from ${placeName(line.store)}` : ''}`).join(', ') || 'Fabric has been released for this garment.'}
                 </p>
               ) : (
                 <>
@@ -303,6 +308,15 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                             {have !== null ? <small style={{ color: Number(line.quantity) > have ? '#8a3520' : '#8a7a6a' }}>{formatInventoryNumber(have)} {line.unit} available{places.length ? ' there' : ''}</small> : null}
                           </>
                         )}
+                        {(item.departments || []).length > 1 ? (
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8a7a6a' }}>
+                            For
+                            <select value={line.departmentKey || ''} onChange={(event) => setLine(index, position, { departmentKey: event.target.value })} aria-label={`Department this ${line.name || 'fabric'} is for`}>
+                              <option value="">Whole garment</option>
+                              {item.departments.map((key) => <option key={key} value={key}>{departmentName(key)}</option>)}
+                            </select>
+                          </label>
+                        ) : (line.departmentKey ? <small style={{ color: '#8a7a6a' }}>For {departmentName(line.departmentKey)}</small> : null)}
                         <button type="button" onClick={() => removeLine(index, position)} aria-label={`Remove ${line.name || 'client supplied fabric'}`} style={{ marginLeft: 'auto', padding: '3px 9px', border: '1px solid #f3d5cc', borderRadius: 6, background: '#fff5f0', color: '#8a3520', fontSize: 12, cursor: 'pointer' }}>Remove</button>
                       </div>
                     );

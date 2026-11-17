@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Flag, XCircle, User, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
-import { money, invoiceApprovalStatus, amountReceived, invoicePayable, isFullyPaid, isAwaitingPayment, formatMoment, paidPercent, DEFAULT_RELEASE_PERCENT } from '../../utils/oms';
+import { money, reviewPayment, invoiceApprovalStatus, amountReceived, invoicePayable, isFullyPaid, isAwaitingPayment, formatMoment, paidPercent, DEFAULT_RELEASE_PERCENT } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 import RecordPaymentForm from '../../components/oms/RecordPaymentForm';
@@ -10,6 +10,7 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
   const [pendingAction, setPendingAction] = useState(null);
   const [pendingTitle, setPendingTitle] = useState('');
   const [actionError, setActionError] = useState('');
+  const [paymentAction, setPaymentAction] = useState(null);
 
   const requestAction = (action, title) => {
     setActionError('');
@@ -65,6 +66,7 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
       ? `Only ${Math.floor(percentPaid)}% paid — under ${releasePercent}%, so only an Admin or Owner can approve it`
       : null;
   const evidence = invoice.paymentEvidence || [];
+  const mayReviewPayments = ['accounts', 'owner', 'admin'].includes(roleId);
   // Kept apart rather than merged into one field — a note left on an item and
   // the invoice's own notes answer different questions, and folding them
   // together with `||` used to mean only one of them was ever shown.
@@ -273,11 +275,30 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
               {invoice.paymentHistory?.length ? (
                 invoice.paymentHistory.map((entry, index) => (
                   <div key={`${entry.recordedAt}-${index}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid #f3ede5' }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#2a7d4f', marginTop: 4, flexShrink: 0 }} />
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: entry.reviewStatus === 'Flagged' ? '#c97b08' : entry.reviewStatus === 'Pending Accounts' ? '#c0a87a' : '#2a7d4f', marginTop: 4, flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 11, color: '#8a7a6a' }}>{formatMoment(entry.recordedAt)}</div>
+                      <div style={{ fontSize: 11, color: '#8a7a6a' }}>Payment {index + 1} · {formatMoment(entry.recordedAt)}</div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1611', marginTop: 2 }}>{entry.method}{entry.note ? ` · ${entry.note}` : ''}</div>
                       <div style={{ fontSize: 12, color: '#5a4e42' }}>{entry.recordedBy || 'Accounts'}</div>
+                      {/* Each payment after the first is reviewed on its own, so
+                          it carries its own status, receipts and decision. */}
+                      {entry.reviewStatus ? (
+                        <div style={{ marginTop: 6, display: 'grid', gap: 6 }}>
+                          <div><Status>{entry.reviewStatus === 'Pending Accounts' ? 'Awaiting Review' : entry.reviewStatus}</Status></div>
+                          {entry.reviewStatus === 'Flagged' && entry.reviewNote ? <div style={{ fontSize: 12, color: '#7a6030' }}>Flagged: {entry.reviewNote}</div> : null}
+                          {entry.clarification ? <div style={{ fontSize: 12, color: '#5a4e42' }}>Store Manager: {entry.clarification}</div> : null}
+                          {entry.reviewStatus === 'Approved' && entry.reviewedBy ? <div style={{ fontSize: 11, color: '#8a7a6a' }}>Approved by {entry.reviewedBy}{entry.reviewedAt ? ` · ${formatMoment(entry.reviewedAt)}` : ''}</div> : null}
+                          {entry.id && evidence.some((item) => item.paymentId === entry.id) ? (
+                            <PaymentEvidenceGallery invoiceNumber={invoice.invoiceNumber} evidence={evidence} paymentId={entry.id} emptyMessage="No receipt attached to this payment." />
+                          ) : null}
+                          {mayReviewPayments && entry.id && entry.reviewStatus !== 'Approved' ? (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <button type="button" style={{ padding: '6px 12px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', color: '#1a1611', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }} onClick={() => { setActionError(''); setPaymentAction({ entry, status: 'PaymentApproved' }); }}>Approve payment</button>
+                              {entry.reviewStatus === 'Pending Accounts' ? <button type="button" style={{ padding: '6px 12px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', color: '#1a1611', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }} onClick={() => { setActionError(''); setPaymentAction({ entry, status: 'PaymentFlagged' }); }}>Flag for clarification</button> : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                     <div style={{ fontWeight: 700, color: '#2a7d4f', fontSize: 13 }}>{money.format(Number(entry.amount || 0))}</div>
                   </div>
@@ -475,6 +496,25 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
             : `This invoice has been marked ${status}. Choosing another action below will replace that decision.`}
         </p>
       </div>
+
+      {paymentAction && (
+        <InvoiceActionConfirmModal
+          invoice={invoice}
+          payment={paymentAction.entry}
+          status={paymentAction.status}
+          onCancel={() => setPaymentAction(null)}
+          onConfirm={async (note) => {
+            try {
+              const updated = await reviewPayment(invoice.invoiceNumber, paymentAction.entry.id, paymentAction.status === 'PaymentApproved' ? 'Approved' : 'Flagged', note);
+              if (updated) onPaymentRecorded?.(updated);
+              setPaymentAction(null);
+            } catch (requestError) {
+              setActionError(requestError.response?.data?.message || 'That decision could not be saved.');
+              setPaymentAction(null);
+            }
+          }}
+        />
+      )}
 
       {pendingAction && (
         <InvoiceActionConfirmModal

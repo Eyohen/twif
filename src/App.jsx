@@ -46,6 +46,7 @@ import {
   useStores,
   useDepartments,
   daysUntilDue, dueDateLabel, isFinishedStatus, isOrder,
+  paymentsAwaitingReview, reviewPayment, clarifyPayment, hasFlaggedPayment,
 } from './utils/oms';
 import { DEPARTMENT_FIELDS, departmentConfig, missingDepartmentDetails } from './config/departmentFields';
 import { isValidPhone, phoneDigits, PHONE_ERROR, PHONE_MAX_LENGTH, PHONE_PATTERN } from './utils/phone';
@@ -174,7 +175,26 @@ function navLabel(role, item) {
   return NAV_LABEL_OVERRIDES[role]?.[item] || item;
 }
 
-function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], onUpdateJob, onApproveInvoice, onNavigate, releasePercent }) {
+// Every tailor on a job, one pill each, so a job shared between several people
+// reads as such from the list without opening it.
+function JobTailorNames({ job, plain = false }) {
+  const names = jobTailors(job);
+  if (!names.length) {
+    return plain
+      ? <>Unassigned</>
+      : <span className="tailor-unassigned" style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#fffbf0', color: '#7a6030', border: '1px solid #e8d9a0' }}>Unassigned</span>;
+  }
+  if (plain) return <>{names.join(', ')}</>;
+  return (
+    <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
+      {names.map((name) => (
+        <span key={name} className="tailor-assigned" style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#f0faf4', color: '#2a7d4f', border: '1px solid #c3e8d4', whiteSpace: 'nowrap' }}>{name}</span>
+      ))}
+    </span>
+  );
+}
+
+function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], onUpdateJob, onApproveInvoice, onInvoiceUpdated, onNavigate, releasePercent }) {
   const isTailor = role === 'tailor';
 
   if (isTailor) {
@@ -192,7 +212,7 @@ function Overview({ role, currentRole, sentInvoices = [], productionJobs = [], o
   }
 
   if (role === 'accounts') {
-    return <AccountsOverview sentInvoices={sentInvoices} onApproveInvoice={onApproveInvoice} onNavigate={onNavigate} releasePercent={releasePercent} />;
+    return <AccountsOverview sentInvoices={sentInvoices} onApproveInvoice={onApproveInvoice} onInvoiceUpdated={onInvoiceUpdated} onNavigate={onNavigate} releasePercent={releasePercent} />;
   }
 
   if (role === 'store_manager') {
@@ -284,9 +304,10 @@ function OperationsOverview({ role, sentInvoices = [], productionJobs = [], onNa
   );
 }
 
-function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate, releasePercent }) {
+function AccountsOverview({ sentInvoices = [], onApproveInvoice, onInvoiceUpdated, onNavigate, releasePercent }) {
   const [inventory, setInventory] = useState([]);
   const [pendingInvoiceAction, setPendingInvoiceAction] = useState(null);
+  const [pendingPaymentAction, setPendingPaymentAction] = useState(null);
   const [actionError, setActionError] = useState('');
   const [activeKpiDot, setActiveKpiDot] = useState(0);
   const kpiScrollRef = useRef(null);
@@ -318,6 +339,9 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate, rel
   const outOfStock = inventory.filter((item) => toNumber(item.quantity) <= 0);
   const healthyStock = inventory.filter((item) => toNumber(item.quantity) > toNumber(item.lowStockThreshold || 5));
   const queue = (pending.length ? pending : sentInvoices).slice(0, 5);
+  // Every payment recorded after the invoice was raised is its own entry here,
+  // reviewed apart from the invoice and from the other payments on it.
+  const paymentQueue = paymentsAwaitingReview(sentInvoices);
   // Keep the Overview queue aligned with the full Accounts invoice page.
   // `orderStatus` describes production/payment-derived order progress and can
   // read "Fully Paid"; it is not the Accounts review decision.
@@ -350,7 +374,16 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate, rel
           <header><div><h2>Invoice Review Queue</h2><p>Invoices awaiting your action.</p></div><button onClick={() => onNavigate?.('Invoices')}>View all invoices →</button></header>
           <div className="accounts-table-wrap">
             <table><thead><tr><th>Invoice</th><th>Customer</th><th>Store</th><th>Total</th><th>Review Status</th><th>Payment</th><th>Action</th></tr></thead>
-            <tbody>{queue.map((invoice) => <tr key={invoice.invoiceNumber} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>
+            <tbody>{paymentQueue.map(({ key, invoice, payment, number }) => <tr key={key} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>
+              <td><strong>{invoice.invoiceNumber}</strong><small style={{ display: 'block', color: '#8a7a6a' }}>Payment {number}</small></td><td>{invoice.customer}</td><td>{invoice.store}</td><td><strong>{money.format(Number(payment.amount || 0))}</strong><small style={{ display: 'block', color: '#8a7a6a' }}>of {money.format(invoice.total)}</small></td>
+              <td><Status>{payment.reviewStatus === 'Pending Accounts' ? 'Awaiting Review' : payment.reviewStatus}</Status></td><td><Status>{invoice.paymentStatus}</Status></td>
+              <td><div className="accounts-row-actions" onClick={(event) => event.stopPropagation()}>
+                <button title="Approve payment" onClick={() => setPendingPaymentAction({ invoice, payment, status: 'PaymentApproved' })}>✓</button>
+                {payment.reviewStatus === 'Pending Accounts' ? <button title="Flag payment for clarification" onClick={() => setPendingPaymentAction({ invoice, payment, status: 'PaymentFlagged' })}>⚑</button> : null}
+                <button title="Open payment" onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>•••</button>
+              </div></td>
+            </tr>)}
+            {queue.map((invoice) => <tr key={invoice.invoiceNumber} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>
               <td><strong>{invoice.invoiceNumber}</strong></td><td>{invoice.customer}</td><td>{invoice.store}</td><td><strong>{money.format(invoice.total)}</strong></td>
               <td><Status>{reviewStatus(invoice)}</Status></td><td><Status>{invoice.paymentStatus}</Status></td>
               <td><div className="accounts-row-actions" onClick={(event) => event.stopPropagation()}>
@@ -365,7 +398,7 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate, rel
                 <button title="Open full invoice" onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>•••</button>
               </div></td>
             </tr>)}</tbody></table>
-            {!queue.length ? <div className="accounts-empty">No invoices are awaiting review.</div> : null}
+            {!queue.length && !paymentQueue.length ? <div className="accounts-empty">No invoices are awaiting review.</div> : null}
           </div>
           <footer style={{cursor:'pointer'}} onClick={() => onNavigate?.('Invoices')}>View full queue →</footer>
         </section>
@@ -414,6 +447,27 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onNavigate, rel
             setActionError(error.response?.data?.message || 'That decision could not be saved.');
           }
           setPendingInvoiceAction(null);
+        }}
+      />}
+      {pendingPaymentAction && <InvoiceActionConfirmModal
+        invoice={pendingPaymentAction.invoice}
+        payment={pendingPaymentAction.payment}
+        status={pendingPaymentAction.status}
+        onCancel={() => setPendingPaymentAction(null)}
+        onConfirm={async (note) => {
+          setActionError('');
+          try {
+            const updated = await reviewPayment(
+              pendingPaymentAction.invoice.invoiceNumber,
+              pendingPaymentAction.payment.id,
+              pendingPaymentAction.status === 'PaymentApproved' ? 'Approved' : 'Flagged',
+              note,
+            );
+            if (updated) onInvoiceUpdated?.(updated);
+          } catch (error) {
+            setActionError(error.response?.data?.message || 'That decision could not be saved.');
+          }
+          setPendingPaymentAction(null);
         }}
       />}
     </div>
@@ -1195,9 +1249,90 @@ function TailorOverview({ currentRole, productionJobs = [], onUpdateJob }) {
   );
 }
 
-function ProductionOverview({ productionJobs = [], onNavigate }) {
+// The jobs that need attention soonest, shared by the Production Manager's
+// overview and the Owner's and Admin's Production page so all three read the
+// same list the same way. Jobs come from the same live list, so it follows
+// every change to a job's status or delivery date.
+function PriorityProductionQueue({ productionJobs = [], onOpenJob, onOpenBoard }) {
   const [queuePage, setQueuePage] = useState(1);
   const QUEUE_PAGE_SIZE = 10;
+  const activeJobs = productionJobs.filter((job) => !isFinishedStatus(job.status));
+  const priorityJobs = [...activeJobs].sort((a, b) => {
+    const first = new Date(a.delivery).getTime();
+    const second = new Date(b.delivery).getTime();
+    if (Number.isNaN(first)) return 1;
+    if (Number.isNaN(second)) return -1;
+    return first - second;
+  });
+
+  return (
+    <div className="panel">
+      <SectionHeader eyebrow="Work schedule" title="Priority Production Queue" />
+      {priorityJobs.length ? (
+        <>
+        {onOpenBoard ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button type="button" onClick={onOpenBoard} style={{ background: 'none', border: 'none', color: '#c97b08', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            Open Production board →
+          </button>
+        </div> : null}
+        <div className="table-wrap">
+          <table className="production-overview-table">
+            <thead>
+              <tr>
+                <th>Delivery</th>
+                <th>Customer</th>
+                <th>Item</th>
+                <th>Tailor</th>
+                <th>Fabric</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {priorityJobs.slice((Math.min(queuePage, Math.max(1, Math.ceil(priorityJobs.length / QUEUE_PAGE_SIZE))) - 1) * QUEUE_PAGE_SIZE, Math.min(queuePage, Math.max(1, Math.ceil(priorityJobs.length / QUEUE_PAGE_SIZE))) * QUEUE_PAGE_SIZE).map((job) => {
+                const isOverdue = job.delivery && new Date(job.delivery) < new Date();
+                return (
+                  <tr key={job.id} className={isOverdue ? 'row-overdue' : ''} style={{ cursor: 'pointer' }} onClick={() => onOpenJob?.(job)}>
+                    <td data-label="Delivery">
+                      <span className={classNames('delivery-date-cell', isOverdue && 'delivery-overdue')}>
+                        {isOverdue && <AlertTriangle size={11} />}
+                        {job.delivery || 'Not set'}
+                      </span>
+                      {dueDateLabel(job.delivery, job.status) ? (
+                        <small style={{ display: 'block', marginTop: 2, fontWeight: 600, color: daysUntilDue(job.delivery) < 0 ? '#8a3520' : '#2a7d4f' }}>{dueDateLabel(job.delivery, job.status)}</small>
+                      ) : null}
+                    </td>
+                    <td data-label="Customer">
+                      <div className="table-customer-cell">
+                        <div className="table-avatar">{job.customer.split(' ').map(p => p[0]).join('').slice(0, 2)}</div>
+                        {job.customer}
+                      </div>
+                    </td>
+                    <td data-label="Item">{job.item}</td>
+                    <td data-label="Tailor">
+                      <JobTailorNames job={job} />
+                    </td>
+                    <td data-label="Fabric"><Status>{job.fabricConfirmed ? 'Confirmed' : 'Pending'}</Status></td>
+                    <td data-label="Status"><Status>{job.status}</Status></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <Pagination
+          page={Math.min(queuePage, Math.max(1, Math.ceil(priorityJobs.length / QUEUE_PAGE_SIZE)))}
+          pageSize={QUEUE_PAGE_SIZE}
+          total={priorityJobs.length}
+          onPage={setQueuePage}
+          noun="orders"
+        />
+        </>
+      ) : <div className="invoice-preview-empty">No active production jobs.</div>}
+    </div>
+  );
+}
+
+function ProductionOverview({ productionJobs = [], onNavigate }) {
   const readyJobs = productionJobs.filter((job) => isFinishedStatus(job.status));
   const unassignedJobs = productionJobs.filter((job) => !job.tailor || job.tailor === 'Unassigned');
   const fabricPending = productionJobs.filter((job) => !job.fabricConfirmed);
@@ -1213,13 +1348,6 @@ function ProductionOverview({ productionJobs = [], onNavigate }) {
     const deliveryDate = new Date(job.delivery);
     return !Number.isNaN(deliveryDate.getTime()) && deliveryDate < now;
   });
-  const priorityJobs = [...activeJobs].sort((a, b) => {
-    const first = new Date(a.delivery).getTime();
-    const second = new Date(b.delivery).getTime();
-    if (Number.isNaN(first)) return 1;
-    if (Number.isNaN(second)) return -1;
-    return first - second;
-  });
 
   return (
     <div className="stack production-overview">
@@ -1231,71 +1359,11 @@ function ProductionOverview({ productionJobs = [], onNavigate }) {
       </section>
 
       <section className="production-overview-grid">
-        <div className="panel">
-          <SectionHeader eyebrow="Work schedule" title="Priority Production Queue" />
-          {priorityJobs.length ? (
-            <>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-              <button type="button" onClick={() => onNavigate?.('Production')} style={{ background: 'none', border: 'none', color: '#c97b08', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                Open Production board →
-              </button>
-            </div>
-            <div className="table-wrap">
-              <table className="production-overview-table">
-                <thead>
-                  <tr>
-                    <th>Delivery</th>
-                    <th>Customer</th>
-                    <th>Item</th>
-                    <th>Tailor</th>
-                    <th>Fabric</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {priorityJobs.slice((Math.min(queuePage, Math.max(1, Math.ceil(priorityJobs.length / QUEUE_PAGE_SIZE))) - 1) * QUEUE_PAGE_SIZE, Math.min(queuePage, Math.max(1, Math.ceil(priorityJobs.length / QUEUE_PAGE_SIZE))) * QUEUE_PAGE_SIZE).map((job) => {
-                    const isOverdue = job.delivery && new Date(job.delivery) < new Date();
-                    return (
-                      <tr key={job.id} className={isOverdue ? 'row-overdue' : ''} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Production')}>
-                        <td data-label="Delivery">
-                          <span className={classNames('delivery-date-cell', isOverdue && 'delivery-overdue')}>
-                            {isOverdue && <AlertTriangle size={11} />}
-                            {job.delivery || 'Not set'}
-                          </span>
-                          {dueDateLabel(job.delivery, job.status) ? (
-                            <small style={{ display: 'block', marginTop: 2, fontWeight: 600, color: daysUntilDue(job.delivery) < 0 ? '#8a3520' : '#2a7d4f' }}>{dueDateLabel(job.delivery, job.status)}</small>
-                          ) : null}
-                        </td>
-                        <td data-label="Customer">
-                          <div className="table-customer-cell">
-                            <div className="table-avatar">{job.customer.split(' ').map(p => p[0]).join('').slice(0, 2)}</div>
-                            {job.customer}
-                          </div>
-                        </td>
-                        <td data-label="Item">{job.item}</td>
-                        <td data-label="Tailor">
-                          <span className={job.tailor && job.tailor !== 'Unassigned' ? 'tailor-assigned' : 'tailor-unassigned'}>
-                            {job.tailor || 'Unassigned'}
-                          </span>
-                        </td>
-                        <td data-label="Fabric"><Status>{job.fabricConfirmed ? 'Confirmed' : 'Pending'}</Status></td>
-                        <td data-label="Status"><Status>{job.status}</Status></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <Pagination
-              page={Math.min(queuePage, Math.max(1, Math.ceil(priorityJobs.length / QUEUE_PAGE_SIZE)))}
-              pageSize={QUEUE_PAGE_SIZE}
-              total={priorityJobs.length}
-              onPage={setQueuePage}
-              noun="orders"
-            />
-            </>
-          ) : <div className="invoice-preview-empty">No active production jobs.</div>}
-        </div>
+        <PriorityProductionQueue
+          productionJobs={productionJobs}
+          onOpenJob={(job) => onNavigate?.('Production', { invoice: job.invoiceNumber })}
+          onOpenBoard={() => onNavigate?.('Production')}
+        />
 
         <div className="panel">
           <SectionHeader eyebrow="Team capacity" title="Tailor Target" />
@@ -1359,7 +1427,7 @@ function ProductionOverview({ productionJobs = [], onNavigate }) {
                 <div className="prod-summary-avatar prod-summary-avatar--sm">{job.customer.split(' ').map(p => p[0]).join('').slice(0, 2)}</div>
                 <div className="prod-summary-info">
                   <strong>{job.customer}</strong>
-                  <span>{job.item} · {job.tailor || 'Unassigned'}</span>
+                  <span>{job.item} · <JobTailorNames job={job} plain /></span>
                 </div>
                 <Status>{job.status}</Status>
               </div>
@@ -1731,6 +1799,11 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [clarification, setClarification] = useState('');
+  // Answers to payments Accounts flagged, one per payment, since each payment
+  // is reviewed on its own and is answered on its own.
+  const [paymentClarifications, setPaymentClarifications] = useState({});
+  const [clarifyingPayment, setClarifyingPayment] = useState('');
+  const [paymentClarifyError, setPaymentClarifyError] = useState('');
   // Which payment status the person editing wants this invoice to end up at.
   // It only steers the payment form below: the status itself still follows the
   // money recorded, so it cannot disagree with the books.
@@ -1953,6 +2026,40 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
             </label>
           </div>
         ) : null}
+
+        {(Array.isArray(invoiceState.paymentHistory) ? invoiceState.paymentHistory : []).filter((entry) => entry?.id && entry.reviewStatus === 'Flagged').map((entry) => (
+          <div key={entry.id} style={{ padding: '14px 16px', marginBottom: 16, border: '1px solid #f0ddb0', borderRadius: 10, background: '#fffbf0' }}>
+            <strong style={{ display: 'block', color: '#7a6030', marginBottom: 5 }}>Accounts requested clarification on the {money.format(toNumber(entry.amount))} payment</strong>
+            <p style={{ margin: '0 0 12px', color: '#5a4e42', fontSize: 13 }}>{entry.reviewNote || 'Check this payment and its receipt, then explain below.'}</p>
+            <label className="os-field">
+              <span>Your clarification *</span>
+              <textarea rows={3} maxLength={2000} value={paymentClarifications[entry.id] || ''} onChange={(event) => setPaymentClarifications((current) => ({ ...current, [entry.id]: event.target.value }))} placeholder="Explain what was checked or corrected for Accounts…" />
+            </label>
+            {paymentClarifyError && clarifyingPayment === entry.id ? <p style={{ color: '#8a3520', fontSize: 12 }}>{paymentClarifyError}</p> : null}
+            <button
+              type="button"
+              disabled={clarifyingPayment === `sending:${entry.id}`}
+              onClick={async () => {
+                const text = String(paymentClarifications[entry.id] || '').trim();
+                setPaymentClarifyError('');
+                setClarifyingPayment(entry.id);
+                if (!text) { setPaymentClarifyError('Explain the clarification before returning this payment to Accounts.'); return; }
+                setClarifyingPayment(`sending:${entry.id}`);
+                try {
+                  const updated = await clarifyPayment(invoice.invoiceNumber, entry.id, text);
+                  if (updated) { setInvoiceState(updated); onSaved?.(updated); }
+                  setClarifyingPayment('');
+                } catch (requestError) {
+                  setPaymentClarifyError(requestError.response?.data?.message || 'The clarification could not be sent.');
+                  setClarifyingPayment(entry.id);
+                }
+              }}
+              style={{ padding: '8px 14px', border: 'none', borderRadius: 8, background: '#1a1611', color: '#fff', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}
+            >
+              {clarifyingPayment === `sending:${entry.id}` ? 'Sending…' : 'Send clarification to Accounts'}
+            </button>
+          </div>
+        ))}
 
         <div className="edit-invoice-grid">
           <label className="os-field">
@@ -2242,7 +2349,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
     ['View Invoice', <Eye size={12} strokeWidth={2} />, () => { window.scrollTo(0, 0); setSelectedInvoice(invoice); }],
     [downloadingInvoiceNumber === invoice.invoiceNumber ? 'Preparing PDF…' : 'Download PDF', downloadingInvoiceNumber === invoice.invoiceNumber ? <LoaderCircle className="invoice-download-spinner" size={12} strokeWidth={2} /> : <Download size={12} strokeWidth={2} />, () => downloadInvoicePdf(invoice)],
     ['Resend Email', <RefreshCw size={12} strokeWidth={2} />, () => resendInvoiceEmail(invoice)],
-    ...(currentRole?.id === 'store_manager' && invoiceApprovalStatus(invoice) === 'Flagged'
+    ...(currentRole?.id === 'store_manager' && (invoiceApprovalStatus(invoice) === 'Flagged' || hasFlaggedPayment(invoice))
       ? [['Review Flag', <AlertCircle size={12} strokeWidth={2} />, () => setEditingInvoice(invoice)]]
       : mayEdit(invoice) ? [['Edit Invoice', <Edit2 size={12} strokeWidth={2} />, () => setEditingInvoice(invoice)]] : []),
     // Approving normally needs the same payment threshold Production checks —
@@ -2521,7 +2628,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
     const matchesSearch = `${invoice.invoiceNumber} ${invoice.customer} ${invoice.store} ${invoice.paymentStatus}`.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'All'
       || (statusFilter === 'Pending' && invoiceApprovalStatus(invoice) === 'Pending Accounts')
-      || (statusFilter === 'Flagged' && invoiceApprovalStatus(invoice) === 'Flagged')
+      || (statusFilter === 'Flagged' && (invoiceApprovalStatus(invoice) === 'Flagged' || hasFlaggedPayment(invoice)))
       || (statusFilter === 'FullyPaid' && invoice.paymentStatus === 'Fully Paid')
       || (statusFilter === 'Partial' && invoice.paymentStatus === 'Partial Paid')
       || (statusFilter === 'AwaitingPayment' && isAwaitingPayment(invoice));
@@ -2529,7 +2636,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
   });
   const total = sentInvoices.reduce((sum, invoice) => sum + toNumber(invoice.total), 0);
   const pending = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts');
-  const flagged = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Flagged');
+  const flagged = sentInvoices.filter((invoice) => invoiceApprovalStatus(invoice) === 'Flagged' || hasFlaggedPayment(invoice));
   const partial = sentInvoices.filter((invoice) => invoice.paymentStatus === 'Partial Paid');
 
   if (editingInvoice) {
@@ -2993,7 +3100,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
                   <button type="button" disabled={Boolean(downloadingInvoiceNumber)} aria-busy={downloadingInvoiceNumber === invoice.invoiceNumber} onClick={() => downloadInvoicePdf(invoice)}>
                     {downloadingInvoiceNumber === invoice.invoiceNumber ? <LoaderCircle className="invoice-download-spinner" size={14} strokeWidth={2} /> : <Download size={14} strokeWidth={2} />} {downloadingInvoiceNumber === invoice.invoiceNumber ? 'Preparing…' : 'Download'}
                   </button>
-                  {currentRole?.id === 'store_manager' && invoiceApprovalStatus(invoice) === 'Flagged' ? (
+                  {currentRole?.id === 'store_manager' && (invoiceApprovalStatus(invoice) === 'Flagged' || hasFlaggedPayment(invoice)) ? (
                     <button type="button" onClick={() => setEditingInvoice(invoice)}>
                       <AlertCircle size={14} strokeWidth={2} /> Review Flag
                     </button>
@@ -6280,6 +6387,13 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
         ))}
       </div>
 
+      {/* The same queue the Production Manager has on their overview, so the
+          Owner and Admin can watch the urgent jobs without that account.
+          Clicking a job opens it here, as View does in the list below. */}
+      {canOverrideHold ? (
+        <PriorityProductionQueue productionJobs={productionJobs} onOpenJob={(job) => setJobModal(job)} />
+      ) : null}
+
       {/* Columns come from .os-layout so the sidebar can stack on a phone; an
           inline grid-template-columns here left the job list 86px wide. */}
       <div className="os-layout os-layout-board">
@@ -6440,9 +6554,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                         ) : null}
                       </td>
                       <td data-label="Tailor" style={{ padding: '12px 14px' }}>
-                        <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: (!order.tailor || order.tailor === 'Unassigned') ? '#fffbf0' : '#f0faf4', color: (!order.tailor || order.tailor === 'Unassigned') ? '#7a6030' : '#2a7d4f', border: '1px solid', borderColor: (!order.tailor || order.tailor === 'Unassigned') ? '#e8d9a0' : '#c3e8d4' }}>
-                          {order.tailor || 'Unassigned'}
-                        </span>
+                        <JobTailorNames job={order} />
                       </td>
                       <td data-label="Fabric" style={{ padding: '12px 14px', fontSize: 12, color: order.fabricConfirmed ? '#2a7d4f' : '#7a6030' }}>
                         <div style={{ fontWeight: 600 }}>{order.fabric || 'Not selected'}</div>
@@ -6485,7 +6597,7 @@ function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, current
                     <Status>{order.status === 'Order Sheet Confirmed' ? 'Ready to Assign' : order.status === 'Ready' ? 'Ready for Collection' : order.status}</Status>
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                    <span style={{ fontSize: 12, color: '#5a4e42' }}>Tailor: <strong>{order.tailor || 'Unassigned'}</strong></span>
+                    <span style={{ fontSize: 12, color: '#5a4e42' }}>{jobTailors(order).length > 1 ? 'Tailors' : 'Tailor'}: <strong><JobTailorNames job={order} plain /></strong></span>
                     <span style={{ fontSize: 12, color: '#5a4e42' }}>Fabric: <strong>{order.fabric || '—'}</strong></span>
                   </div>
                   <button type="button" onClick={() => setJobModal(order)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#faf7f3', color: '#5a4e42', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
@@ -8516,8 +8628,15 @@ const notificationDestination = (item, role) => {
     case 'invoice_created':
     case 'account_approval':
       return { view: 'Invoices', params: invoiceParams };
+    case 'payment_review':
+      return { view: 'Invoices', params: invoiceParams };
+    case 'payment_clarified':
+      return { view: 'Invoices', params: invoiceParams };
     case 'payment_recorded':
-      // Accounts and the Owner keep the payment screens; a store manager
+      // Accounts review each new payment from the invoice's own review page,
+      // where it is listed with its receipt and its Approve / Flag buttons.
+      if (role === 'accounts') return { view: 'Invoices', params: invoiceParams };
+      // Owner and Admin keep the payment screens; a store manager
       // lands on the invoice itself — 'Orders' never reads this param at
       // all, which made this a dead end for them.
       return {
@@ -9075,7 +9194,7 @@ function OrderTableLike({ columns, rows }) {
 }
 
 function renderView(activeView, role, viewProps = {}) {
-  if (activeView === 'Overview') return <Overview role={role} currentRole={viewProps.currentRole} sentInvoices={viewProps.sentInvoices} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} onApproveInvoice={viewProps.onApproveInvoice} onNavigate={viewProps.onNavigate} releasePercent={viewProps.releasePercent} />;
+  if (activeView === 'Overview') return <Overview role={role} currentRole={viewProps.currentRole} sentInvoices={viewProps.sentInvoices} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} onApproveInvoice={viewProps.onApproveInvoice} onInvoiceUpdated={viewProps.onInvoiceUpdated} onNavigate={viewProps.onNavigate} releasePercent={viewProps.releasePercent} />;
   if (activeView === 'Invoices') {
     if (role === 'accounts') return <AccountsInvoicesPage sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} onInvoiceUpdated={viewProps.onInvoiceUpdated} currentRole={viewProps.currentRole} releasePercent={viewProps.releasePercent} />;
     if (['store_manager', 'owner', 'admin'].includes(role)) {
@@ -9129,7 +9248,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Tailors & Staff') return <StaffView role={role} currentRole={viewProps.currentRole} />;
   if (activeView === 'User Management') return <UserManagementPage currentRole={viewProps.currentRole} />;
   if (activeView === 'Stores') return <OwnerStoresPage sentInvoices={viewProps.sentInvoices} />;
-  if (activeView === 'Departments') return <DepartmentsPage />;
+  if (activeView === 'Departments') return <DepartmentsPage currentRole={viewProps.currentRole} />;
   if (activeView === 'Memberships') return <MembershipsPage />;
   if (activeView === 'Shopify Sync') return <ShopifySyncPage />;
   if (activeView === 'Settings') return <SettingsPage onLogout={viewProps.onLogout} />;

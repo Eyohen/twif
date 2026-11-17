@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Box, AlertTriangle, XCircle, Package, LayoutGrid, PlusCircle, List, Boxes, TrendingUp, ChevronRight, Eye, ArrowLeft } from 'lucide-react';
+import { Box, AlertTriangle, XCircle, Package, LayoutGrid, PlusCircle, List, Boxes, TrendingUp, ChevronRight, Eye, ArrowLeft, ListChecks } from 'lucide-react';
 import { api } from '../../lib/api';
-import { money, formatMoment, isInvoiceApproved } from '../../utils/oms';
+import { money, formatMoment, isInvoiceApproved, useDepartments, daysUntilDue, dueDateLabel } from '../../utils/oms';
+import Pagination from '../../components/oms/Pagination';
 import { stockStatus, itemImage, formatInventoryNumber } from './item';
 import ItemDetailsPage from './ItemDetailsPage';
 import AssignFabricPage, { ordersNeedingFabric } from './AssignFabricPage';
@@ -208,6 +209,10 @@ export default function InventoryOverviewPage({ onNavigate }) {
   const [showAwaitingFabric, setShowAwaitingFabric] = useState(false);
   const [showFabricOrders, setShowFabricOrders] = useState(false);
   const [showAssignFabric, setShowAssignFabric] = useState(false);
+  // The order opened straight from the Production Priority Queue.
+  const [assignInvoice, setAssignInvoice] = useState('');
+  const [queuePage, setQueuePage] = useState(1);
+  const departmentList = useDepartments();
   const requestedAllocationOrder = searchParams.get('allocation');
 
   useEffect(() => {
@@ -260,6 +265,17 @@ export default function InventoryOverviewPage({ onNavigate }) {
   }, [invoices, allocations]);
   const fabricAssignedOrders = useMemo(() => invoices.filter((invoice) => selectedFabricsFor(invoice).length), [invoices]);
 
+  // Jobs still waiting on fabric, the ones due soonest first. A job with no
+  // delivery date sorts last.
+  const priorityQueue = useMemo(() => [...ordersNeedingFabric(invoices)].sort((a, b) => {
+    const first = new Date(a.orderSheet?.delivery || a.deliveryDate || '').getTime();
+    const second = new Date(b.orderSheet?.delivery || b.deliveryDate || '').getTime();
+    if (Number.isNaN(first) && Number.isNaN(second)) return 0;
+    if (Number.isNaN(first)) return 1;
+    if (Number.isNaN(second)) return -1;
+    return first - second;
+  }), [invoices]);
+
   const stockValue = items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.cost || 0), 0);
 
   if (openItem) {
@@ -269,7 +285,14 @@ export default function InventoryOverviewPage({ onNavigate }) {
     return <TodaysAllocationsPage allocations={todaysAllocations} loading={loading} onBack={() => setShowAllAllocations(false)} />;
   }
   if (showAssignFabric) {
-    return <AssignFabricPage invoices={invoices} inventory={items} loading={loading} onBack={() => setShowAssignFabric(false)} onChanged={reloadAfterRelease} />;
+    return <AssignFabricPage
+      invoices={invoices}
+      inventory={items}
+      loading={loading}
+      initialInvoiceNumber={assignInvoice}
+      onBack={() => { setShowAssignFabric(false); setAssignInvoice(''); }}
+      onChanged={reloadAfterRelease}
+    />;
   }
   if (showAwaitingFabric) {
     return <AwaitingFabricPage invoices={awaitingFabric} loading={loading} onBack={() => setShowAwaitingFabric(false)} />;
@@ -312,7 +335,7 @@ export default function InventoryOverviewPage({ onNavigate }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             type="button"
-            onClick={() => setShowAssignFabric(true)}
+            onClick={() => { setAssignInvoice(''); setShowAssignFabric(true); }}
             style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', background: '#c97b08', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
           >
             <Package size={14} /> Assign Fabric{ordersNeedingFabric(invoices).length ? ` (${ordersNeedingFabric(invoices).length})` : ''}
@@ -340,6 +363,76 @@ export default function InventoryOverviewPage({ onNavigate }) {
             </article>
           ))}
         </section>
+      </div>
+
+      {/* Production Priority Queue: what Production is waiting on this desk for. */}
+      <div className="os-card" style={{ marginBottom: 16 }}>
+        <div className="os-card-head">
+          <ListChecks size={15} style={{ color: '#c0a87a' }} />
+          <div>
+            <strong>Production Priority Queue</strong>
+            <p>Jobs waiting for fabric, the most urgent first. Open one to assign its fabric.</p>
+          </div>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          {priorityQueue.length ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
+              <thead>
+                <tr>{['Delivery', 'Customer', 'Garments', 'Department', 'Tailor', 'Fabric', ''].map((col) => <th key={col} style={th}>{col}</th>)}</tr>
+              </thead>
+              <tbody>
+                {priorityQueue.slice((queuePage - 1) * 10, queuePage * 10).map((invoice) => {
+                  const sheet = invoice.orderSheet || {};
+                  const pending = (Array.isArray(sheet.items) ? sheet.items : []).filter((item) => !item.fabricAllocated);
+                  const keys = [...new Set(pending.flatMap((item) => item.departments || []))];
+                  const tailors = [...new Set(pending.flatMap((item) => item.tailors || []).filter(Boolean))];
+                  const delivery = sheet.delivery || invoice.deliveryDate;
+                  const days = daysUntilDue(delivery);
+                  const awaitingApproval = pending.some((item) => item.fabricRequest?.status === 'Pending');
+                  const chosen = pending.some((item) => Array.isArray(item.fabrics) && item.fabrics.length);
+                  const open = () => { setAssignInvoice(invoice.invoiceNumber); setShowAssignFabric(true); };
+                  return (
+                    <tr
+                      key={invoice.invoiceNumber}
+                      onClick={open}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={(event) => { event.currentTarget.style.background = '#faf7f3'; }}
+                      onMouseLeave={(event) => { event.currentTarget.style.background = ''; }}
+                    >
+                      <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                        <div style={{ color: '#5a4e42' }}>{delivery ? formatMoment(delivery) : 'Not set'}</div>
+                        {dueDateLabel(delivery, sheet.status) ? <small style={{ fontWeight: 600, color: days !== null && days < 0 ? '#8a3520' : '#2a7d4f' }}>{dueDateLabel(delivery, sheet.status)}</small> : null}
+                      </td>
+                      <td style={{ ...td, fontWeight: 600, color: '#1a1611' }}>{invoice.customer}<small style={{ display: 'block', fontFamily: 'monospace', fontWeight: 400, color: '#8a7a6a' }}>{invoice.invoiceNumber}</small></td>
+                      <td style={{ ...td, color: '#5a4e42' }}>{pending.map((item) => item.item).filter(Boolean).join(', ') || '—'}</td>
+                      <td style={{ ...td, color: '#5a4e42' }}>{keys.map((key) => (departmentList.find((entry) => entry.key === key)?.name || key)).join(', ') || '—'}</td>
+                      <td style={{ ...td, color: tailors.length ? '#5a4e42' : '#b0a090' }}>{tailors.join(', ') || 'Not assigned yet'}</td>
+                      <td style={td}>
+                        <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700, ...(awaitingApproval ? { background: '#fffbf0', color: '#7a6030', border: '1px solid #e8d9a0' } : chosen ? { background: '#eaf2ff', color: '#1767df' } : { background: '#f5f0e8', color: '#5a4e42' }) }}>
+                          {awaitingApproval ? 'Awaiting your approval' : chosen ? 'Fabric chosen' : 'Not chosen yet'}
+                        </span>
+                      </td>
+                      <td style={td}>
+                        <button type="button" onClick={(event) => { event.stopPropagation(); open(); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 12px', border: 'none', borderRadius: 6, background: '#1a1611', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          Assign Fabric <ChevronRight size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ margin: 0, padding: '28px 16px', textAlign: 'center', fontSize: 13, color: '#8a7a6a' }}>
+              {loading ? 'Loading production jobs…' : 'No job is waiting for fabric.'}
+            </p>
+          )}
+        </div>
+        {priorityQueue.length > 10 ? (
+          <div style={{ padding: '0 14px' }}>
+            <Pagination page={Math.min(queuePage, Math.max(1, Math.ceil(priorityQueue.length / 10)))} pageSize={10} total={priorityQueue.length} onPage={setQueuePage} noun="jobs" />
+          </div>
+        ) : null}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -417,7 +510,7 @@ export default function InventoryOverviewPage({ onNavigate }) {
               <strong>Awaiting Fabric</strong>
               <p>Approved invoices with nothing released yet</p>
             </div>
-            <button type="button" onClick={() => setShowAssignFabric(true)} style={{ ...linkButton, marginLeft: 'auto', background: '#1a1611', color: '#fff', border: 'none', fontWeight: 700 }}>
+            <button type="button" onClick={() => { setAssignInvoice(''); setShowAssignFabric(true); }} style={{ ...linkButton, marginLeft: 'auto', background: '#1a1611', color: '#fff', border: 'none', fontWeight: 700 }}>
               Assign Fabric
             </button>
             <button type="button" onClick={() => setShowAwaitingFabric(true)} style={{ ...linkButton, marginLeft: 6 }}>
