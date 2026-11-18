@@ -37,7 +37,7 @@ import {
   dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
   isInvoiceApproved, canShowJobInProduction, productionBlockReason, productionJobFromInvoice,
   mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid, paidPercent, DEFAULT_RELEASE_PERCENT,
-  worksOnJob, jobTailors, averageScore,
+  worksOnJob, jobTailors, averageScore, byRecentUpdate,
   invoiceDocumentPayload, PERIOD_OPTIONS, filterByPeriod, periodTrend, addDaysIso, isEliteCustomer,
   periodWindow, previousWindow, withinWindow, changeAgainst, changeLabel, LOG_PERIODS, paymentsRecordedIn, lineDiscountAmount,
   amountReceived, invoicePayable, formatMoment, CUSTOMER_TRACKING_STEPS,
@@ -338,7 +338,7 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onInvoiceUpdate
   const lowStock = inventory.filter((item) => toNumber(item.quantity) <= toNumber(item.lowStockThreshold || 5));
   const outOfStock = inventory.filter((item) => toNumber(item.quantity) <= 0);
   const healthyStock = inventory.filter((item) => toNumber(item.quantity) > toNumber(item.lowStockThreshold || 5));
-  const queue = (pending.length ? pending : sentInvoices).slice(0, 5);
+  const queue = [...(pending.length ? pending : sentInvoices)].sort(byRecentUpdate).slice(0, 5);
   // Every payment recorded after the invoice was raised is its own entry here,
   // reviewed apart from the invoice and from the other payments on it.
   const paymentQueue = paymentsAwaitingReview(sentInvoices);

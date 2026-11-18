@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Clock, CheckCircle, Flag, DollarSign } from 'lucide-react';
-import { money, invoiceApprovalStatus, amountReceived, amountOutstanding, formatMoment } from '../../utils/oms';
+import { money, invoiceApprovalStatus, amountReceived, amountOutstanding, formatMoment, byRecentUpdate } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 import ReviewInvoicePage from './ReviewInvoicePage';
@@ -15,7 +15,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('All Invoices');
   const [storeFilter, setStoreFilter] = useState('All Stores');
-  const [sortOrder, setSortOrder] = useState('Newest first');
+  const [sortOrder, setSortOrder] = useState('Recently updated');
   const [currentPage, setCurrentPage] = useState(1);
   const [reviewInvoice, setReviewInvoice] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
@@ -38,6 +38,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
   const filtered = useMemo(() => {
     const byDate = (invoice) => new Date(invoice.invoiceDate || invoice.createdAt || 0).getTime();
     const comparators = {
+      'Recently updated': byRecentUpdate,
       'Newest first': (a, b) => byDate(b) - byDate(a),
       'Oldest first': (a, b) => byDate(a) - byDate(b),
       'Highest amount': (a, b) => Number(b.total || 0) - Number(a.total || 0),
@@ -49,7 +50,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
       const matchesTab = tab === 'All Invoices' || status === tab || invoice.paymentStatus === tab;
       const matchesStore = storeFilter === 'All Stores' || invoice.store === storeFilter;
       return matchesSearch && matchesTab && matchesStore;
-    }).sort(comparators[sortOrder] || comparators['Newest first']);
+    }).sort(comparators[sortOrder] || comparators['Recently updated']);
   }, [invoices, search, tab, storeFilter, sortOrder]);
 
   const exportCsv = () => {
@@ -161,6 +162,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
             {stores.map((store) => <option key={store}>{store}</option>)}
           </select>
           <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}>
+            <option>Recently updated</option>
             <option>Newest first</option>
             <option>Oldest first</option>
             <option>Highest amount</option>

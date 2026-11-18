@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Banknote, CheckCircle, Layers, CreditCard, Building2, Search, Download, Eye } from 'lucide-react';
-import { money, amountReceived, invoicePayable } from '../../utils/oms';
+import { money, amountReceived, invoicePayable, byRecentUpdate, startOfWeek } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import PaymentDetailPage from './PaymentDetailPage';
 
@@ -39,7 +39,8 @@ export default function AccountsPaymentsPage({ sentInvoices = [], onInvoiceUpdat
     setSearchParams({}, { replace: true });
   }, [requestedInvoice, sentInvoices, setSearchParams]);
 
-  const payments = useMemo(() => sentInvoices.map((invoice) => {
+  // Most recently updated first, so a payment just recorded is at the top.
+  const payments = useMemo(() => [...sentInvoices].sort(byRecentUpdate).map((invoice) => {
     const when = invoice.invoiceDate || invoice.createdAt;
     const at = when ? new Date(when) : null;
     return {
@@ -69,7 +70,8 @@ export default function AccountsPaymentsPage({ sentInvoices = [], onInvoiceUpdat
   const stores = useMemo(() => [...new Set(payments.map((payment) => payment.store).filter((store) => store !== '—'))], [payments]);
 
   const today = startOfDay(new Date());
-  const weekStart = today - 6 * 86400000;
+  // The calendar week, Monday to Sunday, like "This Week" everywhere else.
+  const weekStart = startOfWeek().getTime();
   const inTab = (payment) => {
     if (tab === 'All Payments') return true;
     if (tab === 'Today') return payment.at ? startOfDay(payment.at) === today : false;

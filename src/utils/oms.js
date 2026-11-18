@@ -642,12 +642,21 @@ export const LOG_PERIODS = [
 // Shared by the dashboard's overall filter and by each panel's own selector.
 // `getDate` pulls the date off a record, since invoices and production jobs
 // carry theirs under different names.
+// "This week" is the calendar week, Monday to Sunday — the same week the
+// tailors' targets use — not the last seven days. It starts at midnight on the
+// Monday just gone (today, when today is a Monday).
+export const startOfWeek = (from = new Date()) => {
+  const start = new Date(from);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  return start;
+};
+
 export const filterByPeriod = (records, getDate, period, customFrom, customTo) => {
   if (period === 'all') return records;
 
   const today = todayIso();
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekFrom = localIso(startOfWeek());
   const monthStart = `${today.slice(0, 7)}-01`;
   const yearStart = `${today.slice(0, 4)}-01-01`;
 
@@ -667,7 +676,7 @@ export const filterByPeriod = (records, getDate, period, customFrom, customTo) =
     const yesterday = addDaysIso(today, -1);
     return records.filter((record) => on(record) === yesterday);
   }
-  if (period === 'week') return records.filter((record) => getDate(record) && new Date(getDate(record)) >= weekAgo);
+  if (period === 'week') return records.filter((record) => on(record) >= weekFrom);
   if (period === 'month') return records.filter((record) => on(record) >= monthStart);
   if (period === 'quarter') {
     const quarterStart = new Date();
@@ -702,7 +711,7 @@ export const periodWindow = (period, customFrom, customTo) => {
     yesterdayEnd.setHours(23, 59, 59, 999);
     return { start, end: yesterdayEnd };
   }
-  if (period === 'week') { start.setDate(start.getDate() - 6); return { start, end }; }
+  if (period === 'week') { return { start: startOfWeek(), end }; }
   if (period === 'month') { start.setDate(1); return { start, end }; }
   if (period === 'quarter') { start.setMonth(Math.floor(start.getMonth() / 3) * 3, 1); return { start, end }; }
   if (period === 'year') { start.setMonth(0, 1); return { start, end }; }
@@ -801,6 +810,11 @@ export const lineDiscountAmount = (item = {}) => {
 // Payments recorded against an invoice are reviewed one by one. A payment with
 // no review status was recorded before that existed (or is the one the invoice
 // was raised with) and is covered by the invoice's own review.
+// Most recently changed first: an invoice that just had a payment recorded or
+// reviewed rises to the top, however long ago it was raised.
+export const lastUpdatedAt = (invoice) => new Date(invoice?.updatedAt || invoice?.createdAt || 0).getTime() || 0;
+export const byRecentUpdate = (a, b) => lastUpdatedAt(b) - lastUpdatedAt(a);
+
 export const paymentsAwaitingReview = (invoices = []) => invoices.flatMap((invoice) => {
   const history = Array.isArray(invoice.paymentHistory) ? invoice.paymentHistory : [];
   return history
