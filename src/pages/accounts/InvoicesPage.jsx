@@ -15,7 +15,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('All Invoices');
   const [storeFilter, setStoreFilter] = useState('All Stores');
-  const [sortOrder, setSortOrder] = useState('Recently updated');
+  const [sortOrder, setSortOrder] = useState('Newest first');
   const [currentPage, setCurrentPage] = useState(1);
   const [reviewInvoice, setReviewInvoice] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
@@ -36,11 +36,11 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
   const stores = useMemo(() => [...new Set(invoices.map((invoice) => invoice.store).filter(Boolean))], [invoices]);
 
   const filtered = useMemo(() => {
-    const byDate = (invoice) => new Date(invoice.invoiceDate || invoice.createdAt || 0).getTime();
     const comparators = {
-      'Recently updated': byRecentUpdate,
-      'Newest first': (a, b) => byDate(b) - byDate(a),
-      'Oldest first': (a, b) => byDate(a) - byDate(b),
+      // "Newest" means most recently updated — a payment or a review moves an
+      // invoice up — not when it was first raised.
+      'Newest first': byRecentUpdate,
+      'Oldest first': (a, b) => -byRecentUpdate(a, b),
       'Highest amount': (a, b) => Number(b.total || 0) - Number(a.total || 0),
       'Lowest amount': (a, b) => Number(a.total || 0) - Number(b.total || 0),
     };
@@ -50,7 +50,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
       const matchesTab = tab === 'All Invoices' || status === tab || invoice.paymentStatus === tab;
       const matchesStore = storeFilter === 'All Stores' || invoice.store === storeFilter;
       return matchesSearch && matchesTab && matchesStore;
-    }).sort(comparators[sortOrder] || comparators['Recently updated']);
+    }).sort(comparators[sortOrder] || comparators['Newest first']);
   }, [invoices, search, tab, storeFilter, sortOrder]);
 
   const exportCsv = () => {
@@ -162,7 +162,6 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
             {stores.map((store) => <option key={store}>{store}</option>)}
           </select>
           <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}>
-            <option>Recently updated</option>
             <option>Newest first</option>
             <option>Oldest first</option>
             <option>Highest amount</option>

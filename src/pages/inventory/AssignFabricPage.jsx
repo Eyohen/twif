@@ -46,7 +46,7 @@ export const ordersNeedingFabric = (invoices) => invoices.filter((invoice) => {
 // The Inventory Officer releases fabric to Production, so this is where they
 // choose which fabric each garment takes, how much, and let it go. Releasing
 // takes it out of stock and cannot be undone from here.
-export default function AssignFabricPage({ invoices, inventory, loading, onBack, onChanged, initialInvoiceNumber = '' }) {
+export default function AssignFabricPage({ invoices, inventory, loading, onBack, onChanged, initialInvoiceNumber = '', backLabel = 'Inventory Overview' }) {
   // Orders Production has already chosen fabric for come first.
   const requested = (invoice) => garmentsOf(invoice).some((item) => !item.fabricAllocated && item.fabricRequest?.status === 'Pending');
   const orders = useMemo(() => [...ordersNeedingFabric(invoices)].sort((a, b) => Number(requested(b)) - Number(requested(a))), [invoices]);
@@ -64,7 +64,7 @@ export default function AssignFabricPage({ invoices, inventory, loading, onBack,
           <Package size={22} />
           <div>
             <button type="button" onClick={open && !openedDirectly ? () => setOpenNumber('') : onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0, marginBottom: 5, border: 'none', background: 'none', color: '#8a7a6a', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
-              <ArrowLeft size={13} /> {open && !openedDirectly ? 'Assign Fabric' : 'Inventory Overview'}
+              <ArrowLeft size={13} /> {open && !openedDirectly ? 'Assign Fabric' : backLabel}
             </button>
             <h2>{open ? `Assign Fabric · ${open.invoiceNumber}` : 'Assign Fabric'}</h2>
             <p>{open

@@ -657,6 +657,8 @@ export const filterByPeriod = (records, getDate, period, customFrom, customTo) =
 
   const today = todayIso();
   const weekFrom = localIso(startOfWeek());
+  // Sunday, the last day of the week — a date later than that is next week's.
+  const weekTo = localIso(new Date(startOfWeek().getTime() + 6 * 86400000 + 12 * 3600000));
   const monthStart = `${today.slice(0, 7)}-01`;
   const yearStart = `${today.slice(0, 4)}-01-01`;
 
@@ -676,7 +678,7 @@ export const filterByPeriod = (records, getDate, period, customFrom, customTo) =
     const yesterday = addDaysIso(today, -1);
     return records.filter((record) => on(record) === yesterday);
   }
-  if (period === 'week') return records.filter((record) => on(record) >= weekFrom);
+  if (period === 'week') return records.filter((record) => on(record) >= weekFrom && on(record) <= weekTo);
   if (period === 'month') return records.filter((record) => on(record) >= monthStart);
   if (period === 'quarter') {
     const quarterStart = new Date();

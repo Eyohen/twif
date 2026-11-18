@@ -22,6 +22,7 @@ import ShopifySyncPage from './pages/owner/ShopifySyncPage';
 import DepartmentsPage from './pages/owner/DepartmentsPage';
 import InventoryManagerOverviewPage from './pages/inventory/OverviewPage';
 import InventoryListPage from './pages/inventory/InventoryListPage';
+import InventoryAssignFabricTab from './pages/inventory/AssignFabricTab';
 import { roles, inventoryCategories, navByRole, accountTypeByRole } from './config/oms';
 import { Stat, Status, SectionHeader } from './components/oms/Common';
 import useLabelledTables from './hooks/useLabelledTables';
@@ -55,6 +56,7 @@ import { orderedMeasurementEntries } from './utils/measurements';
 import { compressedImageDataUrl } from './utils/image';
 import PeriodFilter, { ALL_TIME, DEFAULT_PERIODS, initialCustomRange } from './components/oms/PeriodFilter';
 import { TailorTargetBoard } from './components/oms/TailorTargets';
+import TailorTargetPage from './pages/production/TailorTargetPage';
 
 const trackingBaseUrl = (
   import.meta.env.VITE_TRACKING_BASE_URL ||
@@ -141,6 +143,7 @@ const NAV_ICONS = {
   Payments: CreditCard,
   Production: Factory,
   Inventory: Boxes,
+  'Assign Fabric': Package,
   Notifications: Bell,
   Reports: BarChart2,
   Settings: Settings2,
@@ -150,6 +153,7 @@ const NAV_ICONS = {
   'My Log': Calendar,
   'Tailor List': Users2,
   'Tailor Performance': Award,
+  'Tailor Target': Award,
   Staff: Users2,
   'Tailors & Staff': Users2,
   'User Management': UserCog,
@@ -5826,6 +5830,172 @@ const unscoredCount = (job) => (job.items || []).reduce((total, item) => (
   total + (item.tailors || []).filter((name) => item.scores?.[name]?.score === undefined).length
 ), 0);
 
+// The Inventory Manager's view of production: what is due and who has it, to see
+// what fabric will be wanted. It is read-only on purpose — fabric supply is this
+// role's job, running production is the Production Manager's — so there is no
+// button here that assigns, edits or moves a job along. The one action offered
+// is the hand-off to the Assign Fabric tab.
+function InventoryProductionView({ productionJobs = [], onNavigate }) {
+  const departments = useDepartments();
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [page, setPage] = useState(1);
+  const [openJob, setOpenJob] = useState(null);
+  const PAGE_SIZE = 10;
+  const tabs = ['All', 'Order Sheet Confirmed', 'Assigned', 'In Progress'];
+  const tabLabel = (tab) => (tab === 'Order Sheet Confirmed' ? 'Ready to Assign' : tab);
+  const activeJobs = productionJobs.filter((job) => !isFinishedStatus(job.status));
+  const filtered = activeJobs
+    .filter((job) => (statusFilter === 'All' || job.status === statusFilter)
+      && `${job.customer} ${job.invoiceNumber} ${job.item}`.toLowerCase().includes(query.toLowerCase()))
+    .sort((a, b) => {
+      const first = new Date(a.delivery).getTime();
+      const second = new Date(b.delivery).getTime();
+      if (Number.isNaN(first)) return 1;
+      if (Number.isNaN(second)) return -1;
+      return first - second;
+    });
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const departmentName = (key) => departments.find((entry) => entry.key === key)?.name || key;
+  const th = { padding: '11px 14px', background: '#faf7f3', fontSize: 11, fontWeight: 700, color: '#8a7a6a', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', borderBottom: '1px solid #eee5da' };
+
+  return (
+    <div className="os-page">
+      <PriorityProductionQueue productionJobs={productionJobs} onOpenJob={setOpenJob} />
+
+      <div className="os-card" style={{ marginTop: 16 }}>
+        <div className="os-card-head">
+          <Factory size={15} style={{ color: '#c0a87a' }} />
+          <div>
+            <strong>Production Job List</strong>
+            <p>Every active job. View only — assigning and managing jobs is done by Production.</p>
+          </div>
+        </div>
+        <div style={{ padding: '0 14px 12px' }}>
+          <div style={{ position: 'relative', marginBottom: 12, maxWidth: 420 }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#b0a090', pointerEvents: 'none' }} />
+            <input
+              value={query}
+              onChange={(event) => { setQuery(event.target.value); setPage(1); }}
+              placeholder="Search by customer, invoice or item…"
+              style={{ width: '100%', padding: '9px 12px 9px 32px', border: '1px solid #ddd5c8', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', color: '#1a1611' }}
+            />
+          </div>
+          <nav style={{ display: 'flex', gap: 6, overflowX: 'auto' }}>
+            {tabs.map((tab) => {
+              const count = tab === 'All' ? activeJobs.length : activeJobs.filter((job) => job.status === tab).length;
+              const on = statusFilter === tab;
+              return (
+                <button key={tab} type="button" onClick={() => { setStatusFilter(tab); setPage(1); }}
+                  style={{ padding: '7px 14px', borderRadius: 20, border: '1px solid', borderColor: on ? '#1a1611' : '#ddd5c8', background: on ? '#1a1611' : '#fff', color: on ? '#fff' : '#5a4e42', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'inherit' }}>
+                  {tabLabel(tab)}
+                  <span style={{ background: on ? 'rgba(255,255,255,0.2)' : '#eee5da', color: on ? '#fff' : '#8a7a6a', borderRadius: 10, padding: '1px 7px', fontSize: 11 }}>{count}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+            <thead>
+              <tr>{['Customer', 'Item', 'Delivery', 'Tailor', 'Fabric', 'Status', ''].map((heading) => <th key={heading} style={th}>{heading}</th>)}</tr>
+            </thead>
+            <tbody>
+              {visible.length ? visible.map((job) => (
+                <tr key={job.id} style={{ borderBottom: '1px solid #f3ede5' }}>
+                  <td style={{ padding: '12px 14px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1611' }}>{job.customer}</div>
+                    <div style={{ fontSize: 11, color: '#8a7a6a' }}>{job.invoiceNumber}</div>
+                  </td>
+                  <td style={{ padding: '12px 14px', fontSize: 13, color: '#1a1611' }}>
+                    <div style={{ fontWeight: 600 }}>{job.item}</div>
+                    <div style={{ fontSize: 11, color: '#8a7a6a' }}>{job.pieces} {job.pieces === 1 ? 'piece' : 'pieces'}</div>
+                  </td>
+                  <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42', whiteSpace: 'nowrap' }}>
+                    <div>{job.delivery ? new Date(`${job.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No date'}</div>
+                    {job.delivery ? <div style={{ marginTop: 2, fontSize: 11, fontWeight: 600, color: daysUntilDue(job.delivery) < 0 ? '#8a3520' : '#2a7d4f' }}>{dueDateLabel(job.delivery, job.status)}</div> : null}
+                  </td>
+                  <td style={{ padding: '12px 14px' }}><JobTailorNames job={job} /></td>
+                  <td style={{ padding: '12px 14px', fontSize: 12, color: job.fabricConfirmed ? '#2a7d4f' : '#7a6030' }}>
+                    <div style={{ fontWeight: 600 }}>{job.fabric || 'Not selected'}</div>
+                    <div style={{ fontSize: 11 }}>{job.fabricConfirmed ? 'Confirmed' : 'Pending'}</div>
+                  </td>
+                  <td style={{ padding: '12px 14px' }}><Status>{job.status === 'Order Sheet Confirmed' ? 'Ready to Assign' : job.status}</Status></td>
+                  <td style={{ padding: '12px 14px' }}>
+                    <button type="button" onClick={() => setOpenJob(job)} style={{ padding: '5px 12px', border: '1px solid #ddd5c8', borderRadius: 6, background: '#fff', color: '#5a4e42', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'inherit' }}>
+                      <Eye size={12} /> View
+                    </button>
+                  </td>
+                </tr>
+              )) : (
+                <tr><td colSpan={7} style={{ padding: '32px 18px', textAlign: 'center', color: '#8a7a6a', fontSize: 13 }}>No active production jobs{query || statusFilter !== 'All' ? ' match this search' : ''}.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {filtered.length > PAGE_SIZE ? (
+          <div style={{ padding: '0 14px' }}>
+            <Pagination page={currentPage} pageSize={PAGE_SIZE} total={filtered.length} onPage={setPage} noun="jobs" />
+          </div>
+        ) : null}
+      </div>
+
+      {openJob ? (() => {
+        const garments = Array.isArray(openJob.items) ? openJob.items : [];
+        const needsFabric = garments.some((item) => !item.fabricAllocated);
+        return (
+          <div role="dialog" aria-label="Production job details" onClick={() => setOpenJob(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(26,22,17,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+            <div onClick={(event) => event.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+              <div style={{ background: '#1a1611', color: '#fff', padding: '16px 20px', borderRadius: '14px 14px 0 0' }}>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{openJob.invoiceNumber}</div>
+                <div style={{ fontSize: 17, fontWeight: 800 }}>{openJob.customer}</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{openJob.store ? `${openJob.store} · ` : ''}{openJob.pieces} {openJob.pieces === 1 ? 'piece' : 'pieces'}</div>
+              </div>
+              <div style={{ padding: 20, display: 'grid', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
+                  <div><small style={{ display: 'block', color: '#8a7a6a', textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.08em' }}>Status</small><Status>{openJob.status === 'Order Sheet Confirmed' ? 'Ready to Assign' : openJob.status}</Status></div>
+                  <div><small style={{ display: 'block', color: '#8a7a6a', textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.08em' }}>Delivery</small>{openJob.delivery ? new Date(`${openJob.delivery}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No date'}</div>
+                  <div style={{ gridColumn: '1 / -1' }}><small style={{ display: 'block', color: '#8a7a6a', textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.08em', marginBottom: 3 }}>{jobTailors(openJob).length > 1 ? 'Tailors' : 'Tailor'}</small><JobTailorNames job={openJob} /></div>
+                </div>
+                {(garments.length ? garments : [{ item: openJob.item }]).map((garment, index) => {
+                  const lines = Array.isArray(garment.fabrics) ? garment.fabrics.filter((line) => line.fabricId || line.clientSupplied || line.name) : [];
+                  const keys = Array.isArray(garment.departments) ? garment.departments : [];
+                  return (
+                    <div key={index} style={{ border: '1px solid #eee5da', borderRadius: 10, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontWeight: 700, color: '#1a1611', fontSize: 14 }}>
+                        <span>{garment.item || openJob.item}{garment.pieces > 1 ? ` × ${garment.pieces}` : ''}</span>
+                        {garment.fabricAllocated ? <span style={{ fontSize: 11, color: '#2a7d4f' }}>Fabric released</span> : <span style={{ fontSize: 11, color: '#7a6030' }}>Fabric not released</span>}
+                      </div>
+                      {keys.length ? <div style={{ marginTop: 6, fontSize: 12, color: '#5a4e42' }}>Department: {keys.map(departmentName).join(', ')}</div> : null}
+                      <div style={{ marginTop: 6, fontSize: 12, color: '#5a4e42' }}>
+                        Fabric: {lines.length ? lines.map((line) => (line.clientSupplied ? 'Client supplied' : `${line.name || 'Fabric'}${Number(line.quantity) > 0 ? ` — ${line.quantity} ${line.unit || ''}`.trimEnd() : ''}`)).join('; ') : (garment.fabric || openJob.fabric || 'Not selected yet')}
+                      </div>
+                      {garment.designNotes ? <div style={{ marginTop: 6, fontSize: 12, color: '#8a7a6a' }}>Notes: {garment.designNotes}</div> : null}
+                    </div>
+                  );
+                })}
+                <p style={{ margin: 0, fontSize: 12, color: '#8a7a6a' }}>View only. Jobs are assigned and managed by the Production Manager.</p>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '0 20px 20px' }}>
+                {needsFabric ? (
+                  <button type="button" onClick={() => onNavigate?.('Assign Fabric', { invoice: openJob.invoiceNumber })}
+                    style={{ padding: '9px 16px', border: 'none', borderRadius: 8, background: '#c97b08', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Assign Fabric
+                  </button>
+                ) : null}
+                <button type="button" onClick={() => setOpenJob(null)} style={{ padding: '9px 16px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', color: '#5a4e42', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
+    </div>
+  );
+}
+
 function ProductionView({ productionJobs, blockedJobs = [], onUpdateJob, currentRole, onOverrideHold, onApproveInvoice }) {
   const departments = useDepartments();
   const canOverrideHold = ['owner', 'admin'].includes(currentRole?.id);
@@ -9234,6 +9404,8 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'Payments') return ['accounts', 'owner', 'admin'].includes(role)
     ? <AccountsPaymentsPage sentInvoices={viewProps.sentInvoices} onInvoiceUpdated={viewProps.onInvoiceUpdated} />
     : <PaymentsView sentInvoices={viewProps.sentInvoices} onApproveInvoice={viewProps.onApproveInvoice} releasePercent={viewProps.releasePercent} />;
+  if (activeView === 'Assign Fabric' && role === 'inventory_manager') return <InventoryAssignFabricTab onNavigate={viewProps.onNavigate} />;
+  if (activeView === 'Production' && role === 'inventory_manager') return <InventoryProductionView productionJobs={viewProps.productionJobs} onNavigate={viewProps.onNavigate} />;
   if (activeView === 'Production') return <ProductionView productionJobs={viewProps.productionJobs} blockedJobs={viewProps.blockedProductionJobs} onUpdateJob={viewProps.onUpdateJob} currentRole={viewProps.currentRole} onOverrideHold={viewProps.onOverrideHold} onApproveInvoice={viewProps.onApproveInvoice} />;
   // Adding stock is limited to Inventory, Owner and Admin — Production and
   // Store Managers can see levels for planning/sales but cannot change them, and an Owner
@@ -9256,6 +9428,7 @@ function renderView(activeView, role, viewProps = {}) {
   if (activeView === 'My Tasks') return <MyTasksPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} onUpdateJob={viewProps.onUpdateJob} />;
   if (activeView === 'My Log') return <WeeklyLogPage currentRole={viewProps.currentRole} productionJobs={viewProps.productionJobs} />;
   if (activeView === 'Tailor List') return <TailorReportsPage mode="list" productionJobs={viewProps.productionJobs} />;
+  if (activeView === 'Tailor Target' && role === 'production_manager') return <TailorTargetPage />;
   if (activeView === 'Tailor Performance') return <TailorReportsPage mode="performance" productionJobs={viewProps.productionJobs} />;
   if (activeView === 'Notifications') return <NotificationPanel role={role} currentRole={viewProps.currentRole} onNavigate={viewProps.onNavigate} />;
   return <Overview role={role} />;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Banknote, CheckCircle, Layers, CreditCard, Building2, Search, Download, Eye } from 'lucide-react';
-import { money, amountReceived, invoicePayable, byRecentUpdate, startOfWeek } from '../../utils/oms';
+import { money, amountReceived, invoicePayable, byRecentUpdate, lastUpdatedAt, startOfWeek } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import PaymentDetailPage from './PaymentDetailPage';
 
@@ -21,6 +21,7 @@ export default function AccountsPaymentsPage({ sentInvoices = [], onInvoiceUpdat
   const [methodFilter, setMethodFilter] = useState('Payment Method');
   const [statusFilter, setStatusFilter] = useState('Payment Status');
   const [storeFilter, setStoreFilter] = useState('Store');
+  const [sortOrder, setSortOrder] = useState('Newest first');
   const [currentPage, setCurrentPage] = useState(1);
   const [openPayment, setOpenPayment] = useState(null);
   const [activeKpiDot, setActiveKpiDot] = useState(0);
@@ -45,6 +46,7 @@ export default function AccountsPaymentsPage({ sentInvoices = [], onInvoiceUpdat
     const at = when ? new Date(when) : null;
     return {
       invoice,
+      updated: lastUpdatedAt(invoice),
       at: at && !Number.isNaN(at.getTime()) ? at : null,
       date: at && !Number.isNaN(at.getTime()) ? at.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
       invoiceNumber: invoice.invoiceNumber,
@@ -88,7 +90,7 @@ export default function AccountsPaymentsPage({ sentInvoices = [], onInvoiceUpdat
     const statusMatch = statusFilter === 'Payment Status' || payment.status === statusFilter;
     const storeMatch = storeFilter === 'Store' || payment.store === storeFilter;
     return queryMatch && methodMatch && statusMatch && storeMatch && inTab(payment);
-  }), [payments, search, tab, methodFilter, statusFilter, storeFilter]);
+  }).sort((a, b) => (sortOrder === 'Oldest first' ? a.updated - b.updated : b.updated - a.updated)), [payments, search, tab, methodFilter, statusFilter, storeFilter, sortOrder]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const page = Math.min(currentPage, pageCount);
@@ -219,6 +221,11 @@ export default function AccountsPaymentsPage({ sentInvoices = [], onInvoiceUpdat
                 <select {...selectProps} value={storeFilter} onChange={(event) => { setStoreFilter(event.target.value); setCurrentPage(1); }}>
                   <option>Store</option>
                   {stores.map((name) => <option key={name}>{name}</option>)}
+                </select>
+                {/* Newest means most recently updated, not first recorded. */}
+                <select {...selectProps} value={sortOrder} onChange={(event) => { setSortOrder(event.target.value); setCurrentPage(1); }}>
+                  <option>Newest first</option>
+                  <option>Oldest first</option>
                 </select>
               </div>
               {/* Tab Nav */}

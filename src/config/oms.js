@@ -28,8 +28,8 @@ export const navByRole = {
   admin: ['Overview', 'Orders', 'Customers', 'Invoices', 'Order Sheet', 'Order Sheets', 'Payments', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'User Management', 'Departments', 'Memberships', 'Reports', 'Shopify Sync', 'Settings', 'Notifications'],
   store_manager: ['Overview', 'Customers', 'Orders', 'Invoices', 'Order Sheet', 'Order Sheets', 'Inventory', 'Notifications'],
   accounts: ['Overview', 'Invoices', 'Payments', 'Reports', 'Inventory', 'Notifications'],
-  production_manager: ['Overview', 'Production', 'Tailor List', 'Tailor Performance', 'Inventory', 'Notifications'],
-  inventory_manager: ['Overview', 'Inventory', 'Notifications'],
+  production_manager: ['Overview', 'Production', 'Tailor List', 'Tailor Performance', 'Tailor Target', 'Inventory', 'Notifications'],
+  inventory_manager: ['Overview', 'Inventory', 'Assign Fabric', 'Production', 'Notifications'],
   // One log screen, read over a week, month, quarter, year or a range of the
   // tailor's own choosing.
   tailor: ['My Tasks', 'My Log', 'Notifications'],
@@ -61,6 +61,7 @@ export const navIcons = {
   'My Log': 'Calendar',
   'Tailor List': 'Users2',
   'Tailor Performance': 'Award',
+  'Tailor Target': 'Award',
   Staff: 'Users2',
   'Tailors & Staff': 'Users2',
   'User Management': 'UserCog',
