@@ -1782,8 +1782,16 @@ dd {
 .topbar-subtitle { margin: 7px 0 0; color: #6f6d69; font-size: 13px; }
 .production-role-shell .sidebar { gap: 18px; padding: 18px 14px; }
 .production-role-shell .sidebar nav :is(button,a) { min-height: 43px; }
-.production-shortcuts { display: grid; gap: 2px; border-top: 1px solid #252525; padding-top: 19px; }
-.production-shortcuts > span { margin: 0 10px 9px; color: #8f8f8f; font-size: 9px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; }
+.production-shortcuts { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid #252525; padding-top: 10px; flex: 0 1 auto; min-height: 0; }
+.production-shortcuts.collapsed { flex: 0 0 auto; }
+.production-shortcuts > .production-shortcuts-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 34px; padding: 0 10px; background: none; border: 0; cursor: pointer; }
+.production-shortcuts-toggle span { margin: 0; color: #8f8f8f; font-size: 9px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; }
+.production-shortcuts-toggle b { color: #8f8f8f; font-size: 12px; }
+.production-shortcuts-list { display: grid; gap: 2px; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+/* Main tabs stay put; only the shortcuts below them scroll. */
+.production-role-shell .sidebar nav { flex: 0 0 auto; overflow-y: visible; }
+/* Only on a screen too short for the tabs and footer together. */
+.production-role-shell .sidebar { overflow-y: auto; scrollbar-width: thin; }
 .production-shortcuts button { display: flex; align-items: center; gap: 13px; padding-left: 12px; color: #f1f1f1; }
 .production-shortcuts i { width: 18px; color: #fafafa; font-style: normal; text-align: center; }
 .production-dashboard { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; color: #171717; }

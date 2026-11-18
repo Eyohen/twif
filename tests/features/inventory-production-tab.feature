@@ -21,3 +21,12 @@ Feature: The Inventory Manager's Production and Assign Fabric tabs
     Given I am signed in as the Inventory Manager
     When I open the Assign Fabric page
     Then I should see the orders awaiting fabric
+
+  Scenario: The Inventory Manager can see the reference images on a job
+    Given an order sheet has been raised and Accounts have approved it
+    And the order carries a reference image
+    And I am signed in as the Inventory Manager
+    When I open the Production page
+    And I view the job for that order
+    Then I should see its reference image
+    And I can open the reference image full size

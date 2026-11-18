@@ -5841,6 +5841,8 @@ function InventoryProductionView({ productionJobs = [], onNavigate }) {
   const [statusFilter, setStatusFilter] = useState('All');
   const [page, setPage] = useState(1);
   const [openJob, setOpenJob] = useState(null);
+  // A data: URL cannot be opened in a new tab, so a reference image opens here.
+  const [viewingImage, setViewingImage] = useState(null);
   const PAGE_SIZE = 10;
   const tabs = ['All', 'Order Sheet Confirmed', 'Assigned', 'In Progress'];
   const tabLabel = (tab) => (tab === 'Order Sheet Confirmed' ? 'Ready to Assign' : tab);
@@ -5963,6 +5965,11 @@ function InventoryProductionView({ productionJobs = [], onNavigate }) {
                 {(garments.length ? garments : [{ item: openJob.item }]).map((garment, index) => {
                   const lines = Array.isArray(garment.fabrics) ? garment.fabrics.filter((line) => line.fabricId || line.clientSupplied || line.name) : [];
                   const keys = Array.isArray(garment.departments) ? garment.departments : [];
+                  // An older single-garment order keeps its photos on the job itself.
+                  const jobImages = index === 0 ? (openJob.styleImages || []) : [];
+                  const jobVideos = index === 0 ? (openJob.styleVideos || []) : [];
+                  const images = Array.isArray(garment.styleImages) && garment.styleImages.length ? garment.styleImages : jobImages;
+                  const videos = Array.isArray(garment.styleVideos) && garment.styleVideos.length ? garment.styleVideos : jobVideos;
                   return (
                     <div key={index} style={{ border: '1px solid #eee5da', borderRadius: 10, padding: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontWeight: 700, color: '#1a1611', fontSize: 14 }}>
@@ -5974,6 +5981,42 @@ function InventoryProductionView({ productionJobs = [], onNavigate }) {
                         Fabric: {lines.length ? lines.map((line) => (line.clientSupplied ? 'Client supplied' : `${line.name || 'Fabric'}${Number(line.quantity) > 0 ? ` — ${line.quantity} ${line.unit || ''}`.trimEnd() : ''}`)).join('; ') : (garment.fabric || openJob.fabric || 'Not selected yet')}
                       </div>
                       {garment.designNotes ? <div style={{ marginTop: 6, fontSize: 12, color: '#8a7a6a' }}>Notes: {garment.designNotes}</div> : null}
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Reference Images ({images.length})</div>
+                        {images.length ? (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                            {images.map((image, imageIndex) => (
+                              image.dataUrl || image.url ? (
+                                <button key={`${image.label}-${imageIndex}`} type="button" className="tailor-style-image" title={image.label}
+                                  onClick={() => setViewingImage({ ...image, dataUrl: image.dataUrl || image.url })}>
+                                  <img src={image.dataUrl || image.url} alt={image.label || `Reference ${imageIndex + 1}`} />
+                                  <span>{image.label || `Image ${imageIndex + 1}`}</span>
+                                </button>
+                              ) : (
+                                <span key={`${image.label}-${imageIndex}`} className="tailor-style-ref">
+                                  <strong>{image.label || `Image ${imageIndex + 1}`}</strong>
+                                  <small>{image.name}</small>
+                                </span>
+                              )
+                            ))}
+                          </div>
+                        ) : (
+                          <p style={{ margin: 0, fontSize: 13, color: '#b0a090' }}>No reference images uploaded</p>
+                        )}
+                      </div>
+                      {videos.length ? (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Reference Videos ({videos.length})</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                            {videos.map((video, videoIndex) => (
+                              <div key={video.publicId || `${video.name}-${videoIndex}`}>
+                                <video src={video.url} controls preload="metadata" style={{ width: '100%', borderRadius: 8, background: '#000', display: 'block' }} />
+                                <small style={{ display: 'block', marginTop: 2, color: '#8a7a6a' }}>{video.label || video.name || `Video ${videoIndex + 1}`}</small>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -5992,6 +6035,19 @@ function InventoryProductionView({ productionJobs = [], onNavigate }) {
           </div>
         );
       })() : null}
+
+      {viewingImage ? (
+        <div role="dialog" aria-label={viewingImage.label || 'Reference image'} onClick={() => setViewingImage(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(26,22,17,0.75)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ maxWidth: '90vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }} onClick={(event) => event.stopPropagation()}>
+            <img src={viewingImage.dataUrl} alt={viewingImage.label || 'Reference image'} style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8, boxShadow: '0 24px 60px rgba(0,0,0,0.4)' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#fff' }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{viewingImage.label || 'Reference image'}</span>
+              <button type="button" onClick={() => setViewingImage(null)} style={{ padding: '6px 14px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6, background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -9441,6 +9497,9 @@ function App() {
   const [role, setRole] = useState(restoredSession?.role || null);
   const visibleNav = navByRole[role];
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // The Production Manager's Shortcuts fold away and scroll on their own, so
+  // the main tabs above them never need a scrollbar.
+  const [shortcutsOpen, setShortcutsOpen] = useState(true);
   const [sentInvoices, setSentInvoices] = useState([]);
   // How much of an invoice has to be paid before production may start. Held in
   // Settings so the shop can change it without a deploy.
@@ -9886,13 +9945,20 @@ function App() {
           })}
         </nav>
         {role === 'production_manager' ? (
-          <div className="production-shortcuts">
-            <span>Shortcuts</span>
-            {[['Active Jobs', Activity], ['Assign Tailor', Users], ['Fabric Allocation', Boxes], ['Production Notes', ClipboardList]].map(([label, Icon]) => (
-              <button type="button" key={label} onClick={() => openView('Production')}>
-                <Icon size={14} />{label}
-              </button>
-            ))}
+          <div className={classNames('production-shortcuts', !shortcutsOpen && 'collapsed')}>
+            <button type="button" className="production-shortcuts-toggle" aria-expanded={shortcutsOpen} aria-controls="production-shortcuts-list" onClick={() => setShortcutsOpen((open) => !open)}>
+              <span>Shortcuts</span>
+              <b aria-hidden="true">{shortcutsOpen ? '▾' : '▸'}</b>
+            </button>
+            {shortcutsOpen ? (
+              <div className="production-shortcuts-list" id="production-shortcuts-list">
+                {[['Active Jobs', Activity], ['Assign Tailor', Users], ['Fabric Allocation', Boxes], ['Production Notes', ClipboardList]].map(([label, Icon]) => (
+                  <button type="button" key={label} onClick={() => openView('Production')}>
+                    <Icon size={14} />{label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {/* Who is signed in, and the account actions, both live at the foot of
