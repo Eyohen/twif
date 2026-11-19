@@ -409,7 +409,7 @@ export default function UserManagementPage({ currentRole }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Filter size={13} style={{ color: '#8a7a6a' }} />
             {[
-              { value: roleFilter, onChange: setRoleFilter, options: [['all', 'All Roles'], ['admin', 'Admin'], ['accounts', 'Accountant'], ['tailor', 'Tailor'], ['store_manager', 'Store Manager'], ['production_manager', 'Production']] },
+              { value: roleFilter, onChange: setRoleFilter, options: [['all', 'All Roles'], ['admin', 'Admin'], ['accounts', 'Accountant'], ['tailor', 'Tailor'], ['store_manager', 'Store Manager'], ['production_manager', 'Production'], ['inventory_manager', 'Inventory Manager']] },
               { value: storeFilter, onChange: setStoreFilter, options: [['all', 'All Stores'], ...stores.filter((s) => s !== 'all').map((s) => [s, storeLabel(s)])] },
               { value: statusFilter, onChange: setStatusFilter, options: [['all', 'All Statuses'], ['active', 'Active'], ['inactive', 'Inactive']] },
             ].map((sel, i) => (

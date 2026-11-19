@@ -836,10 +836,24 @@ export const reviewPayment = (invoiceNumber, paymentId, status, note = '') => ap
   .patch(`/oms/invoices/${encodeURIComponent(invoiceNumber)}/payments/${encodeURIComponent(paymentId)}/review`, { status, note })
   .then((response) => response.data?.data?.invoice);
 
-export const clarifyPayment = (invoiceNumber, paymentId, clarification) => api
-  .patch(`/oms/invoices/${encodeURIComponent(invoiceNumber)}/payments/${encodeURIComponent(paymentId)}/clarify`, { clarification })
+export const clarifyPayment = (invoiceNumber, paymentId, clarification, clarificationImages = []) => api
+  .patch(`/oms/invoices/${encodeURIComponent(invoiceNumber)}/payments/${encodeURIComponent(paymentId)}/clarify`, { clarification, ...(clarificationImages.length ? { clarificationImages } : {}) })
   .then((response) => response.data?.data?.invoice);
 
 // A payment Accounts have flagged is waiting for the Store Manager's answer.
 export const hasFlaggedPayment = (invoice) => (Array.isArray(invoice?.paymentHistory) ? invoice.paymentHistory : [])
   .some((entry) => entry?.id && entry.reviewStatus === 'Flagged');
+
+// What an invoice's Approval badge should say. The invoice's own review and each
+// later payment's review are separate, so an approved invoice used to keep
+// reading "Approved" after Accounts flagged a payment on it. A flagged payment
+// now shows until Accounts approve it again; one the Store Manager has since
+// answered reads as waiting on Accounts. A refused invoice keeps its own word.
+export const invoiceDisplayApproval = (invoice) => {
+  const base = invoiceApprovalStatus(invoice);
+  if (!['Approved', 'Pending Accounts'].includes(base)) return base;
+  if (hasFlaggedPayment(invoice)) return 'Payment Flagged';
+  const history = Array.isArray(invoice?.paymentHistory) ? invoice.paymentHistory : [];
+  if (history.some((entry) => entry?.id && entry.reviewStatus === 'Pending Accounts' && entry.clarifiedAt)) return 'Pending Accounts';
+  return base;
+};

@@ -35,7 +35,7 @@ import PaymentEvidenceGallery from './components/oms/PaymentEvidenceGallery';
 import Pagination from './components/oms/Pagination';
 import {
   money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
-  dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus,
+  dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus, invoiceDisplayApproval,
   isInvoiceApproved, canShowJobInProduction, productionBlockReason, productionJobFromInvoice,
   mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid, paidPercent, DEFAULT_RELEASE_PERCENT,
   worksOnJob, jobTailors, averageScore, byRecentUpdate,
@@ -54,6 +54,7 @@ import { isValidPhone, phoneDigits, PHONE_ERROR, PHONE_MAX_LENGTH, PHONE_PATTERN
 import DiscountField from './components/oms/DiscountField';
 import { orderedMeasurementEntries } from './utils/measurements';
 import { compressedImageDataUrl } from './utils/image';
+import ClarificationImagePicker from './components/oms/ClarificationImagePicker';
 import PeriodFilter, { ALL_TIME, DEFAULT_PERIODS, initialCustomRange } from './components/oms/PeriodFilter';
 import { TailorTargetBoard } from './components/oms/TailorTargets';
 import TailorTargetPage from './pages/production/TailorTargetPage';
@@ -1707,7 +1708,7 @@ function OrdersView({ sentInvoices }) {
                   <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invoice.item || '—'}</td>
                   <td style={{ padding: '12px 14px', fontSize: 13 }}><strong style={{ color: '#1a1611' }}>{money.format(invoice.total)}</strong></td>
                   <td style={{ padding: '12px 14px', fontSize: 13 }}><Status>{invoice.paymentStatus}</Status></td>
-                  <td style={{ padding: '12px 14px', fontSize: 13 }}><Status>{invoiceApprovalStatus(invoice)}</Status></td>
+                  <td style={{ padding: '12px 14px', fontSize: 13 }}><Status>{invoiceDisplayApproval(invoice)}</Status></td>
                   <td style={{ padding: '12px 14px', fontSize: 13, color: '#8a7a6a', whiteSpace: 'nowrap' }}>
                     {invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                   </td>
@@ -1737,7 +1738,7 @@ function OrdersView({ sentInvoices }) {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, paddingTop: 8, borderTop: '1px solid #f3ede5' }}>
                 <div><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Amount</div><div style={{ fontWeight: 700, fontSize: 13 }}>{money.format(invoice.total)}</div></div>
-                <div><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Approval</div><Status>{invoiceApprovalStatus(invoice)}</Status></div>
+                <div><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em' }}>Approval</div><Status>{invoiceDisplayApproval(invoice)}</Status></div>
               </div>
             </div>
           ))}
@@ -1803,6 +1804,8 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [clarification, setClarification] = useState('');
+  const [clarificationImages, setClarificationImages] = useState([]);
+  const [paymentClarificationImages, setPaymentClarificationImages] = useState({});
   // Answers to payments Accounts flagged, one per payment, since each payment
   // is reviewed on its own and is answered on its own.
   const [paymentClarifications, setPaymentClarifications] = useState({});
@@ -1995,7 +1998,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
         customerPhone,
         customerEmail,
         dueDate,
-        ...(flaggedForClarification ? { clarification: clarification.trim() } : {}),
+        ...(flaggedForClarification ? { clarification: clarification.trim(), ...(clarificationImages.length ? { clarificationImages } : {}) } : {}),
         ...(!isApproved && storeKey ? { store: storeKey } : {}),
         ...(!isApproved && removedEvidenceIndexes.length ? { removePaymentEvidenceAt: removedEvidenceIndexes } : {}),
         ...(!isApproved && newEvidence.length ? { addPaymentEvidence: newEvidence } : {}),
@@ -2028,6 +2031,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
               <span>Your clarification *</span>
               <textarea rows={4} maxLength={2000} value={clarification} onChange={(event) => setClarification(event.target.value)} placeholder="Explain what was checked or corrected for Accounts…" />
             </label>
+            <ClarificationImagePicker images={clarificationImages} onChange={setClarificationImages} label="Attach images (optional) — for example the correct payment photo" />
           </div>
         ) : null}
 
@@ -2039,6 +2043,10 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
               <span>Your clarification *</span>
               <textarea rows={3} maxLength={2000} value={paymentClarifications[entry.id] || ''} onChange={(event) => setPaymentClarifications((current) => ({ ...current, [entry.id]: event.target.value }))} placeholder="Explain what was checked or corrected for Accounts…" />
             </label>
+            <ClarificationImagePicker
+              images={paymentClarificationImages[entry.id] || []}
+              onChange={(next) => setPaymentClarificationImages((current) => ({ ...current, [entry.id]: next }))}
+            />
             {paymentClarifyError && clarifyingPayment === entry.id ? <p style={{ color: '#8a3520', fontSize: 12 }}>{paymentClarifyError}</p> : null}
             <button
               type="button"
@@ -2050,7 +2058,7 @@ function EditInvoicePage({ invoice, onClose, onSaved }) {
                 if (!text) { setPaymentClarifyError('Explain the clarification before returning this payment to Accounts.'); return; }
                 setClarifyingPayment(`sending:${entry.id}`);
                 try {
-                  const updated = await clarifyPayment(invoice.invoiceNumber, entry.id, text);
+                  const updated = await clarifyPayment(invoice.invoiceNumber, entry.id, text, paymentClarificationImages[entry.id] || []);
                   if (updated) { setInvoiceState(updated); onSaved?.(updated); }
                   setClarifyingPayment('');
                 } catch (requestError) {
@@ -2712,17 +2720,19 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
             <section className="store-detail-panel order-timeline"><h3>Timeline</h3><div><article className="done"><i>✓</i><span><strong>Invoice Created</strong><small>{invoice.createdBy ? `by ${invoice.createdBy}` : `${invoice.store} store`}</small></span><time>{formatMoment(invoice.createdAt)}</time></article>{isAwaitingPayment(invoice) ? null : <article className="paid"><i>●</i><span><strong>Payment Recorded ({invoice.paymentStatus})</strong><small>{paidAmount === null ? 'Amount not recorded' : `${money.format(paidAmount)} received`}{invoice.paymentMethod ? ` · ${invoice.paymentMethod}` : ''}</small></span><time>{invoice.paymentHistory?.length ? formatMoment(invoice.paymentHistory[invoice.paymentHistory.length - 1].recordedAt) : '—'}</time></article>}{/* This step was fixed at a hollow marker with a dash for the time, so
                   the timeline never moved on however the invoice stood. */}
               {(() => {
-                const approval = invoiceApprovalStatus(invoice);
+                const approval = invoiceDisplayApproval(invoice);
                 const approved = approval === 'Approved';
-                const refused = ['Flagged', 'Rejected'].includes(approval);
+                const refused = ['Flagged', 'Rejected', 'Payment Flagged'].includes(approval);
                 return (
                   <article className={approved ? 'done' : refused ? 'flagged' : ''}>
                     <i>{approved ? '✓' : refused ? '!' : '○'}</i>
                     <span>
-                      <strong>{approved ? 'Accounts Approved' : refused ? `Accounts ${approval}` : 'Awaiting Approval'}</strong>
+                      <strong>{approved ? 'Accounts Approved' : approval === 'Payment Flagged' ? 'Payment Flagged by Accounts' : refused ? `Accounts ${approval}` : 'Awaiting Approval'}</strong>
                       <small>
                         {approved
                           ? `Approved by ${invoice.accountApprovedBy || 'Accounts'}`
+                          : approval === 'Payment Flagged'
+                            ? 'A payment on this invoice needs your clarification'
                           : refused
                             ? invoice.accountApprovalNote || 'Sent back by Accounts'
                             : 'Waiting for accounts approval'}
@@ -2941,7 +2951,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
                       <Status>{invoice.paymentStatus}</Status>
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 13 }}>
-                      <Status>{invoiceApprovalStatus(invoice)}</Status>
+                      <Status>{invoiceDisplayApproval(invoice)}</Status>
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 13, color: '#5a4e42', whiteSpace: 'nowrap' }}>
                       {invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
@@ -3088,7 +3098,7 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
                   </div>
                   <div>
                     <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 2 }}>Approval</div>
-                    <Status>{invoiceApprovalStatus(invoice)}</Status>
+                    <Status>{invoiceDisplayApproval(invoice)}</Status>
                   </div>
                   <div>
                     <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#b0a090', letterSpacing: '0.06em', marginBottom: 2 }}>Date</div>

@@ -5,6 +5,7 @@ import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 import RecordPaymentForm from '../../components/oms/RecordPaymentForm';
 import PaymentEvidenceGallery from '../../components/oms/PaymentEvidenceGallery';
+import ClarificationImages from '../../components/oms/ClarificationImages';
 
 export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DEFAULT_RELEASE_PERCENT, onBack, onReview, onPaymentRecorded }) {
   const [pendingAction, setPendingAction] = useState(null);
@@ -128,6 +129,7 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
         <div style={{ padding: '12px 14px', background: '#f0faf4', border: '1px solid #b8e4cb', borderRadius: 8, color: '#245f40' }}>
           <strong style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Store Manager clarification</strong>
           <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55 }}>{invoice.storeManagerClarification}</p>
+          <ClarificationImages invoiceNumber={invoice.invoiceNumber} count={(invoice.storeManagerClarificationImages || []).length} />
           <small style={{ display: 'block', marginTop: 6, color: '#568069' }}>
             {invoice.clarifiedBy || 'Store Manager'}{invoice.clarifiedAt ? ` · ${formatMoment(invoice.clarifiedAt)}` : ''}
           </small>
@@ -287,6 +289,7 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
                           <div><Status>{entry.reviewStatus === 'Pending Accounts' ? 'Awaiting Review' : entry.reviewStatus}</Status></div>
                           {entry.reviewStatus === 'Flagged' && entry.reviewNote ? <div style={{ fontSize: 12, color: '#7a6030' }}>Flagged: {entry.reviewNote}</div> : null}
                           {entry.clarification ? <div style={{ fontSize: 12, color: '#5a4e42' }}>Store Manager: {entry.clarification}</div> : null}
+                          {entry.id && (entry.clarificationImages || []).length ? <ClarificationImages invoiceNumber={invoice.invoiceNumber} paymentId={entry.id} count={entry.clarificationImages.length} /> : null}
                           {entry.reviewStatus === 'Approved' && entry.reviewedBy ? <div style={{ fontSize: 11, color: '#8a7a6a' }}>Approved by {entry.reviewedBy}{entry.reviewedAt ? ` · ${formatMoment(entry.reviewedAt)}` : ''}</div> : null}
                           {entry.id && evidence.some((item) => item.paymentId === entry.id) ? (
                             <PaymentEvidenceGallery invoiceNumber={invoice.invoiceNumber} evidence={evidence} paymentId={entry.id} emptyMessage="No receipt attached to this payment." />

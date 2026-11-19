@@ -92,3 +92,26 @@ When('I open the Needs Clarification tab', async function () {
 Then('the invoice list should include that invoice', async function () {
   await expect(this.page.locator('tr').filter({ hasText: this.invoiceNumber }).first()).toBeVisible({ timeout: 15000 });
 });
+
+When('I search for that invoice', async function () {
+  await this.page.waitForLoadState('networkidle');
+  await this.page.getByPlaceholder('Search invoice, customer...').first().fill(this.invoiceNumber);
+  await this.page.waitForTimeout(600);
+});
+
+When('I reload the page', async function () {
+  await this.page.reload();
+  await this.page.waitForLoadState('networkidle');
+});
+
+Then('that invoice should read Payment Flagged', async function () {
+  const row = this.page.locator('tr').filter({ hasText: this.invoiceNumber }).first();
+  await expect(row).toBeVisible({ timeout: 15000 });
+  await expect(row.getByText('Payment Flagged')).toBeVisible();
+});
+
+Then('that invoice should no longer read Payment Flagged', async function () {
+  const row = this.page.locator('tr').filter({ hasText: this.invoiceNumber }).first();
+  await expect(row).toBeVisible({ timeout: 15000 });
+  await expect(row.getByText('Payment Flagged')).toHaveCount(0);
+});

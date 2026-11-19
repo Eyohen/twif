@@ -50,3 +50,18 @@ Feature: Each payment on an invoice is reviewed on its own
     And I open the Invoices page
     And I open the Needs Clarification tab
     Then the invoice list should include that invoice
+
+  Scenario: A flagged payment shows on the invoice until it is approved again
+    Given an invoice for 50000 that nothing has been paid against
+    When the Store Manager records a payment of 10000 on it
+    And Accounts flag the first payment asking for the sender's name
+    And I am signed in as the Store Manager
+    And I open the Invoices page
+    And I search for that invoice
+    Then that invoice should read Payment Flagged
+    When the Store Manager clarifies the first payment
+    And Accounts approve the first payment
+    And I reload the page
+    And I search for that invoice
+    Then that invoice should no longer read Payment Flagged
+
