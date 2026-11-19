@@ -117,3 +117,12 @@ Then('the Accountant can see the image when reviewing the invoice', async functi
   await expect(this.page.getByText('Store Manager clarification')).toBeVisible({ timeout: 15000 });
   await expect(this.page.getByAltText(/Clarification image 1/)).toBeVisible({ timeout: 15000 });
 });
+
+const cannotOpen = async (world, role) => {
+  const client = await world.api(role);
+  const response = await client.get(`${API_URL}/oms/invoices/${world.invoiceNumber}/clarification-images/0`);
+  expect(response.status(), `${role} could open the image`).toBe(403);
+  await client.dispose();
+};
+Then('a Tailor cannot open the clarification image', async function () { await cannotOpen(this, 'Tailor'); });
+Then('an Inventory Manager cannot open the clarification image', async function () { await cannotOpen(this, 'Inventory Manager'); });

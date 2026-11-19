@@ -1151,6 +1151,7 @@ td {
 .status-partial-paid,
 .status-assigned,
 .status-order-sheet-confirmed,
+.status-pending-clearance,
 .status-pending-accounts {
   border-color: rgba(231, 162, 45, 0.3);
   background: rgba(231, 162, 45, 0.14);

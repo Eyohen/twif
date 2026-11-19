@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Flag, XCircle, User, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
-import { money, reviewPayment, invoiceApprovalStatus, amountReceived, invoicePayable, isFullyPaid, isAwaitingPayment, formatMoment, paidPercent, DEFAULT_RELEASE_PERCENT } from '../../utils/oms';
+import { money, reviewPayment, invoiceApprovalStatus, invoiceReviewLabel, amountReceived, invoicePayable, isFullyPaid, isAwaitingPayment, formatMoment, paidPercent, DEFAULT_RELEASE_PERCENT } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 import RecordPaymentForm from '../../components/oms/RecordPaymentForm';
@@ -103,7 +103,7 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
             <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 22, color: '#1a1611' }}>
               Review Invoice {invoice.invoiceNumber}
             </h2>
-            <Status>{status}</Status>
+            <Status>{invoiceReviewLabel(invoice)}</Status>
           </div>
           <p style={{ margin: 0, fontSize: 13, color: '#8a7a6a' }}>Review payment evidence and invoice details before approving.</p>
         </div>

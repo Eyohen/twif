@@ -11,6 +11,13 @@ Feature: Images with a clarification
     And the image should be available to Accounts
     And the invoice list should not carry the image itself
 
+  Scenario: Staff who do not handle clarifications cannot open the images
+    Given an invoice for 50000 that nothing has been paid against
+    And Accounts have flagged the invoice asking for the right payment photo
+    When the Store Manager answers with a note and an image
+    Then a Tailor cannot open the clarification image
+    And an Inventory Manager cannot open the clarification image
+
   Scenario: A written clarification alone is still accepted
     Given an invoice for 50000 that nothing has been paid against
     And Accounts have flagged the invoice asking for the right payment photo

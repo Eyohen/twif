@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Clock, CheckCircle, Flag, DollarSign } from 'lucide-react';
-import { money, invoiceApprovalStatus, amountReceived, amountOutstanding, formatMoment, byRecentUpdate } from '../../utils/oms';
+import { money, invoiceReviewLabel, amountReceived, amountOutstanding, formatMoment, byRecentUpdate } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 import ReviewInvoicePage from './ReviewInvoicePage';
@@ -29,7 +29,8 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
     setActiveKpiDot(Math.round(scrollLeft / cardWidth));
   };
 
-  const statusOf = (invoice) => invoiceApprovalStatus(invoice) === 'Pending Accounts' ? 'Awaiting Review' : invoiceApprovalStatus(invoice);
+  const statusOf = (invoice) => invoiceReviewLabel(invoice);
+  const isFlaggedStatus = (status) => status === 'Flagged' || status === 'Payment Flagged';
 
   // Offered from the invoices on hand, so the list can never name a store with
   // nothing behind it.
@@ -47,7 +48,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
     return invoices.filter((invoice) => {
       const status = statusOf(invoice);
       const matchesSearch = `${invoice.invoiceNumber} ${invoice.customer}`.toLowerCase().includes(search.toLowerCase());
-      const matchesTab = tab === 'All Invoices' || status === tab || invoice.paymentStatus === tab;
+      const matchesTab = tab === 'All Invoices' || status === tab || invoice.paymentStatus === tab || (tab === 'Flagged' && isFlaggedStatus(status));
       const matchesStore = storeFilter === 'All Stores' || invoice.store === storeFilter;
       return matchesSearch && matchesTab && matchesStore;
     }).sort(comparators[sortOrder] || comparators['Newest first']);
@@ -73,7 +74,8 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
   const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const awaiting = invoices.filter((invoice) => statusOf(invoice) === 'Awaiting Review');
   const approved = invoices.filter((invoice) => statusOf(invoice) === 'Approved');
-  const flagged = invoices.filter((invoice) => statusOf(invoice) === 'Flagged');
+  const flagged = invoices.filter((invoice) => isFlaggedStatus(statusOf(invoice)));
+  const clearing = invoices.filter((invoice) => statusOf(invoice) === 'Pending Clearance');
   // An invoice whose received amount was never recorded cannot be counted as
   // fully outstanding, so it is counted apart from the figure.
   const outstanding = invoices.reduce((sum, invoice) => sum + (amountOutstanding(invoice) ?? 0), 0);
@@ -173,6 +175,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
           {[
             ['All Invoices', invoices.length],
             ['Awaiting Review', awaiting.length],
+            ['Pending Clearance', clearing.length],
             ['Awaiting Payment', invoices.filter((i) => statusOf(i) === 'Awaiting Payment').length],
             ['Partial Paid', invoices.filter((i) => i.paymentStatus === 'Partial Paid').length],
             ['Approved', approved.length],
@@ -220,7 +223,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
                     </td>
                     <td>
                       <button onClick={() => setReviewInvoice(invoice)}>
-                        {status === 'Awaiting Review' ? 'Review' : status === 'Flagged' ? 'Resolve' : 'View'}
+                        {status === 'Awaiting Review' || status === 'Pending Clearance' ? 'Review' : isFlaggedStatus(status) ? 'Resolve' : 'View'}
                       </button>
                     </td>
                   </tr>
@@ -252,7 +255,7 @@ export default function AccountsInvoicesPage({ sentInvoices = [], onApproveInvoi
                 <footer>
                   <span>{invoice.submitted || formatMoment(invoice.createdAt)}</span>
                   <button type="button" onClick={() => setReviewInvoice(invoice)}>
-                    {status === 'Awaiting Review' ? 'Review' : status === 'Flagged' ? 'Resolve' : 'View'} &nbsp;›
+                    {status === 'Awaiting Review' || status === 'Pending Clearance' ? 'Review' : isFlaggedStatus(status) ? 'Resolve' : 'View'} &nbsp;›
                   </button>
                 </footer>
               </article>

@@ -35,7 +35,7 @@ import PaymentEvidenceGallery from './components/oms/PaymentEvidenceGallery';
 import Pagination from './components/oms/Pagination';
 import {
   money, todayIso, invoiceSeed, invoiceItemSeed, trackingTokenSeed, toNumber,
-  dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus, invoiceDisplayApproval,
+  dateInputValue, customerStatus, paymentStatusLabels, invoiceApprovalStatus, invoiceDisplayApproval, invoiceReviewLabel,
   isInvoiceApproved, canShowJobInProduction, productionBlockReason, productionJobFromInvoice,
   mergeJobsByInvoice, classNames, isAwaitingPayment, isFullyPaid, paidPercent, DEFAULT_RELEASE_PERCENT,
   worksOnJob, jobTailors, averageScore, byRecentUpdate,
@@ -350,10 +350,7 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onInvoiceUpdate
   // Keep the Overview queue aligned with the full Accounts invoice page.
   // `orderStatus` describes production/payment-derived order progress and can
   // read "Fully Paid"; it is not the Accounts review decision.
-  const reviewStatus = (invoice) => {
-    const status = invoiceApprovalStatus(invoice);
-    return status === 'Pending Accounts' ? 'Awaiting Review' : status;
-  };
+  const reviewStatus = (invoice) => invoiceReviewLabel(invoice);
 
   return (
     <div className="accounts-dashboard">
@@ -2727,12 +2724,14 @@ function StoreInvoicesView({ sentInvoices: allInvoices = [], currentRole, onInvo
                   <article className={approved ? 'done' : refused ? 'flagged' : ''}>
                     <i>{approved ? '✓' : refused ? '!' : '○'}</i>
                     <span>
-                      <strong>{approved ? 'Accounts Approved' : approval === 'Payment Flagged' ? 'Payment Flagged by Accounts' : refused ? `Accounts ${approval}` : 'Awaiting Approval'}</strong>
+                      <strong>{approved ? 'Accounts Approved' : approval === 'Pending Clearance' ? 'Pending Clearance' : approval === 'Payment Flagged' ? 'Payment Flagged by Accounts' : refused ? `Accounts ${approval}` : 'Awaiting Approval'}</strong>
                       <small>
                         {approved
                           ? `Approved by ${invoice.accountApprovedBy || 'Accounts'}`
+                          : approval === 'Pending Clearance'
+                            ? 'Your clarification is with Accounts for review'
                           : approval === 'Payment Flagged'
-                            ? 'A payment on this invoice needs your clarification'
+                            ? (invoice.accountApprovalNote || 'A payment on this invoice needs your clarification')
                           : refused
                             ? invoice.accountApprovalNote || 'Sent back by Accounts'
                             : 'Waiting for accounts approval'}

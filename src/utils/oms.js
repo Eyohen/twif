@@ -846,14 +846,27 @@ export const hasFlaggedPayment = (invoice) => (Array.isArray(invoice?.paymentHis
 
 // What an invoice's Approval badge should say. The invoice's own review and each
 // later payment's review are separate, so an approved invoice used to keep
-// reading "Approved" after Accounts flagged a payment on it. A flagged payment
-// now shows until Accounts approve it again; one the Store Manager has since
-// answered reads as waiting on Accounts. A refused invoice keeps its own word.
+// reading "Approved" after Accounts flagged a payment on it. The word follows
+// the clarification workflow, for the first payment and later ones alike:
+//   Awaiting Review -> Payment Flagged -> Pending Clearance -> Approved
+// A refused invoice keeps its own word.
 export const invoiceDisplayApproval = (invoice) => {
   const base = invoiceApprovalStatus(invoice);
-  if (!['Approved', 'Pending Accounts'].includes(base)) return base;
-  if (hasFlaggedPayment(invoice)) return 'Payment Flagged';
+  if (base === 'Rejected') return base;
   const history = Array.isArray(invoice?.paymentHistory) ? invoice.paymentHistory : [];
-  if (history.some((entry) => entry?.id && entry.reviewStatus === 'Pending Accounts' && entry.clarifiedAt)) return 'Pending Accounts';
+  // Flagging the invoice's own payment flags the invoice; a later payment is
+  // flagged on its own entry. Either way it waits on the Store Manager.
+  if (base === 'Flagged' || hasFlaggedPayment(invoice)) return 'Payment Flagged';
+  // The Store Manager has answered and it is back with Accounts to clear.
+  const invoiceAnswered = base === 'Pending Accounts' && invoice?.storeManagerClarification && invoice?.clarifiedAt;
+  const paymentAnswered = history.some((entry) => entry?.id && entry.reviewStatus === 'Pending Accounts' && entry.clarifiedAt);
+  if (invoiceAnswered || paymentAnswered) return 'Pending Clearance';
   return base;
+};
+
+// The same, as Accounts word it: an invoice nobody has reviewed yet is
+// "Awaiting Review".
+export const invoiceReviewLabel = (invoice) => {
+  const shown = invoiceDisplayApproval(invoice);
+  return shown === 'Pending Accounts' ? 'Awaiting Review' : shown;
 };
