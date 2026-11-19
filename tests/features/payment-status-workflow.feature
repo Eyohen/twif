@@ -25,3 +25,21 @@ Feature: The invoice status follows a flagged payment
     When the Store Manager answers with a note only
     Then the invoice should read "Pending Clearance" for the "Accountant"
     And the invoice should read "Pending Clearance" for the "Store Manager"
+
+  Scenario: A clarified payment is listed once on the Accountant's Overview as Pending Clearance
+    Given an invoice for 50000 that nothing has been paid against
+    When the Store Manager records a payment of 10000 on it
+    And Accounts flag the first payment asking for the sender's name
+    And the Store Manager clarifies the first payment
+    And I am signed in as the Accountant
+    And I open the Overview page
+    Then that invoice should be in the review queue exactly once
+    And its queue entry should name the payment and read "Pending Clearance"
+
+  Scenario: A normal payment awaiting review is listed once as Awaiting Review
+    Given an invoice for 50000 that nothing has been paid against
+    When the Store Manager records a payment of 10000 on it
+    And I am signed in as the Accountant
+    And I open the Overview page
+    Then that invoice should be in the review queue exactly once
+    And its queue entry should name the payment and read "Awaiting Review"

@@ -830,6 +830,15 @@ export const paymentsAwaitingReview = (invoices = []) => invoices.flatMap((invoi
     }));
 }).sort((a, b) => new Date(b.payment.recordedAt || 0) - new Date(a.payment.recordedAt || 0));
 
+// What one payment's review badge should say. "Awaiting Review" is for a
+// payment nobody has looked at; one that was flagged and has since been
+// answered by the Store Manager is waiting to be cleared.
+export const paymentReviewLabel = (entry) => {
+  if (entry?.reviewStatus === 'Flagged') return 'Payment Flagged';
+  if (entry?.reviewStatus === 'Pending Accounts') return entry.clarifiedAt ? 'Pending Clearance' : 'Awaiting Review';
+  return entry?.reviewStatus || '';
+};
+
 // Both return the invoice as the server now holds it, so the screen can swap it
 // in rather than guess at the result.
 export const reviewPayment = (invoiceNumber, paymentId, status, note = '') => api

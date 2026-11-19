@@ -47,7 +47,7 @@ import {
   useStores,
   useDepartments,
   daysUntilDue, dueDateLabel, isFinishedStatus, isOrder,
-  paymentsAwaitingReview, reviewPayment, clarifyPayment, hasFlaggedPayment,
+  paymentsAwaitingReview, paymentReviewLabel, reviewPayment, clarifyPayment, hasFlaggedPayment,
 } from './utils/oms';
 import { DEPARTMENT_FIELDS, departmentConfig, missingDepartmentDetails } from './config/departmentFields';
 import { isValidPhone, phoneDigits, PHONE_ERROR, PHONE_MAX_LENGTH, PHONE_PATTERN } from './utils/phone';
@@ -343,10 +343,16 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onInvoiceUpdate
   const lowStock = inventory.filter((item) => toNumber(item.quantity) <= toNumber(item.lowStockThreshold || 5));
   const outOfStock = inventory.filter((item) => toNumber(item.quantity) <= 0);
   const healthyStock = inventory.filter((item) => toNumber(item.quantity) > toNumber(item.lowStockThreshold || 5));
-  const queue = [...(pending.length ? pending : sentInvoices)].sort(byRecentUpdate).slice(0, 5);
   // Every payment recorded after the invoice was raised is its own entry here,
   // reviewed apart from the invoice and from the other payments on it.
   const paymentQueue = paymentsAwaitingReview(sentInvoices);
+  // An invoice whose payment is already listed above is not listed a second
+  // time as the invoice: it was showing twice, once under each status.
+  const invoicesWithPaymentRow = new Set(paymentQueue.map(({ invoice }) => invoice.invoiceNumber));
+  const queue = [...(pending.length ? pending : sentInvoices)]
+    .filter((invoice) => !invoicesWithPaymentRow.has(invoice.invoiceNumber))
+    .sort(byRecentUpdate)
+    .slice(0, 5);
   // Keep the Overview queue aligned with the full Accounts invoice page.
   // `orderStatus` describes production/payment-derived order progress and can
   // read "Fully Paid"; it is not the Accounts review decision.
@@ -378,7 +384,7 @@ function AccountsOverview({ sentInvoices = [], onApproveInvoice, onInvoiceUpdate
             <table><thead><tr><th>Invoice</th><th>Customer</th><th>Store</th><th>Total</th><th>Review Status</th><th>Payment</th><th>Action</th></tr></thead>
             <tbody>{paymentQueue.map(({ key, invoice, payment, number }) => <tr key={key} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('Invoices', { review: invoice.invoiceNumber })}>
               <td><strong>{invoice.invoiceNumber}</strong><small style={{ display: 'block', color: '#8a7a6a' }}>Payment {number}</small></td><td>{invoice.customer}</td><td>{invoice.store}</td><td><strong>{money.format(Number(payment.amount || 0))}</strong><small style={{ display: 'block', color: '#8a7a6a' }}>of {money.format(invoice.total)}</small></td>
-              <td><Status>{payment.reviewStatus === 'Pending Accounts' ? 'Awaiting Review' : payment.reviewStatus}</Status></td><td><Status>{invoice.paymentStatus}</Status></td>
+              <td><Status>{paymentReviewLabel(payment)}</Status></td><td><Status>{invoice.paymentStatus}</Status></td>
               <td><div className="accounts-row-actions" onClick={(event) => event.stopPropagation()}>
                 <button title="Approve payment" onClick={() => setPendingPaymentAction({ invoice, payment, status: 'PaymentApproved' })}>✓</button>
                 {payment.reviewStatus === 'Pending Accounts' ? <button title="Flag payment for clarification" onClick={() => setPendingPaymentAction({ invoice, payment, status: 'PaymentFlagged' })}>⚑</button> : null}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Flag, XCircle, User, FileText, CreditCard, Clock, AlertCircle } from 'lucide-react';
-import { money, reviewPayment, invoiceApprovalStatus, invoiceReviewLabel, amountReceived, invoicePayable, isFullyPaid, isAwaitingPayment, formatMoment, paidPercent, DEFAULT_RELEASE_PERCENT } from '../../utils/oms';
+import { money, reviewPayment, invoiceApprovalStatus, invoiceReviewLabel, paymentReviewLabel, amountReceived, invoicePayable, isFullyPaid, isAwaitingPayment, formatMoment, paidPercent, DEFAULT_RELEASE_PERCENT } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import InvoiceActionConfirmModal from '../../components/oms/InvoiceActionConfirmModal';
 import RecordPaymentForm from '../../components/oms/RecordPaymentForm';
@@ -286,7 +286,7 @@ export default function ReviewInvoicePage({ invoice, roleId, releasePercent = DE
                           it carries its own status, receipts and decision. */}
                       {entry.reviewStatus ? (
                         <div style={{ marginTop: 6, display: 'grid', gap: 6 }}>
-                          <div><Status>{entry.reviewStatus === 'Pending Accounts' ? 'Awaiting Review' : entry.reviewStatus}</Status></div>
+                          <div><Status>{paymentReviewLabel(entry)}</Status></div>
                           {entry.reviewStatus === 'Flagged' && entry.reviewNote ? <div style={{ fontSize: 12, color: '#7a6030' }}>Flagged: {entry.reviewNote}</div> : null}
                           {entry.clarification ? <div style={{ fontSize: 12, color: '#5a4e42' }}>Store Manager: {entry.clarification}</div> : null}
                           {entry.id && (entry.clarificationImages || []).length ? <ClarificationImages invoiceNumber={invoice.invoiceNumber} paymentId={entry.id} count={entry.clarificationImages.length} /> : null}
