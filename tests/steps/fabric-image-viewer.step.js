@@ -7,6 +7,7 @@ const PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcS
 const addFabric = async (world, image) => {
   const tag = Date.now().toString().slice(-7);
   world.fabricName = `Viewer Test ${tag}`;
+  world.fabricSku = `VW-${tag}`;
   const client = await world.api('Inventory Manager');
   const response = await client.post(`${API_URL}/oms/fabrics`, {
     data: { name: world.fabricName, sku: `VW-${tag}`, type: 'Fabric', unit: 'yards', quantity: 10, store: 'lekki', ...(image ? { image } : {}) },

@@ -37,6 +37,14 @@ const garmentsOf = (invoice) => {
   const sheet = invoice.orderSheet || {};
   return Array.isArray(sheet.items) ? sheet.items : [];
 };
+// A fabric matches when every word typed appears in its SKU, name, type or
+// colour, so "navy wool" and "fab-014" both find it.
+const matchesSearch = (fabric, term) => {
+  const words = String(term || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const text = `${fabric.sku || ''} ${fabric.name || ''} ${fabric.type || ''} ${fabric.colour || ''}`.toLowerCase();
+  return words.every((word) => text.includes(word));
+};
+
 // The Store Manager's notes on a garment — the materials and instructions to
 // choose fabric from. An older one-garment order keeps them on the sheet itself.
 const designNotesOf = (item, index, sheet) => String(item.designNotes || (index === 0 ? sheet.designNotes : '') || '').trim();
@@ -342,7 +350,7 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                     <select value="" onChange={(event) => { addLine(index, event.target.value); setSearches((current) => ({ ...current, [index]: '' })); }} aria-label={`Add fabric for ${item.item || `item ${index + 1}`}`}>
                       <option value="">Choose from stock…</option>
                       {inventory
-                        .filter((fabric) => !(searches[index] || '').trim() || `${fabric.sku || ''} ${fabric.name} ${fabric.type || ''}`.toLowerCase().includes(searches[index].trim().toLowerCase()))
+                        .filter((fabric) => matchesSearch(fabric, searches[index]))
                         .map((fabric) => {
                           // Held anywhere counts: it can be taken from whichever
                           // location has it.
@@ -351,6 +359,27 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                         })}
                     </select>
                   </label>
+                  {(searches[index] || '').trim() ? (() => {
+                    // The matches are shown as they are typed, to pick from
+                    // directly — filtering the closed dropdown alone showed nothing.
+                    const found = inventory.filter((fabric) => matchesSearch(fabric, searches[index]));
+                    return (
+                      <div role="listbox" aria-label={`Fabrics matching ${searches[index].trim()}`} style={{ maxWidth: 360, border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', maxHeight: 240, overflowY: 'auto' }}>
+                        {found.length ? found.slice(0, 20).map((fabric) => {
+                          const have = Number(fabric.quantity || 0);
+                          return (
+                            <button key={fabric.id} type="button" role="option" aria-selected="false" disabled={have <= 0}
+                              onClick={() => { addLine(index, fabric.id); setSearches((current) => ({ ...current, [index]: '' })); }}
+                              style={{ display: 'flex', width: '100%', justifyContent: 'space-between', gap: 10, padding: '8px 12px', border: 'none', borderBottom: '1px solid #f3ede5', background: 'none', textAlign: 'left', fontSize: 13, color: have > 0 ? '#1a1611' : '#b0a090', cursor: have > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+                              <span><strong>{fabric.sku ? `${fabric.sku} · ` : ''}{fabric.name}</strong>{fabric.colour ? <small style={{ color: '#8a7a6a' }}> · {fabric.colour}</small> : null}</span>
+                              <small style={{ color: '#8a7a6a', whiteSpace: 'nowrap' }}>{have > 0 ? `${formatInventoryNumber(have)} ${fabric.unit}` : 'out of stock'}</small>
+                            </button>
+                          );
+                        }) : <p style={{ margin: 0, padding: '10px 12px', fontSize: 13, color: '#8a7a6a' }}>No fabric matches &ldquo;{searches[index].trim()}&rdquo;.</p>}
+                        {found.length > 20 ? <p style={{ margin: 0, padding: '8px 12px', fontSize: 12, color: '#8a7a6a' }}>Showing 20 of {found.length}. Keep typing to narrow it.</p> : null}
+                      </div>
+                    );
+                  })() : null}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button type="button" disabled={Boolean(busy)} onClick={() => run(index, false)} style={{ padding: '8px 16px', border: '1px solid #ddd5c8', borderRadius: 8, background: '#fff', color: '#1a1611', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                       {busy === `save-${index}` ? 'Saving…' : 'Save selection'}
