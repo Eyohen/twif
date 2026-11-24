@@ -4,6 +4,7 @@ import { api } from '../../lib/api';
 import { money, formatMoment, useStores } from '../../utils/oms';
 import { Status } from '../../components/oms/Common';
 import { stockStatus, itemImage, colourSwatch, formatInventoryNumber } from './item';
+import ImageLightbox from '../../components/oms/ImageLightbox';
 
 export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, onArchive, approvalRequest, readOnly = false }) {
   // The list row is shown immediately so the page never opens blank, then the
@@ -12,6 +13,7 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
   const [allocations, setAllocations] = useState([]);
   const [loadError, setLoadError] = useState('');
   const stores = useStores();
+  const [photoOpen, setPhotoOpen] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -85,8 +87,14 @@ export default function ItemDetailsPage({ itemId, fallbackItem, onBack, onEdit, 
         {/* A stock picture of the material stands in until someone photographs
             the item itself, and is labelled so the two are never confused. */}
         <figure className="item-detail-photo-wrap">
-          <img className="item-detail-photo" src={image.src} alt={image.isPhoto ? item.name : `${item.type} (stock picture)`} />
-          {image.isPhoto ? null : <figcaption>Stock picture · no photo yet</figcaption>}
+          {image.isPhoto ? (
+            <button type="button" aria-label={`View the photo of ${item.name} full size`} title="View full size"
+              onClick={() => setPhotoOpen(true)} style={{ padding: 0, border: 'none', background: 'none', cursor: 'zoom-in', display: 'inline-flex' }}>
+              <img className="item-detail-photo" src={image.src} alt={item.name} />
+            </button>
+          ) : <img className="item-detail-photo" src={image.src} alt={`${item.type} (stock picture)`} />}
+          {image.isPhoto ? <figcaption>Click the photo to view it full size</figcaption> : <figcaption>Stock picture · no photo yet</figcaption>}
+          {photoOpen ? <ImageLightbox src={image.src} label={item.name} onClose={() => setPhotoOpen(false)} /> : null}
         </figure>
         <div className="item-detail-identity">
           <h2>{item.name}</h2>

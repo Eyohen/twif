@@ -9,6 +9,7 @@ import ItemDetailsPage from './ItemDetailsPage';
 import EditItemPage from './EditItemPage';
 import OwnerInventoryApprovalsPage from '../owner/InventoryApprovalsPage';
 import AssignFabricPage, { ordersNeedingFabric } from './AssignFabricPage';
+import ImageLightbox from '../../components/oms/ImageLightbox';
 
 const PAGE_SIZE = 10;
 const EMPTY_FORM = { sku: '', name: '', type: '', colour: '', quantity: '', unit: 'yards', cost: '', location: '', store: '', supplier: '', lowStockThreshold: '', image: '' };
@@ -22,6 +23,8 @@ const selectStyle = {
 
 export default function InventoryListPage({ currentRole, ownerMode = false, readOnly = false, canArchive = false }) {
   const [items, setItems] = useState([]);
+  // The item whose photo is open full size.
+  const [viewingPhoto, setViewingPhoto] = useState(null);
   const [types, setTypes] = useState([]);
   const [units, setUnits] = useState(['yards', 'units']);
   const [loading, setLoading] = useState(true);
@@ -444,12 +447,20 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
                 >
                   <td style={{ padding: '12px 14px', fontSize: 13, borderBottom: '1px solid #f3ede5' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <img
-                        src={image.src}
-                        alt=""
-                        title={image.isPhoto ? undefined : `Stock picture of ${item.type} — no photo of this item yet`}
-                        style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', flexShrink: 0, border: '1px solid #eee5da', opacity: image.isPhoto ? 1 : 0.85 }}
-                      />
+                      {image.isPhoto ? (
+                        <button type="button" aria-label={`View the photo of ${item.name} full size`} title="View full size"
+                          onClick={(event) => { event.stopPropagation(); setViewingPhoto({ src: image.src, label: item.name }); }}
+                          style={{ padding: 0, border: 'none', background: 'none', cursor: 'zoom-in', flexShrink: 0, display: 'inline-flex' }}>
+                          <img src={image.src} alt="" style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', border: '1px solid #eee5da' }} />
+                        </button>
+                      ) : (
+                        <img
+                          src={image.src}
+                          alt=""
+                          title={`Stock picture of ${item.type} — no photo of this item yet`}
+                          style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', flexShrink: 0, border: '1px solid #eee5da', opacity: 0.85 }}
+                        />
+                      )}
                       <span>
                         <div style={{ fontWeight: 600, color: '#1a1611' }}>{item.name}</div>
                         <div style={{ fontSize: 11, color: '#8a7a6a', fontFamily: 'monospace', marginTop: 2 }}>{item.sku || 'No SKU'}</div>
@@ -547,15 +558,23 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
               role="button"
               tabIndex={0}
               onClick={() => setSelectedItem(item)}
-              onKeyDown={(event) => { if (event.key === 'Enter') setSelectedItem(item); }}
+              onKeyDown={(event) => { if (event.key === 'Enter' && event.target === event.currentTarget) setSelectedItem(item); }}
               style={{ cursor: 'pointer' }}
             >
               <div className="os-card-head">
-                <img
-                  src={image.src}
-                  alt=""
-                  style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', flexShrink: 0, border: '1px solid #eee5da', opacity: image.isPhoto ? 1 : 0.85 }}
-                />
+                {image.isPhoto ? (
+                  <button type="button" aria-label={`View the photo of ${item.name} full size`} title="View full size"
+                    onClick={(event) => { event.stopPropagation(); setViewingPhoto({ src: image.src, label: item.name }); }}
+                    style={{ padding: 0, border: 'none', background: 'none', cursor: 'zoom-in', flexShrink: 0, display: 'inline-flex' }}>
+                    <img src={image.src} alt="" style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', border: '1px solid #eee5da' }} />
+                  </button>
+                ) : (
+                  <img
+                    src={image.src}
+                    alt=""
+                    style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', flexShrink: 0, border: '1px solid #eee5da', opacity: 0.85 }}
+                  />
+                )}
                 <div>
                   <strong>{item.name}</strong>
                   <p>{item.sku || 'No SKU'} · {item.type}</p>
@@ -729,6 +748,8 @@ export default function InventoryListPage({ currentRole, ownerMode = false, read
           </form>
         </div>
       )}
+
+      {viewingPhoto ? <ImageLightbox src={viewingPhoto.src} label={viewingPhoto.label} onClose={() => setViewingPhoto(null)} /> : null}
 
       <style>{`
         @media (max-width: 860px) {

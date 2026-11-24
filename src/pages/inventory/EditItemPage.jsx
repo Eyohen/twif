@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle, Tag, Sliders, MessageSquare, Users, Bell, List,
 import { api } from '../../lib/api';
 import { money, useStores } from '../../utils/oms';
 import { itemPhotoUrl, formatInventoryNumber } from './item';
+import ImageLightbox from '../../components/oms/ImageLightbox';
 
 const DETAIL_FIELDS = ['sku', 'name', 'type', 'colour', 'cost', 'location', 'supplier', 'lowStockThreshold'];
 
@@ -18,6 +19,7 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
     lowStockThreshold: item.lowStockThreshold ?? '',
   });
   const [image, setImage] = useState({ dataUrl: '', removed: false });
+  const [photoOpen, setPhotoOpen] = useState(false);
   // The total is never typed directly — an Inventory Manager adds stock that
   // came in or deducts stock that left, and the new total is computed from
   // that, so what is being approved is a clear, auditable movement rather
@@ -135,6 +137,7 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
       {error && <div className="invoice-message">{error}</div>}
       {message && <div className="invoice-message">{message}</div>}
 
+      {photoOpen && currentImage ? <ImageLightbox src={currentImage} label={item.name} onClose={() => setPhotoOpen(false)} /> : null}
       <section className="edit-item-layout">
         <main>
           <article>
@@ -150,6 +153,11 @@ export default function EditItemPage({ item, currentRole, types = [], onCancel, 
               <div style={{ fontSize: 12, color: '#8a7a6a', lineHeight: 1.5 }}>
                 <strong style={{ display: 'block', color: '#5a4e42', fontSize: 13 }}>Item photo</strong>
                 PNG, JPEG, WebP or GIF, up to 4MB.
+                {currentImage ? (
+                  <button type="button" onClick={() => setPhotoOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, marginRight: 6, border: '1px solid #ddd5c8', background: '#fff', borderRadius: 6, padding: '4px 8px', fontSize: 11.5, color: '#5a4e42', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    View full size
+                  </button>
+                ) : null}
                 {currentImage ? (
                   <button type="button" onClick={() => setImage({ dataUrl: '', removed: true })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, border: '1px solid #ddd5c8', background: '#fff', borderRadius: 6, padding: '4px 8px', fontSize: 11.5, color: '#8a3520', cursor: 'pointer', fontFamily: 'inherit' }}>
                     <X size={11} /> Remove photo
