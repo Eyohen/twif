@@ -814,7 +814,9 @@ export const lineDiscountAmount = (item = {}) => {
 // was raised with) and is covered by the invoice's own review.
 // Most recently changed first: an invoice that just had a payment recorded or
 // reviewed rises to the top, however long ago it was raised.
-export const lastUpdatedAt = (invoice) => new Date(invoice?.updatedAt || invoice?.createdAt || 0).getTime() || 0;
+// Payment activity only: the order sheet and production touch the invoice too
+// (a tailor assigned, Ready), and must not move it up Accounts' lists.
+export const lastUpdatedAt = (invoice) => new Date(invoice?.paymentUpdatedAt || invoice?.createdAt || 0).getTime() || 0;
 export const byRecentUpdate = (a, b) => lastUpdatedAt(b) - lastUpdatedAt(a);
 
 export const paymentsAwaitingReview = (invoices = []) => invoices.flatMap((invoice) => {

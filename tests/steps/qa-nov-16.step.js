@@ -7,8 +7,8 @@ Then('it should be the most recently updated invoice in the register', async fun
   const body = await (await client.get(`${API_URL}/oms/invoices/sent`)).json();
   await client.dispose();
   const invoices = body?.data?.invoices || [];
-  const latest = [...invoices].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
-  expect(latest.updatedAt, 'invoices carry no updatedAt').toBeTruthy();
+  const latest = [...invoices].sort((a, b) => new Date(b.paymentUpdatedAt) - new Date(a.paymentUpdatedAt))[0];
+  expect(latest.paymentUpdatedAt, 'invoices carry no paymentUpdatedAt').toBeTruthy();
   expect(latest.invoiceNumber).toBe(this.invoiceNumber);
 });
 

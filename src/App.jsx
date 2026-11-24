@@ -5995,7 +5995,7 @@ function InventoryProductionView({ productionJobs = [], onNavigate }) {
                       <div style={{ marginTop: 6, fontSize: 12, color: '#5a4e42' }}>
                         Fabric: {lines.length ? lines.map((line) => (line.clientSupplied ? 'Client supplied' : `${line.name || 'Fabric'}${Number(line.quantity) > 0 ? ` — ${line.quantity} ${line.unit || ''}`.trimEnd() : ''}`)).join('; ') : (garment.fabric || openJob.fabric || 'Not selected yet')}
                       </div>
-                      {garment.designNotes ? <div style={{ marginTop: 6, fontSize: 12, color: '#8a7a6a' }}>Notes: {garment.designNotes}</div> : null}
+                      {(garment.designNotes || (index === 0 ? openJob.designNotes : '')) ? <div style={{ marginTop: 6, fontSize: 12, color: '#8a7a6a' }}>Notes: {garment.designNotes || openJob.designNotes}</div> : null}
                       <div style={{ marginTop: 10 }}>
                         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8a7a6a', fontWeight: 700, marginBottom: 4 }}>Reference Images ({images.length})</div>
                         {images.length ? (

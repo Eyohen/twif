@@ -37,6 +37,9 @@ const garmentsOf = (invoice) => {
   const sheet = invoice.orderSheet || {};
   return Array.isArray(sheet.items) ? sheet.items : [];
 };
+// The Store Manager's notes on a garment — the materials and instructions to
+// choose fabric from. An older one-garment order keeps them on the sheet itself.
+const designNotesOf = (item, index, sheet) => String(item.designNotes || (index === 0 ? sheet.designNotes : '') || '').trim();
 export const ordersNeedingFabric = (invoices) => invoices.filter((invoice) => {
   const sheet = invoice.orderSheet || {};
   return isInvoiceApproved(invoice) && sheet.status && !READY.includes(sheet.status)
@@ -188,7 +191,6 @@ function OrderFabric({ invoice, inventory, onChanged }) {
     });
     if (release && short) { setNotice({ error: true, text: `No single location holds ${short.quantity} ${short.unit || ''} of ${short.name} to release that much.`.replace('  ', ' ') }); return; }
     const tailor = (item.tailors || [])[0];
-    if (release && stockLines.length && !tailor) { setNotice({ error: true, text: 'Production has not assigned a tailor to this garment yet. Fabric is released once there is one.' }); return; }
 
     setBusy(`${release ? 'release' : 'save'}-${index}`);
     try {
@@ -202,7 +204,8 @@ function OrderFabric({ invoice, inventory, onChanged }) {
             return { fabricId: line.fabricId, quantity: Number(line.quantity), ...(from ? { fromStore: from } : {}) };
           }),
           trackingToken: sheet.trackingToken || invoice.trackingToken,
-          tailorName: tailor,
+          // Fabric can be released before Production names a tailor.
+          ...(tailor ? { tailorName: tailor } : {}),
           itemIndex: index,
           itemName: item.item || `Item ${index + 1}`,
         });
@@ -272,6 +275,12 @@ function OrderFabric({ invoice, inventory, onChanged }) {
                 <p style={{ margin: 0, padding: '8px 12px', borderRadius: 8, background: '#fff5f0', border: '1px solid #f3d5cc', color: '#8a3520', fontSize: 13, fontWeight: 600 }}>
                   Declined{item.fabricRequest.declinedBy ? ` by ${item.fabricRequest.declinedBy}` : ''}{item.fabricRequest.declineReason ? `: ${item.fabricRequest.declineReason}` : ''}. Waiting for Production to choose again.
                 </p>
+              ) : null}
+              {designNotesOf(item, index, sheet) ? (
+                <div style={{ padding: '8px 12px', borderRadius: 8, background: '#faf7f3', border: '1px solid #eee5da' }}>
+                  <small style={{ display: 'block', color: '#8a7a6a', textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.08em', fontWeight: 700, marginBottom: 3 }}>Design notes from the Store Manager</small>
+                  <div style={{ fontSize: 13, color: '#1a1611', whiteSpace: 'pre-wrap' }}>{designNotesOf(item, index, sheet)}</div>
+                </div>
               ) : null}
               {released ? (
                 <p style={{ margin: 0, fontSize: 13, color: '#5a4e42' }}>
